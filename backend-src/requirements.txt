@@ -1,0 +1,31 @@
+# Cerebro Backend Dependencies
+
+# Web Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+
+# Real-time
+python-socketio>=5.10.0
+redis>=5.0.0  # Use redis, not aioredis (deprecated)
+
+# AI - Local LLM (primary, FREE!)
+httpx>=0.27.0  # For calling Ollama on DGX Spark
+
+# AI - Cloud fallback (optional, costs money)
+anthropic>=0.40.0
+# claude-agent-sdk  # Install when available: pip install claude-agent-sdk
+
+# Authentication
+PyJWT>=2.8.0
+
+# Utilities
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+python-multipart>=0.0.6
+
+# Task Queue (optional, for background tasks)
+arq>=0.25.0
+
+# Trading (Alpaca)
+aiohttp>=3.9.0
+python-dotenv>=1.0.0

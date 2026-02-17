@@ -1,0 +1,49 @@
+appId: com.cerebro.desktop
+productName: Cerebro
+copyright: Copyright 2024-2026 Professor (Michael Anthony Lopez)
+
+directories:
+  output: dist
+  buildResources: assets
+
+files:
+  - electron/**/*
+  - frontend/**/*
+  - assets/**/*
+  - package.json
+
+# No extraResources needed — remote mode connects to existing server
+
+asar: true
+asarUnpack:
+  - "**/*.node"
+
+win:
+  icon: assets/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Cerebro
+  uninstallDisplayName: Cerebro
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
+  installerHeaderIcon: assets/icon.ico
+  runAfterFinish: true
+
+linux:
+  icon: assets/icon.png
+  category: Utility
+  target:
+    - target: AppImage
+      arch:
+        - x64
+        - arm64
+
+publish: null

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      -webkit-app-region: drag;
+      user-select: none;
+    }
+    .splash {
+      background: radial-gradient(ellipse at center, #1a1025 0%, #0a0a0f 100%);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      border-radius: 20px;
+      padding: 48px 64px;
+      text-align: center;
+      box-shadow: 0 0 60px rgba(139, 92, 246, 0.15), 0 20px 40px rgba(0,0,0,0.5);
+    }
+    .logo {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 20px;
+    }
+    .logo svg {
+      width: 100%;
+      height: 100%;
+      filter: drop-shadow(0 0 20px rgba(139, 92, 246, 0.5));
+    }
+    h1 {
+      color: #e2e8f0;
+      font-size: 28px;
+      font-weight: 300;
+      letter-spacing: 6px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .tagline {
+      color: rgba(139, 92, 246, 0.7);
+      font-size: 12px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 32px;
+    }
+    #status {
+      color: rgba(226, 232, 240, 0.6);
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+    .loader {
+      width: 120px;
+      height: 2px;
+      background: rgba(139, 92, 246, 0.1);
+      border-radius: 2px;
+      margin: 0 auto;
+      overflow: hidden;
+    }
+    .loader::after {
+      content: '';
+      display: block;
+      width: 40%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, #8b5cf6, transparent);
+      border-radius: 2px;
+      animation: loading 1.5s ease-in-out infinite;
+    }
+    @keyframes loading {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(350%); }
+    }
+  </style>
+</head>
+<body>
+  <div class="splash">
+    <div class="logo">
+      <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="g" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#a78bfa"/>
+            <stop offset="50%" stop-color="#8b5cf6"/>
+            <stop offset="100%" stop-color="#6d28d9"/>
+          </radialGradient>
+        </defs>
+        <circle cx="50" cy="50" r="42" fill="url(#g)" opacity="0.9"/>
+        <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(167,139,250,0.4)" stroke-width="1"/>
+        <circle cx="50" cy="50" r="35" fill="none" stroke="rgba(167,139,250,0.2)" stroke-width="0.5"/>
+        <!-- Neural network nodes -->
+        <circle cx="50" cy="30" r="3" fill="#e2e8f0" opacity="0.8"/>
+        <circle cx="35" cy="45" r="2.5" fill="#e2e8f0" opacity="0.6"/>
+        <circle cx="65" cy="45" r="2.5" fill="#e2e8f0" opacity="0.6"/>
+        <circle cx="40" cy="60" r="2" fill="#e2e8f0" opacity="0.5"/>
+        <circle cx="60" cy="60" r="2" fill="#e2e8f0" opacity="0.5"/>
+        <circle cx="50" cy="70" r="2.5" fill="#e2e8f0" opacity="0.7"/>
+        <!-- Connections -->
+        <line x1="50" y1="30" x2="35" y2="45" stroke="#e2e8f0" stroke-width="0.5" opacity="0.3"/>
+        <line x1="50" y1="30" x2="65" y2="45" stroke="#e2e8f0" stroke-width="0.5" opacity="0.3"/>
+        <line x1="35" y1="45" x2="40" y2="60" stroke="#e2e8f0" stroke-width="0.5" opacity="0.3"/>
+        <line x1="65" y1="45" x2="60" y2="60" stroke="#e2e8f0" stroke-width="0.5" opacity="0.3"/>
+        <line x1="35" y1="45" x2="60" y2="60" stroke="#e2e8f0" stroke-width="0.5" opacity="0.2"/>
+        <line x1="65" y1="45" x2="40" y2="60" stroke="#e2e8f0" stroke-width="0.5" opacity="0.2"/>
+        <line x1="40" y1="60" x2="50" y2="70" stroke="#e2e8f0" stroke-width="0.5" opacity="0.3"/>
+        <line x1="60" y1="60" x2="50" y2="70" stroke="#e2e8f0" stroke-width="0.5" opacity="0.3"/>
+      </svg>
+    </div>
+    <h1>Cerebro</h1>
+    <div class="tagline">Your AI, Everywhere</div>
+    <div id="status">Initializing...</div>
+    <div class="loader"></div>
+  </div>
+</body>
+</html>

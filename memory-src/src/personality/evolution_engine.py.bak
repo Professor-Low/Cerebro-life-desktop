@@ -1,0 +1,530 @@
+"""
+Personality Evolution Engine - Evolve traits from feedback and corrections.
+
+Part of Phase 6 Enhancement in the All-Knowing Brain PRD.
+Maps corrections and feedback to trait changes.
+"""
+
+import json
+import re
+from pathlib import Path
+from datetime import datetime, timedelta
+from typing import Dict, Any, List, Optional, Tuple
+from collections import defaultdict
+
+
+# Correction-to-trait mappings
+CORRECTION_TRAIT_MAPPINGS = {
+    # Communication corrections
+    "verbose": {
+        "trait": "comm_concise_responses",
+        "category": "communication",
+        "value": "Prefers concise, focused responses",
+        "positive": True,
+        "strength_change": 0.15
+    },
+    "too much detail": {
+        "trait": "comm_concise_responses",
+        "category": "communication",
+        "value": "Prefers concise, focused responses",
+        "positive": True,
+        "strength_change": 0.15
+    },
+    "explain more": {
+        "trait": "comm_detailed_explanations",
+        "category": "communication",
+        "value": "Prefers detailed explanations",
+        "positive": True,
+        "strength_change": 0.15
+    },
+    "what does that mean": {
+        "trait": "comm_detailed_explanations",
+        "category": "communication",
+        "value": "Prefers detailed explanations",
+        "positive": True,
+        "strength_change": 0.1
+    },
+    "skip": {
+        "trait": "comm_skip_basics",
+        "category": "communication",
+        "value": "Skip basic explanations, get to the point",
+        "positive": True,
+        "strength_change": 0.15
+    },
+    "get to the point": {
+        "trait": "comm_skip_basics",
+        "category": "communication",
+        "value": "Skip basic explanations, get to the point",
+        "positive": True,
+        "strength_change": 0.15
+    },
+
+    # Technical corrections
+    "use python": {
+        "trait": "tech_prefer_python",
+        "category": "technical",
+        "value": "Prefers Python for solutions",
+        "positive": True,
+        "strength_change": 0.2
+    },
+    "use javascript": {
+        "trait": "tech_prefer_javascript",
+        "category": "technical",
+        "value": "Prefers JavaScript for solutions",
+        "positive": True,
+        "strength_change": 0.2
+    },
+    "don't use": {
+        "trait": "tech_avoid_technology",
+        "category": "technical",
+        "value": "Avoid certain technologies",
+        "positive": False,
+        "strength_change": 0.15
+    },
+
+    # Workflow corrections
+    "just do it": {
+        "trait": "work_action_oriented",
+        "category": "workflow",
+        "value": "Prefers action over discussion",
+        "positive": True,
+        "strength_change": 0.2
+    },
+    "ask first": {
+        "trait": "work_confirm_before_action",
+        "category": "workflow",
+        "value": "Ask for confirmation before major actions",
+        "positive": True,
+        "strength_change": 0.2
+    },
+    "don't ask": {
+        "trait": "work_autonomous_action",
+        "category": "workflow",
+        "value": "Act autonomously without asking",
+        "positive": True,
+        "strength_change": 0.15
+    },
+    "automate": {
+        "trait": "work_prefer_automation",
+        "category": "workflow",
+        "value": "Prefers automation over manual tasks",
+        "positive": True,
+        "strength_change": 0.15
+    },
+}
+
+
+class PersonalityEvolutionEngine:
+    """
+    Evolves personality traits based on feedback and corrections.
+    Maps user feedback to trait changes.
+    """
+
+    def __init__(self, base_path: str = None):
+        if base_path is None:
+
+            from config import AI_MEMORY_BASE
+
+            base_path = str(AI_MEMORY_BASE)
+
+        self.base_path = Path(base_path)
+
+        # Import trait tracker lazily to avoid circular imports
+        self._trait_tracker = None
+
+    @property
+    def trait_tracker(self):
+        """Lazy load trait tracker."""
+        if self._trait_tracker is None:
+            try:
+                from .trait_tracker import TraitTracker
+            except ImportError:
+                from trait_tracker import TraitTracker
+            self._trait_tracker = TraitTracker(str(self.base_path))
+        return self._trait_tracker
+
+    def evolve_from_correction(self, correction: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Evolve traits based on a correction.
+
+        Args:
+            correction: Correction dict with content, topic, importance, etc.
+
+        Returns:
+            List of trait changes made
+        """
+        content = correction.get("content", "").lower()
+        topic = correction.get("topic", "general")
+        importance = correction.get("importance", "medium")
+        correction_id = correction.get("id", correction.get("content_hash", "unknown"))
+
+        changes = []
+
+        # Check against mappings
+        for trigger, mapping in CORRECTION_TRAIT_MAPPINGS.items():
+            if trigger in content:
+                # Calculate strength based on importance
+                strength_multiplier = {
+                    "high": 1.5,
+                    "medium": 1.0,
+                    "low": 0.5
+                }.get(importance, 1.0)
+
+                base_strength = mapping["strength_change"] * strength_multiplier
+
+                # Add or strengthen the trait
+                result = self.trait_tracker.add_trait(
+                    name=mapping["trait"],
+                    category=mapping["category"],
+                    value=mapping["value"],
+                    strength=base_strength,
+                    positive=mapping["positive"],
+                    source=f"correction:{correction_id}"
+                )
+
+                # Link correction to trait
+                self.trait_tracker.link_correction(mapping["trait"], correction_id)
+
+                changes.append({
+                    "trigger": trigger,
+                    "trait": mapping["trait"],
+                    "action": result.get("action"),
+                    "strength_change": base_strength
+                })
+
+        # Also check for emotional patterns
+        emotional_changes = self._detect_emotional_patterns(content, correction_id)
+        changes.extend(emotional_changes)
+
+        return changes
+
+    def _detect_emotional_patterns(self, content: str,
+                                    source_id: str) -> List[Dict[str, Any]]:
+        """Detect emotional patterns from correction content."""
+        changes = []
+
+        # Frustration indicators
+        frustration_patterns = [
+            (r"(annoying|frustrating|hate|terrible)", "frustration_general"),
+            (r"(waste of time|too slow|takes too long)", "frustration_efficiency"),
+            (r"(wrong|incorrect|mistake|error)", "frustration_accuracy"),
+        ]
+
+        for pattern, trait_name in frustration_patterns:
+            if re.search(pattern, content, re.IGNORECASE):
+                result = self.trait_tracker.add_trait(
+                    name=trait_name,
+                    category="emotional",
+                    value=f"Frustrated by: {content[:50]}...",
+                    strength=0.4,
+                    positive=False,
+                    source=f"correction:{source_id}"
+                )
+                changes.append({
+                    "trigger": pattern,
+                    "trait": trait_name,
+                    "action": result.get("action"),
+                    "type": "emotional"
+                })
+
+        return changes
+
+    def evolve_from_feedback(self, feedback_type: str, context: str,
+                              accepted: bool, session_id: str = None) -> Dict[str, Any]:
+        """
+        Evolve traits based on suggestion feedback.
+
+        Args:
+            feedback_type: Type of feedback (suggestion, response, action)
+            context: What the feedback was about
+            accepted: Whether it was accepted/positive
+            session_id: Optional session ID
+
+        Returns:
+            Result of evolution
+        """
+        changes = []
+        context_lower = context.lower()
+
+        # Map feedback to traits
+        if feedback_type == "suggestion":
+            if accepted:
+                # Strengthen related traits
+                if "automation" in context_lower:
+                    result = self.trait_tracker.strengthen_trait(
+                        "work_prefer_automation", 0.1, f"suggestion_accepted:{session_id}"
+                    )
+                    if result:
+                        changes.append(result)
+                elif "explain" in context_lower:
+                    result = self.trait_tracker.strengthen_trait(
+                        "comm_detailed_explanations", 0.1, f"suggestion_accepted:{session_id}"
+                    )
+                    if result:
+                        changes.append(result)
+            else:
+                # Weaken related traits
+                if "automation" in context_lower:
+                    result = self.trait_tracker.weaken_trait(
+                        "work_prefer_automation", 0.05, f"suggestion_rejected:{session_id}"
+                    )
+                    if result:
+                        changes.append(result)
+
+        elif feedback_type == "response":
+            # Track response style preferences
+            if accepted:
+                if any(word in context_lower for word in ["concise", "brief", "short"]):
+                    result = self.trait_tracker.strengthen_trait(
+                        "comm_concise_responses", 0.1, f"response_liked:{session_id}"
+                    )
+                    if result:
+                        changes.append(result)
+                elif any(word in context_lower for word in ["detailed", "thorough", "complete"]):
+                    result = self.trait_tracker.strengthen_trait(
+                        "comm_detailed_explanations", 0.1, f"response_liked:{session_id}"
+                    )
+                    if result:
+                        changes.append(result)
+
+        return {
+            "feedback_type": feedback_type,
+            "accepted": accepted,
+            "changes": changes,
+            "timestamp": datetime.now().isoformat()
+        }
+
+    def process_corrections_batch(self, corrections: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Process a batch of corrections and evolve traits.
+
+        Args:
+            corrections: List of correction dicts
+
+        Returns:
+            Summary of changes
+        """
+        all_changes = []
+        traits_affected = set()
+
+        for correction in corrections:
+            changes = self.evolve_from_correction(correction)
+            all_changes.extend(changes)
+            for change in changes:
+                traits_affected.add(change.get("trait"))
+
+        return {
+            "corrections_processed": len(corrections),
+            "total_changes": len(all_changes),
+            "traits_affected": list(traits_affected),
+            "changes": all_changes,
+            "timestamp": datetime.now().isoformat()
+        }
+
+    def get_evolution_summary(self, days: int = 30) -> Dict[str, Any]:
+        """
+        Get a comprehensive evolution summary.
+
+        Args:
+            days: Number of days to analyze
+
+        Returns:
+            Evolution summary
+        """
+        # Get trait evolution summary
+        trait_summary = self.trait_tracker.get_evolution_summary(days)
+
+        # Get all current traits
+        all_traits = self.trait_tracker.get_all_traits()
+
+        # Calculate trait stability (inverse of change frequency)
+        total_changes = trait_summary.get("total_changes", 0)
+        total_traits = all_traits.get("total_traits", 1)
+        stability = 1.0 - min(1.0, total_changes / (total_traits * days / 7))
+
+        # Get recent history
+        recent_history = self.trait_tracker.get_trait_history(days=days)
+
+        # Identify evolving vs stable categories
+        category_changes = defaultdict(int)
+        for change in recent_history:
+            category_changes[change.get("category", "unknown")] += 1
+
+        return {
+            "period_days": days,
+            "trait_summary": trait_summary,
+            "current_trait_count": total_traits,
+            "personality_stability": round(stability, 2),
+            "category_evolution": dict(category_changes),
+            "most_evolved_traits": trait_summary.get("most_evolved_traits", []),
+            "recommendations": self._generate_recommendations(trait_summary, all_traits),
+            "generated_at": datetime.now().isoformat()
+        }
+
+    def _generate_recommendations(self, trait_summary: Dict,
+                                   all_traits: Dict) -> List[str]:
+        """Generate recommendations based on evolution patterns."""
+        recommendations = []
+
+        # Check for high change rate
+        avg_changes = trait_summary.get("average_changes_per_day", 0)
+        if avg_changes > 2:
+            recommendations.append(
+                "High trait evolution rate - personality model may be unstable. "
+                "Consider reviewing recent corrections."
+            )
+
+        # Check for unbalanced categories
+        by_category = all_traits.get("by_category", {})
+        if len(by_category) < 3:
+            recommendations.append(
+                "Some trait categories have limited data. "
+                "More interaction will improve personality model."
+            )
+
+        # Check for weak traits
+        strongest = all_traits.get("strongest_traits", [])
+        if strongest and strongest[0].get("strength", 0) < 0.5:
+            recommendations.append(
+                "No strong traits detected. System needs more data to "
+                "confidently model user preferences."
+            )
+
+        if not recommendations:
+            recommendations.append("Personality model is stable and well-developed.")
+
+        return recommendations
+
+    def synchronize_with_profile(self) -> Dict[str, Any]:
+        """
+        Synchronize evolved traits back to the user profile.
+
+        Returns:
+            Sync result
+        """
+        profile_file = self.base_path / "user" / "profile.json"
+
+        if not profile_file.exists():
+            return {"error": "Profile file not found", "synced": False}
+
+        try:
+            with open(profile_file, "r", encoding="utf-8") as f:
+                profile = json.load(f)
+
+            # Get current traits
+            all_traits = self.trait_tracker.get_all_traits()
+            by_category = all_traits.get("by_category", {})
+
+            # Update communication style
+            comm_traits = by_category.get("communication", {})
+            if comm_traits:
+                profile.setdefault("communication_style", {})
+                profile["communication_style"]["prefers"] = [
+                    t["value"] for t in comm_traits.get("prefers", [])
+                    if t.get("strength", 0) >= 0.5
+                ][:10]
+                profile["communication_style"]["dislikes"] = [
+                    t["value"] for t in comm_traits.get("dislikes", [])
+                    if t.get("strength", 0) >= 0.5
+                ][:10]
+
+            # Update preferences
+            workflow_traits = by_category.get("workflow", {})
+            if workflow_traits:
+                profile.setdefault("preferences", {})
+                profile["preferences"]["personal"] = [
+                    t["value"] for t in workflow_traits.get("prefers", [])
+                    if t.get("strength", 0) >= 0.5
+                ][:10]
+                profile["preferences"]["dislikes"] = [
+                    t["value"] for t in workflow_traits.get("dislikes", [])
+                    if t.get("strength", 0) >= 0.5
+                ][:10]
+
+            # Update metadata
+            profile["_last_updated"] = datetime.now().isoformat()
+            profile["metadata"] = profile.get("metadata", {})
+            profile["metadata"]["last_trait_sync"] = datetime.now().isoformat()
+            profile["metadata"]["trait_count"] = all_traits.get("total_traits", 0)
+
+            # Save profile
+            with open(profile_file, "w", encoding="utf-8") as f:
+                json.dump(profile, f, indent=2, ensure_ascii=False)
+
+            return {
+                "synced": True,
+                "traits_synced": all_traits.get("total_traits", 0),
+                "categories_updated": list(by_category.keys()),
+                "timestamp": datetime.now().isoformat()
+            }
+
+        except Exception as e:
+            return {"error": str(e), "synced": False}
+
+
+# Convenience functions
+
+def evolve_from_correction(correction: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Evolve traits from a single correction."""
+    engine = PersonalityEvolutionEngine()
+    return engine.evolve_from_correction(correction)
+
+
+def evolve_from_feedback(feedback_type: str, context: str,
+                          accepted: bool, session_id: str = None) -> Dict[str, Any]:
+    """Evolve traits from feedback."""
+    engine = PersonalityEvolutionEngine()
+    return engine.evolve_from_feedback(feedback_type, context, accepted, session_id)
+
+
+def get_evolution_summary(days: int = 30) -> Dict[str, Any]:
+    """Get personality evolution summary."""
+    engine = PersonalityEvolutionEngine()
+    return engine.get_evolution_summary(days)
+
+
+if __name__ == "__main__":
+    # Test the evolution engine
+    print("=== Personality Evolution Engine Test ===\n")
+
+    engine = PersonalityEvolutionEngine()
+
+    # Test correction processing
+    print("1. Testing correction processing...")
+    test_correction = {
+        "content": "too verbose, get to the point please",
+        "topic": "communication",
+        "importance": "high",
+        "id": "test-correction-001"
+    }
+
+    changes = engine.evolve_from_correction(test_correction)
+    print(f"   Changes from correction: {len(changes)}")
+    for change in changes:
+        print(f"   - {change['trait']}: {change['action']}")
+
+    # Test feedback processing
+    print("\n2. Testing feedback processing...")
+    result = engine.evolve_from_feedback(
+        feedback_type="suggestion",
+        context="automation script",
+        accepted=True,
+        session_id="test-session"
+    )
+    print(f"   Feedback result: {result['changes']}")
+
+    # Get evolution summary
+    print("\n3. Getting evolution summary...")
+    summary = engine.get_evolution_summary(30)
+    print(f"   Stability: {summary['personality_stability']}")
+    print(f"   Trait count: {summary['current_trait_count']}")
+    print(f"   Recommendations: {summary['recommendations']}")
+
+    # Sync to profile
+    print("\n4. Syncing to profile...")
+    sync_result = engine.synchronize_with_profile()
+    print(f"   Synced: {sync_result.get('synced')}")
+    if sync_result.get("traits_synced"):
+        print(f"   Traits synced: {sync_result['traits_synced']}")
+
+    print("\n=== Test Complete ===")
