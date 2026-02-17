@@ -1,0 +1,86 @@
+Cerebro Source Available License
+Version 1.0, February 2026
+
+Copyright (c) 2026 Michael Anthony Lopez (Professor-Low)
+All Rights Reserved.
+
+TERMS AND CONDITIONS
+
+1. DEFINITIONS
+
+   "Software" means the Cerebro Desktop application and all associated source
+   code, documentation, assets, and configuration files in this repository.
+
+   "Licensor" means Michael Anthony Lopez (Professor-Low).
+
+   "You" means the individual or entity accessing or using the Software.
+
+2. GRANT OF RIGHTS
+
+   Subject to the terms of this License, the Licensor grants You a limited,
+   non-exclusive, non-transferable, non-sublicensable right to:
+
+   a) VIEW and READ the source code for personal educational purposes.
+   b) USE the compiled Software solely with a valid, paid Cerebro subscription
+      obtained from https://cerebro.life.
+   c) FORK this repository for the sole purpose of submitting pull requests
+      back to the original repository.
+
+3. RESTRICTIONS
+
+   You may NOT, without prior written permission from the Licensor:
+
+   a) Copy, modify, merge, publish, distribute, sublicense, or sell copies
+      of the Software or any derivative works.
+   b) Use the Software, in whole or in part, to create competing products
+      or services.
+   c) Remove, alter, or obscure any copyright notices, license terms, or
+      attribution notices in the Software.
+   d) Use the Software for any commercial purpose other than as an
+      authorized end user with a valid subscription.
+   e) Redistribute the compiled binaries or installers to any third party.
+
+4. ATTRIBUTION
+
+   Any authorized use, reference to, or derivative work based on the Software
+   (where expressly permitted in writing by the Licensor) MUST include:
+
+   a) Clear and prominent attribution to Michael Anthony Lopez (Professor-Low)
+      as the original author.
+   b) A link to the original repository:
+      https://github.com/Professor-Low/Cerebro-life-desktop
+   c) A statement that the work is derived from or based on Cerebro.
+
+5. INTELLECTUAL PROPERTY
+
+   The Licensor retains all right, title, and interest in and to the Software,
+   including all intellectual property rights. This License does not grant You
+   any rights to trademarks, service marks, or trade names of the Licensor,
+   including but not limited to the "Cerebro" name and brand.
+
+6. NO WARRANTY
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+7. LIMITATION OF LIABILITY
+
+   IN NO EVENT SHALL THE LICENSOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+   LIABILITY ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE.
+
+8. TERMINATION
+
+   This License is effective until terminated. Your rights under this License
+   will terminate automatically without notice if You fail to comply with any
+   of its terms. Upon termination, You must destroy all copies of the Software
+   in Your possession.
+
+9. GOVERNING LAW
+
+   This License shall be governed by the laws of the State of Florida,
+   United States of America.
+
+For licensing inquiries or permission requests:
+   Email: lopez.michael19007@gmail.com
+   GitHub: https://github.com/Professor-Low
