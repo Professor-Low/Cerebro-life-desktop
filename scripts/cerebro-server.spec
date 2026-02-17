@@ -8,8 +8,9 @@ from PyInstaller.utils.hooks import collect_submodules
 block_cipher = None
 
 # Paths
-SPEC_DIR = os.path.dirname(os.path.abspath(SPECPATH))
-PROJECT_DIR = os.path.abspath(os.path.join(SPEC_DIR, '..'))
+# SPECPATH is set by PyInstaller to the directory containing the spec file (scripts/)
+SCRIPTS_DIR = os.path.abspath(SPECPATH)
+PROJECT_DIR = os.path.dirname(SCRIPTS_DIR)
 BACKEND_DIR = os.path.join(PROJECT_DIR, 'backend-src')
 
 # Entry point (copied into backend dir before build)

@@ -14,12 +14,13 @@ from PyInstaller.utils.hooks import collect_submodules
 block_cipher = None
 
 # Paths
-SPEC_DIR = os.path.dirname(os.path.abspath(SPECPATH))
-PROJECT_DIR = os.path.abspath(os.path.join(SPEC_DIR, '..'))
+# SPECPATH is set by PyInstaller to the directory containing the spec file (scripts/)
+SCRIPTS_DIR = os.path.abspath(SPECPATH)
+PROJECT_DIR = os.path.dirname(SCRIPTS_DIR)
 MEMORY_SRC_DIR = os.path.join(PROJECT_DIR, 'memory-src', 'src')
 
 # Entry point
-entry_point = os.path.join(SPEC_DIR, 'cerebro-mcp-entry.py')
+entry_point = os.path.join(SCRIPTS_DIR, 'cerebro-mcp-entry.py')
 
 # ----- Data files: include all .py modules from memory-src/src/ -----
 datas = []

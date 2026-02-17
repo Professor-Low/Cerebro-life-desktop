@@ -1,0 +1,26 @@
+# Default: auto-detect, normalize to LF in repo
+* text=auto eol=lf
+
+# Force LF for all source files (critical for CI on Linux)
+*.sh text eol=lf
+*.py text eol=lf
+*.spec text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.toml text eol=lf
+
+# Allow CRLF for Windows-only scripts
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+
+# Binary files
+*.png binary
+*.ico binary
+*.woff2 binary
+*.svg binary
