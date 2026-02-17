@@ -1,0 +1,227 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '20'
+
+jobs:
+  # --- Backend binary builds ---
+  build-backend-win:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Build backend
+        run: |
+          cd scripts
+          .\build-backend.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-win
+          path: backend/
+          retention-days: 1
+
+  build-backend-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Build backend
+        run: bash scripts/build-backend.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-linux
+          path: backend/
+          retention-days: 1
+
+  # --- MCP server binary builds ---
+  build-mcp-win:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Build MCP server
+        run: |
+          cd scripts
+          .\build-mcp-server.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcp-server-win
+          path: mcp-server/
+          retention-days: 1
+
+  build-mcp-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Build MCP server
+        run: bash scripts/build-mcp-server.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcp-server-linux
+          path: mcp-server/
+          retention-days: 1
+
+  # --- Full Stack edition (requires backend + mcp binaries) ---
+  build-fullstack-win:
+    needs: [build-backend-win, build-mcp-win]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Download backend
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-win
+          path: backend/
+      - name: Download MCP server
+        uses: actions/download-artifact@v4
+        with:
+          name: mcp-server-win
+          path: mcp-server/
+      - name: Download Redis for Windows
+        run: |
+          mkdir redis
+          curl -L -o redis/redis-server.exe https://github.com/zkteco-home/redis-windows/releases/download/7.4.2/redis-server-7.4.2-windows-amd64.exe
+      - run: npm ci
+      - name: Build Full Stack installer
+        run: npm run build:fullstack:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fullstack-win
+          path: dist/Cerebro-FullStack-Setup-*.exe
+          retention-days: 1
+
+  build-fullstack-linux:
+    needs: [build-backend-linux, build-mcp-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Download backend
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-linux
+          path: backend/
+      - name: Download MCP server
+        uses: actions/download-artifact@v4
+        with:
+          name: mcp-server-linux
+          path: mcp-server/
+      - name: Install Redis
+        run: |
+          mkdir -p redis
+          sudo apt-get update && sudo apt-get install -y redis-server
+          cp /usr/bin/redis-server redis/redis-server
+      - run: npm ci
+      - name: Build Full Stack installers
+        run: npm run build:fullstack:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fullstack-linux
+          path: |
+            dist/Cerebro-FullStack-Setup-*.AppImage
+            dist/Cerebro-FullStack-Setup-*.deb
+          retention-days: 1
+
+  # --- Client edition (no backend/mcp needed) ---
+  build-client-win:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci
+      - name: Build Client installer
+        run: npm run build:client:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client-win
+          path: dist/Cerebro-Client-Setup-*.exe
+          retention-days: 1
+
+  build-client-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci
+      - name: Build Client installer
+        run: npm run build:client:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client-linux
+          path: dist/Cerebro-Client-Setup-*.AppImage
+          retention-days: 1
+
+  # --- Create GitHub Release ---
+  release:
+    needs:
+      - build-fullstack-win
+      - build-fullstack-linux
+      - build-client-win
+      - build-client-linux
+    runs-on: ubuntu-latest
+    env:
+      TAG_NAME: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+      - name: List artifacts
+        run: find artifacts/ -type f | sort
+      - name: Determine prerelease
+        id: prerelease
+        run: |
+          if echo "$TAG_NAME" | grep -qE '(alpha|beta|rc)'; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
+          generate_release_notes: true
+          files: |
+            artifacts/fullstack-win/*
+            artifacts/fullstack-linux/*
+            artifacts/client-win/*
+            artifacts/client-linux/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

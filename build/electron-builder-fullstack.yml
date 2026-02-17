@@ -1,6 +1,7 @@
 appId: com.cerebro.desktop
 productName: Cerebro
 copyright: Copyright 2024-2026 Professor (Michael Anthony Lopez)
+artifactName: Cerebro-FullStack-Setup-${version}-${arch}.${ext}
 
 directories:
   output: dist
@@ -19,6 +20,10 @@ extraResources:
       - "**/*"
   - from: redis/
     to: redis
+    filter:
+      - "**/*"
+  - from: mcp-server/
+    to: mcp-server
     filter:
       - "**/*"
 
@@ -52,11 +57,9 @@ linux:
     - target: AppImage
       arch:
         - x64
-        - arm64
     - target: deb
       arch:
         - x64
-        - arm64
   desktop:
     Name: Cerebro
     Comment: Your AI, Everywhere

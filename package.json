@@ -9,11 +9,13 @@
     "start": "electron .",
     "start:dev": "cross-env CEREBRO_DEV=1 electron .",
     "start:remote": "cross-env CEREBRO_REMOTE_URL=http://192.168.0.70:3000 electron .",
-    "build": "electron-builder",
-    "build:win": "electron-builder --win",
-    "build:linux": "electron-builder --linux",
-    "build:all": "electron-builder --win --linux",
-    "build:win-remote": "cross-env CEREBRO_REMOTE_URL=http://192.168.0.70:3000 electron-builder --win -c build/electron-builder-remote.yml",
+    "build:fullstack:win": "electron-builder --win -c build/electron-builder-fullstack.yml",
+    "build:fullstack:linux": "electron-builder --linux -c build/electron-builder-fullstack.yml",
+    "build:client:win": "electron-builder --win -c build/electron-builder-client.yml",
+    "build:client:linux": "electron-builder --linux -c build/electron-builder-client.yml",
+    "build:backend": "bash scripts/build-backend.sh",
+    "build:mcp": "bash scripts/build-mcp-server.sh",
+    "build:prepare-fullstack": "npm run build:backend && npm run build:mcp",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
@@ -23,8 +25,5 @@
     "electron": "^34.0.0",
     "electron-builder": "^25.1.8",
     "cross-env": "^7.0.3"
-  },
-  "build": {
-    "extends": "build/electron-builder.yml"
   }
 }

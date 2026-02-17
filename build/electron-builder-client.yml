@@ -1,6 +1,7 @@
-appId: com.cerebro.desktop
-productName: Cerebro
+appId: com.cerebro.desktop.client
+productName: Cerebro Client
 copyright: Copyright 2024-2026 Professor (Michael Anthony Lopez)
+artifactName: Cerebro-Client-Setup-${version}-${arch}.${ext}
 
 directories:
   output: dist
@@ -12,7 +13,7 @@ files:
   - assets/**/*
   - package.json
 
-# No extraResources needed — remote mode connects to existing server
+# No extraResources — Client edition connects to a remote server
 
 asar: true
 asarUnpack:
@@ -44,6 +45,5 @@ linux:
     - target: AppImage
       arch:
         - x64
-        - arm64
 
 publish: null

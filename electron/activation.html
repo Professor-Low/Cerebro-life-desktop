@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Cerebro - Activate License</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0a0a0f;
+      color: #e2e8f0;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .container {
+      background: radial-gradient(ellipse at center, #1a1025 0%, #0a0a0f 100%);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      border-radius: 20px;
+      padding: 48px;
+      width: 460px;
+      text-align: center;
+      box-shadow: 0 0 60px rgba(139, 92, 246, 0.1);
+    }
+    .logo {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 16px;
+    }
+    .logo svg {
+      width: 100%;
+      height: 100%;
+      filter: drop-shadow(0 0 15px rgba(139, 92, 246, 0.4));
+    }
+    h1 {
+      font-size: 24px;
+      font-weight: 300;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .subtitle {
+      color: rgba(139, 92, 246, 0.6);
+      font-size: 12px;
+      letter-spacing: 2px;
+      margin-bottom: 32px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+      text-align: left;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      color: rgba(226, 232, 240, 0.5);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 12px 16px;
+      background: rgba(139, 92, 246, 0.05);
+      border: 1px solid rgba(139, 92, 246, 0.2);
+      border-radius: 8px;
+      color: #e2e8f0;
+      font-size: 15px;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 2px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input[type="text"]:focus {
+      border-color: rgba(139, 92, 246, 0.5);
+    }
+    input[type="text"]::placeholder {
+      color: rgba(226, 232, 240, 0.2);
+      letter-spacing: 1px;
+    }
+    .btn {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+      color: white;
+      margin-bottom: 12px;
+    }
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 20px rgba(139, 92, 246, 0.3);
+    }
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+    .btn-secondary {
+      background: transparent;
+      color: rgba(139, 92, 246, 0.7);
+      border: 1px solid rgba(139, 92, 246, 0.2);
+    }
+    .btn-secondary:hover {
+      border-color: rgba(139, 92, 246, 0.4);
+      color: rgba(139, 92, 246, 0.9);
+    }
+    #status {
+      margin-top: 16px;
+      font-size: 13px;
+      min-height: 20px;
+    }
+    .status-error { color: #f87171; }
+    .status-success { color: #4ade80; }
+    .status-loading { color: rgba(139, 92, 246, 0.7); }
+    .links {
+      margin-top: 24px;
+      font-size: 12px;
+      color: rgba(226, 232, 240, 0.3);
+    }
+    .links a {
+      color: rgba(139, 92, 246, 0.6);
+      text-decoration: none;
+    }
+    .links a:hover {
+      color: rgba(139, 92, 246, 0.9);
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="g" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#a78bfa"/>
+            <stop offset="50%" stop-color="#8b5cf6"/>
+            <stop offset="100%" stop-color="#6d28d9"/>
+          </radialGradient>
+        </defs>
+        <circle cx="50" cy="50" r="42" fill="url(#g)" opacity="0.9"/>
+        <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(167,139,250,0.4)" stroke-width="1"/>
+        <circle cx="50" cy="30" r="3" fill="#e2e8f0" opacity="0.8"/>
+        <circle cx="35" cy="45" r="2.5" fill="#e2e8f0" opacity="0.6"/>
+        <circle cx="65" cy="45" r="2.5" fill="#e2e8f0" opacity="0.6"/>
+        <circle cx="40" cy="60" r="2" fill="#e2e8f0" opacity="0.5"/>
+        <circle cx="60" cy="60" r="2" fill="#e2e8f0" opacity="0.5"/>
+        <circle cx="50" cy="70" r="2.5" fill="#e2e8f0" opacity="0.7"/>
+        <line x1="50" y1="30" x2="35" y2="45" stroke="#e2e8f0" stroke-width="0.5" opacity="0.3"/>
+        <line x1="50" y1="30" x2="65" y2="45" stroke="#e2e8f0" stroke-width="0.5" opacity="0.3"/>
+        <line x1="35" y1="45" x2="40" y2="60" stroke="#e2e8f0" stroke-width="0.5" opacity="0.3"/>
+        <line x1="65" y1="45" x2="60" y2="60" stroke="#e2e8f0" stroke-width="0.5" opacity="0.3"/>
+        <line x1="40" y1="60" x2="50" y2="70" stroke="#e2e8f0" stroke-width="0.5" opacity="0.3"/>
+        <line x1="60" y1="60" x2="50" y2="70" stroke="#e2e8f0" stroke-width="0.5" opacity="0.3"/>
+      </svg>
+    </div>
+    <h1>Cerebro</h1>
+    <div class="subtitle">License Activation</div>
+
+    <div class="form-group">
+      <label for="license-key">License Key</label>
+      <input type="text" id="license-key" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false">
+    </div>
+
+    <button class="btn btn-primary" id="activate-btn" onclick="activate()">Activate</button>
+    <button class="btn btn-secondary" onclick="buyLicense()">Buy a License</button>
+
+    <div id="status"></div>
+
+    <div class="links">
+      <a href="https://cerebro.life" target="_blank">cerebro.life</a>
+    </div>
+  </div>
+
+  <script>
+    const keyInput = document.getElementById('license-key');
+    const activateBtn = document.getElementById('activate-btn');
+    const statusEl = document.getElementById('status');
+
+    keyInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') activate();
+    });
+
+    async function activate() {
+      const key = keyInput.value.trim();
+      if (!key) {
+        showStatus('Please enter a license key', 'error');
+        return;
+      }
+
+      activateBtn.disabled = true;
+      showStatus('Validating...', 'loading');
+
+      try {
+        const result = await window.cerebroDesktop.activateLicense(key);
+        if (result.success) {
+          showStatus('License activated! Loading Cerebro...', 'success');
+        } else {
+          showStatus(result.error || 'Activation failed', 'error');
+          activateBtn.disabled = false;
+        }
+      } catch (err) {
+        showStatus('Connection error. Please check your internet.', 'error');
+        activateBtn.disabled = false;
+      }
+    }
+
+    function buyLicense() {
+      // Open in default browser
+      const { shell } = require('electron');
+      // Since we're in a sandboxed context, use the preload bridge
+      window.open('https://cerebro.life/pricing', '_blank');
+    }
+
+    function showStatus(msg, type) {
+      statusEl.textContent = msg;
+      statusEl.className = 'status-' + type;
+    }
+
+    // Focus the input on load
+    keyInput.focus();
+  </script>
+</body>
+</html>
