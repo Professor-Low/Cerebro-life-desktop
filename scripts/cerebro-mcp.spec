@@ -74,6 +74,9 @@ hiddenimports = [
     'concurrent.futures',
     # HTTP (for optional remote embedding client)
     'httpx',
+    # CLI (mcp[cli] dependency)
+    'typer',
+    'click',
     # Starlette/SSE deps that mcp might pull in
     'starlette',
     'sse_starlette',

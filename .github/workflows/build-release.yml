@@ -22,9 +22,17 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Build backend
+        shell: pwsh
+        run: .\scripts\build-backend.ps1
+      - name: Verify output
+        shell: pwsh
         run: |
-          cd scripts
-          .\build-backend.ps1
+          if (-not (Test-Path "backend\cerebro-server")) {
+            Write-Error "Backend output not found at backend\cerebro-server"
+            Get-ChildItem -Recurse -Directory -Filter "cerebro-server" | Select-Object FullName
+            exit 1
+          }
+          Get-ChildItem "backend\cerebro-server" | Select-Object -First 5
       - uses: actions/upload-artifact@v4
         with:
           name: backend-win
@@ -40,6 +48,14 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Build backend
         run: bash scripts/build-backend.sh
+      - name: Verify output
+        run: |
+          if [ ! -d "backend/cerebro-server" ]; then
+            echo "Backend output not found at backend/cerebro-server"
+            find . -type d -name "cerebro-server" 2>/dev/null
+            exit 1
+          fi
+          ls -la backend/cerebro-server/ | head -5
       - uses: actions/upload-artifact@v4
         with:
           name: backend-linux
@@ -55,9 +71,17 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Build MCP server
+        shell: pwsh
+        run: .\scripts\build-mcp-server.ps1
+      - name: Verify output
+        shell: pwsh
         run: |
-          cd scripts
-          .\build-mcp-server.ps1
+          if (-not (Test-Path "mcp-server\cerebro-mcp-server")) {
+            Write-Error "MCP output not found at mcp-server\cerebro-mcp-server"
+            Get-ChildItem -Recurse -Directory -Filter "cerebro-mcp-server" | Select-Object FullName
+            exit 1
+          }
+          Get-ChildItem "mcp-server\cerebro-mcp-server" | Select-Object -First 5
       - uses: actions/upload-artifact@v4
         with:
           name: mcp-server-win
@@ -73,6 +97,14 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Build MCP server
         run: bash scripts/build-mcp-server.sh
+      - name: Verify output
+        run: |
+          if [ ! -d "mcp-server/cerebro-mcp-server" ]; then
+            echo "MCP output not found at mcp-server/cerebro-mcp-server"
+            find . -type d -name "cerebro-mcp-server" 2>/dev/null
+            exit 1
+          fi
+          ls -la mcp-server/cerebro-mcp-server/ | head -5
       - uses: actions/upload-artifact@v4
         with:
           name: mcp-server-linux

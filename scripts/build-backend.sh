@@ -23,8 +23,24 @@ cp "$SCRIPT_DIR/cerebro-entry.py" "$BACKEND_DIR/cerebro-entry.py"
 cd "$BACKEND_DIR"
 pyinstaller "$SCRIPT_DIR/cerebro-server.spec" --distpath "$PROJECT_DIR/backend" --workpath "$SCRIPT_DIR/.build-work" --clean
 
+# PyInstaller with spec files may ignore --distpath and output to cwd/dist/ instead.
+# Ensure the output ends up where we expect it.
+if [ ! -d "$PROJECT_DIR/backend/cerebro-server" ]; then
+  echo "Output not at expected --distpath location, checking dist/..."
+  if [ -d "$BACKEND_DIR/dist/cerebro-server" ]; then
+    mkdir -p "$PROJECT_DIR/backend"
+    mv "$BACKEND_DIR/dist/cerebro-server" "$PROJECT_DIR/backend/"
+    echo "Moved output from dist/ to backend/"
+  else
+    echo "ERROR: Could not find PyInstaller output"
+    find "$BACKEND_DIR" -name "cerebro-server" -type d 2>/dev/null || true
+    exit 1
+  fi
+fi
+
 # Clean up
 rm -f "$BACKEND_DIR/cerebro-entry.py"
 deactivate
 
 echo "Backend build complete: $PROJECT_DIR/backend/cerebro-server/"
+ls -la "$PROJECT_DIR/backend/cerebro-server/" | head -5
