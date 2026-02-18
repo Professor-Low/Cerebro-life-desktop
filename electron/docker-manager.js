@@ -537,45 +537,62 @@ class DockerManager extends EventEmitter {
       return { success: true, needsRestart };
 
     } else {
-      // Linux: download get-docker.sh, then run as root
-      if (onProgress) onProgress({ stage: 'downloading', message: 'Downloading Docker install script...' });
-      const getDockerScript = path.join(os.tmpdir(), 'get-docker.sh');
+      // Linux: detect distro and install Docker appropriately
+      const user = os.userInfo().username;
+      const wrapperPath = path.join(os.tmpdir(), 'cerebro-install-docker.sh');
+      const markerPath = path.join(os.tmpdir(), 'cerebro-docker-install-done');
+      // Clean up any old marker (may be root-owned from a previous failed run)
+      try { fs.unlinkSync(markerPath); } catch {
+        try { require('child_process').execFileSync('rm', ['-f', markerPath]); } catch {}
+      }
 
       try {
-        await new Promise((resolve, reject) => {
-          const file = fs.createWriteStream(getDockerScript);
-          https.get('https://get.docker.com', (res) => {
-            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-              file.close();
-              https.get(res.headers.location, (r) => {
-                r.pipe(file);
-                file.on('finish', () => file.close(resolve));
-              }).on('error', reject);
-              return;
-            }
-            res.pipe(file);
-            file.on('finish', () => file.close(resolve));
-          }).on('error', reject);
-        });
+        const distro = this._detectLinuxDistro();
 
-        if (onProgress) onProgress({ stage: 'installing', message: 'Installing Docker (password required)...' });
-        const user = os.userInfo().username;
+        if (distro === 'arch') {
+          // Arch-based (Arch, Manjaro, EndeavourOS): use pacman
+          if (onProgress) onProgress({ stage: 'installing', message: 'Installing Docker via pacman (password required)...' });
 
-        // Write a wrapper script that installs Docker and adds user to group
-        const wrapperPath = path.join(os.tmpdir(), 'cerebro-install-docker.sh');
-        const markerPath = path.join(os.tmpdir(), 'cerebro-docker-install-done');
-        // Clean up any old marker
-        try { fs.unlinkSync(markerPath); } catch {}
+          fs.writeFileSync(wrapperPath, [
+            '#!/bin/sh',
+            'pacman -S --noconfirm docker',
+            'systemctl enable docker',
+            'systemctl start docker',
+            `usermod -aG docker "${user}"`,
+            'exit $?',
+          ].join('\n'));
+          fs.chmodSync(wrapperPath, '755');
+        } else {
+          // Debian/Ubuntu/Fedora/RHEL/etc: use get-docker.sh
+          if (onProgress) onProgress({ stage: 'downloading', message: 'Downloading Docker install script...' });
+          const getDockerScript = path.join(os.tmpdir(), 'get-docker.sh');
 
-        fs.writeFileSync(wrapperPath, [
-          '#!/bin/sh',
-          `sh "${getDockerScript}"`,
-          `usermod -aG docker "${user}"`,
-          'RESULT=$?',
-          `echo $RESULT > "${markerPath}"`,
-          'exit $RESULT',
-        ].join('\n'));
-        fs.chmodSync(wrapperPath, '755');
+          await new Promise((resolve, reject) => {
+            const file = fs.createWriteStream(getDockerScript);
+            https.get('https://get.docker.com', (res) => {
+              if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                file.close();
+                https.get(res.headers.location, (r) => {
+                  r.pipe(file);
+                  file.on('finish', () => file.close(resolve));
+                }).on('error', reject);
+                return;
+              }
+              res.pipe(file);
+              file.on('finish', () => file.close(resolve));
+            }).on('error', reject);
+          });
+
+          if (onProgress) onProgress({ stage: 'installing', message: 'Installing Docker (password required)...' });
+
+          fs.writeFileSync(wrapperPath, [
+            '#!/bin/sh',
+            `sh "${getDockerScript}"`,
+            `usermod -aG docker "${user}"`,
+            'exit $?',
+          ].join('\n'));
+          fs.chmodSync(wrapperPath, '755');
+        }
 
         await this._runAsRoot(wrapperPath, [], { timeout: 300000, markerPath });
 
@@ -651,13 +668,13 @@ class DockerManager extends EventEmitter {
       try {
         const startScript = path.join(os.tmpdir(), 'cerebro-start-docker.sh');
         const markerPath = path.join(os.tmpdir(), 'cerebro-docker-start-done');
-        try { fs.unlinkSync(markerPath); } catch {}
+        try { fs.unlinkSync(markerPath); } catch {
+          try { require('child_process').execFileSync('rm', ['-f', markerPath]); } catch {}
+        }
         fs.writeFileSync(startScript, [
           '#!/bin/sh',
           'systemctl start docker',
-          'RESULT=$?',
-          `echo $RESULT > "${markerPath}"`,
-          'exit $RESULT',
+          'exit $?',
         ].join('\n'));
         fs.chmodSync(startScript, '755');
         await this._runAsRoot(startScript, [], { timeout: 30000, markerPath });
@@ -717,15 +734,22 @@ class DockerManager extends EventEmitter {
   _runInTerminal(scriptPath, options = {}) {
     return new Promise(async (resolve, reject) => {
       const markerPath = options.markerPath || path.join(os.tmpdir(), 'cerebro-root-done');
-      try { fs.unlinkSync(markerPath); } catch {}
+      // Clean up marker — may be root-owned from a previous run
+      try { fs.unlinkSync(markerPath); } catch {
+        try { require('child_process').execFileSync('rm', ['-f', markerPath]); } catch {}
+      }
 
       // Wrap in sudo with marker file
       const wrapperPath = path.join(os.tmpdir(), 'cerebro-terminal-wrapper.sh');
       fs.writeFileSync(wrapperPath, [
         '#!/bin/sh',
+        // Clean any root-owned marker from a previous failed run
+        `sudo rm -f "${markerPath}"`,
         `sudo "${scriptPath}"`,
         'RESULT=$?',
-        `echo $RESULT > "${markerPath}"`,
+        // Write marker with sudo and make world-readable so Electron can read+delete it
+        `echo $RESULT | sudo tee "${markerPath}" > /dev/null`,
+        `sudo chmod 666 "${markerPath}"`,
         'echo ""',
         'if [ $RESULT -eq 0 ]; then echo "Done! This window will close in 3 seconds..."; else echo "Failed (exit $RESULT). This window will close in 5 seconds..."; fi',
         'sleep 3',
@@ -777,6 +801,25 @@ class DockerManager extends EventEmitter {
         reject(err);
       });
     });
+  }
+
+  /**
+   * Detect the Linux distribution family.
+   * Returns 'arch', 'debian', 'fedora', or 'unknown'.
+   */
+  _detectLinuxDistro() {
+    try {
+      const osRelease = fs.readFileSync('/etc/os-release', 'utf-8');
+      if (/^ID=arch$/m.test(osRelease) || /^ID_LIKE=.*arch/m.test(osRelease)) return 'arch';
+      if (/^ID_LIKE=.*debian/m.test(osRelease) || /^ID=ubuntu$/m.test(osRelease) || /^ID=debian$/m.test(osRelease)) return 'debian';
+      if (/^ID_LIKE=.*fedora/m.test(osRelease) || /^ID=fedora$/m.test(osRelease)) return 'fedora';
+    } catch {}
+    // Fallback: check for pacman
+    try {
+      fs.accessSync('/usr/bin/pacman', fs.constants.X_OK);
+      return 'arch';
+    } catch {}
+    return 'unknown';
   }
 
   /**
