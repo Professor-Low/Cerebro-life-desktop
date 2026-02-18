@@ -252,6 +252,18 @@ app.whenReady().then(async () => {
   const trayIconPath = path.join(__dirname, '..', 'assets', 'tray-icon.png');
   tray = createTray(mainWindow, trayIconPath);
 
+  // Post-restart resume: check for saved setup state before license gate
+  const savedState = dockerManager.loadSetupState();
+  if (savedState && savedState.step === 'needs-setup') {
+    console.log('[Main] Resuming setup after restart');
+    showSetupWizard();
+    // Signal the activation page to jump to the setup step once loaded
+    mainWindow.webContents.on('did-finish-load', () => {
+      mainWindow.webContents.send('resume-after-restart', savedState);
+    });
+    return;
+  }
+
   // License gate
   const licensed = await checkLicense();
   if (!licensed) {
@@ -487,11 +499,52 @@ ipcMain.handle('get-setup-status', async () => {
 ipcMain.handle('toggle-autostart', (_event, enabled) => {
   app.setLoginItemSettings({
     openAtLogin: enabled,
-    path: app.getPath('exe'),
+    path: process.env.APPIMAGE || app.getPath('exe'),
   });
   return app.getLoginItemSettings().openAtLogin;
 });
 
 ipcMain.handle('get-autostart', () => {
   return app.getLoginItemSettings().openAtLogin;
+});
+
+ipcMain.handle('enable-autostart', () => {
+  app.setLoginItemSettings({
+    openAtLogin: true,
+    path: process.env.APPIMAGE || app.getPath('exe'),
+  });
+  return true;
+});
+
+// Restart & setup state
+ipcMain.handle('needs-restart', () => {
+  return dockerManager.needsRestart();
+});
+
+ipcMain.handle('save-setup-state', (_event, state) => {
+  dockerManager.saveSetupState(state);
+  return true;
+});
+
+ipcMain.handle('load-setup-state', () => {
+  return dockerManager.loadSetupState();
+});
+
+ipcMain.handle('clear-setup-state', () => {
+  dockerManager.clearSetupState();
+  return true;
+});
+
+ipcMain.handle('restart-computer', () => {
+  const { execFile } = require('child_process');
+  if (process.platform === 'win32') {
+    execFile('shutdown', ['/r', '/t', '5'], (err) => {
+      if (err) console.error('[Main] Restart failed:', err.message);
+    });
+  } else {
+    execFile('loginctl', ['reboot'], (err) => {
+      if (err) console.error('[Main] Restart failed:', err.message);
+    });
+  }
+  return true;
 });

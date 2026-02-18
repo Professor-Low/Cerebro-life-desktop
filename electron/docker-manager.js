@@ -10,6 +10,7 @@ const https = require('https');
 const CEREBRO_DIR = path.join(os.homedir(), '.cerebro');
 const COMPOSE_FILE = path.join(CEREBRO_DIR, 'docker-compose.yml');
 const ENV_FILE = path.join(CEREBRO_DIR, '.env');
+const SETUP_STATE_FILE = path.join(CEREBRO_DIR, '.setup-state.json');
 const BACKEND_IMAGE = 'ghcr.io/professor-low/cerebro-backend';
 const MEMORY_IMAGE = 'ghcr.io/professor-low/cerebro-memory';
 
@@ -17,6 +18,8 @@ class DockerManager extends EventEmitter {
   constructor() {
     super();
     this._running = false;
+    this._dockerInstalledThisSession = false;
+    this._needsRestart = false;
     this._ensureCerebroDir();
   }
 
@@ -577,6 +580,8 @@ class DockerManager extends EventEmitter {
 
       // 4. Return based on WSL2 availability
       const needsRestart = !wsl.available;
+      this._dockerInstalledThisSession = true;
+      this._needsRestart = needsRestart;
       if (onProgress) {
         onProgress({
           stage: needsRestart ? 'restart-required' : 'done',
@@ -645,8 +650,10 @@ class DockerManager extends EventEmitter {
 
         await this._runAsRoot(wrapperPath, [], { timeout: 300000, markerPath });
 
-        if (onProgress) onProgress({ stage: 'done', message: 'Docker installed! You may need to log out and back in for group changes.' });
-        return { success: true, needsRestart: false };
+        this._dockerInstalledThisSession = true;
+        this._needsRestart = true; // docker group needs re-login
+        if (onProgress) onProgress({ stage: 'done', message: 'Docker installed! A restart is needed for group changes.' });
+        return { success: true, needsRestart: true };
       } catch (err) {
         return { success: false, needsRestart: false, error: `Installation failed: ${err.message}` };
       }
@@ -896,6 +903,36 @@ class DockerManager extends EventEmitter {
 
   isSetupComplete() {
     return fs.existsSync(COMPOSE_FILE) && fs.existsSync(ENV_FILE);
+  }
+
+  wasDockerInstalledThisSession() {
+    return this._dockerInstalledThisSession;
+  }
+
+  needsRestart() {
+    return this._needsRestart;
+  }
+
+  saveSetupState(state) {
+    this._ensureCerebroDir();
+    fs.writeFileSync(SETUP_STATE_FILE, JSON.stringify({ ...state, savedAt: Date.now() }));
+  }
+
+  loadSetupState() {
+    try {
+      if (fs.existsSync(SETUP_STATE_FILE)) {
+        return JSON.parse(fs.readFileSync(SETUP_STATE_FILE, 'utf-8'));
+      }
+    } catch {}
+    return null;
+  }
+
+  clearSetupState() {
+    try {
+      if (fs.existsSync(SETUP_STATE_FILE)) {
+        fs.unlinkSync(SETUP_STATE_FILE);
+      }
+    } catch {}
   }
 
   _getDefaultComposeContent() {

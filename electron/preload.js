@@ -40,6 +40,14 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
   // Settings
   toggleAutostart: (enabled) => ipcRenderer.invoke('toggle-autostart', enabled),
   getAutostart: () => ipcRenderer.invoke('get-autostart'),
+  enableAutostart: () => ipcRenderer.invoke('enable-autostart'),
+
+  // Restart & setup state
+  needsRestart: () => ipcRenderer.invoke('needs-restart'),
+  saveSetupState: (state) => ipcRenderer.invoke('save-setup-state', state),
+  loadSetupState: () => ipcRenderer.invoke('load-setup-state'),
+  clearSetupState: () => ipcRenderer.invoke('clear-setup-state'),
+  restartComputer: () => ipcRenderer.invoke('restart-computer'),
 
   // Event listeners for progress
   onPullProgress: (callback) => {
@@ -53,6 +61,11 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
   },
   onDockerStartProgress: (callback) => {
     ipcRenderer.on('docker-start-progress', (_event, data) => callback(data));
+  },
+
+  // Resume after restart signal
+  onResumeAfterRestart: (callback) => {
+    ipcRenderer.on('resume-after-restart', (_event, state) => callback(state));
   },
 
   isElectron: true,

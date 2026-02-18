@@ -394,6 +394,21 @@
       color: rgba(139, 92, 246, 0.9);
       text-decoration: underline;
     }
+
+    .countdown-container {
+      width: 140px;
+      height: 140px;
+      margin: 24px auto;
+    }
+    .countdown-ring { width: 100%; height: 100%; }
+    .ring-progress {
+      transition: stroke-dashoffset 1s linear;
+    }
+    @keyframes countdownPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+    .countdown-number { font-family: 'Segoe UI', system-ui, sans-serif; }
   </style>
 </head>
 <body>
@@ -444,6 +459,7 @@
         <div class="dot"></div>
         <div class="dot"></div>
         <div class="dot"></div>
+        <div class="dot"></div>
       </div>
       <h2>Activate Cerebro</h2>
       <div class="subtitle">Enter your license key or activation code</div>
@@ -463,6 +479,7 @@
         <div class="dot done"></div>
         <div class="dot done"></div>
         <div class="dot active"></div>
+        <div class="dot"></div>
         <div class="dot"></div>
         <div class="dot"></div>
         <div class="dot"></div>
@@ -498,14 +515,43 @@
           </div>
         </div>
       </div>
-      <button class="btn btn-primary" id="prereq-continue-btn" disabled onclick="goToStep(4)">Continue</button>
+      <button class="btn btn-primary" id="prereq-continue-btn" disabled onclick="proceedAfterPrereqs()">Continue</button>
       <button class="btn btn-ghost" onclick="checkPrerequisites()">Re-check</button>
       <div class="status" id="prereq-status"></div>
     </div>
 
-    <!-- Step 4: Setup -->
+    <!-- Step 4: Restart -->
+    <div class="step" id="step-restart">
+      <div class="step-dots">
+        <div class="dot done"></div>
+        <div class="dot done"></div>
+        <div class="dot done"></div>
+        <div class="dot active"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+      </div>
+      <h2>Restart Required</h2>
+      <div class="subtitle">Docker was installed but needs a restart to finish setup</div>
+      <div class="countdown-container">
+        <svg class="countdown-ring" viewBox="0 0 120 120">
+          <circle class="ring-bg" cx="60" cy="60" r="52" fill="none" stroke="rgba(139,92,246,0.1)" stroke-width="4"/>
+          <circle class="ring-progress" cx="60" cy="60" r="52" fill="none" stroke="#8b5cf6" stroke-width="4"
+            stroke-linecap="round" stroke-dasharray="326.73" stroke-dashoffset="0"
+            transform="rotate(-90 60 60)"/>
+          <text class="countdown-number" x="60" y="68" text-anchor="middle" fill="#e2e8f0" font-size="36" font-weight="300">15</text>
+        </svg>
+      </div>
+      <div class="subtitle" id="restart-message">Your computer will restart automatically</div>
+      <button class="btn btn-primary" id="restart-now-btn" onclick="restartNow()">Restart Now</button>
+      <button class="btn btn-ghost" onclick="restartLater()">I'll restart later</button>
+      <div class="status" id="restart-status"></div>
+    </div>
+
+    <!-- Step 5: Setup -->
     <div class="step" id="step-setup">
       <div class="step-dots">
+        <div class="dot done"></div>
         <div class="dot done"></div>
         <div class="dot done"></div>
         <div class="dot done"></div>
@@ -528,9 +574,10 @@
       <div class="status" id="setup-status"></div>
     </div>
 
-    <!-- Step 5: MCP Configuration -->
+    <!-- Step 6: MCP Configuration -->
     <div class="step" id="step-mcp">
       <div class="step-dots">
+        <div class="dot done"></div>
         <div class="dot done"></div>
         <div class="dot done"></div>
         <div class="dot done"></div>
@@ -545,13 +592,14 @@
         <div class="mcp-info-body">This configures Claude Code to use Cerebro's MCP server running in Docker, giving it access to 49 cognitive tools including memory, reasoning, and goal tracking. Your ~/.claude/mcp.json will be updated.</div>
       </div>
       <button class="btn btn-primary" id="mcp-setup-btn" onclick="setupMcp()">Yes, Set It Up</button>
-      <button class="btn btn-ghost" onclick="goToStep(6)">Skip for Now</button>
+      <button class="btn btn-ghost" onclick="goToStep(7)">Skip for Now</button>
       <div class="status" id="mcp-status"></div>
     </div>
 
-    <!-- Step 6: Ready -->
+    <!-- Step 7: Ready -->
     <div class="step" id="step-ready">
       <div class="step-dots">
+        <div class="dot done"></div>
         <div class="dot done"></div>
         <div class="dot done"></div>
         <div class="dot done"></div>
@@ -597,7 +645,7 @@
       document.querySelectorAll('.step').forEach(function(s) { s.classList.remove('active'); });
       currentStep = step;
 
-      var stepIds = ['step-welcome', 'step-activate', 'step-prereqs', 'step-setup', 'step-mcp', 'step-ready'];
+      var stepIds = ['step-welcome', 'step-activate', 'step-prereqs', 'step-restart', 'step-setup', 'step-mcp', 'step-ready'];
       var el = document.getElementById(stepIds[step - 1]);
       if (el) el.classList.add('active');
 
@@ -608,9 +656,12 @@
         checkPrerequisites();
       }
       if (step === 4) {
+        startRestartCountdown();
+      }
+      if (step === 5) {
         runSetup();
       }
-      if (step === 6) {
+      if (step === 7) {
         showReadyStep();
       }
     }
@@ -876,7 +927,7 @@
         showStatus('setup-status', 'Setup complete!', 'success');
         return delay(800);
       }).then(function() {
-        goToStep(5);
+        goToStep(6);
       }).catch(function(err) {
         showStatus('setup-status', err.message, 'error');
       });
@@ -890,7 +941,7 @@
       window.cerebroDesktop.configureMcp().then(function(result) {
         if (result.success) {
           showStatus('mcp-status', 'MCP configured at ' + result.configPath, 'success');
-          setTimeout(function() { goToStep(6); }, 1200);
+          setTimeout(function() { goToStep(7); }, 1200);
         } else {
           showStatus('mcp-status', result.error || 'Configuration failed', 'error');
           btn.disabled = false;
@@ -936,6 +987,87 @@
       if (!el) return;
       el.textContent = msg;
       el.className = 'status status-' + type;
+    }
+
+    var countdownTimer = null;
+
+    function proceedAfterPrereqs() {
+      window.cerebroDesktop.needsRestart().then(function(needs) {
+        if (needs) {
+          goToStep(4); // Restart step
+        } else {
+          goToStep(5); // Skip restart, go to Setup
+        }
+      }).catch(function() {
+        goToStep(5); // On error, skip restart
+      });
+    }
+
+    function startRestartCountdown() {
+      var seconds = 15;
+      var circumference = 2 * Math.PI * 52; // r=52
+      var ring = document.querySelector('.ring-progress');
+      var numberEl = document.querySelector('.countdown-number');
+
+      // Save state + enable autostart before countdown
+      window.cerebroDesktop.saveSetupState({ step: 'needs-setup', plan: activatedPlan });
+      window.cerebroDesktop.enableAutostart();
+
+      ring.style.strokeDashoffset = '0';
+      numberEl.textContent = seconds;
+
+      if (countdownTimer) clearInterval(countdownTimer);
+      countdownTimer = setInterval(function() {
+        seconds--;
+        numberEl.textContent = seconds;
+        var offset = circumference * (1 - seconds / 15);
+        ring.style.strokeDashoffset = offset;
+
+        if (seconds <= 0) {
+          clearInterval(countdownTimer);
+          countdownTimer = null;
+          restartNow();
+        }
+      }, 1000);
+    }
+
+    function restartNow() {
+      if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+      var btn = document.getElementById('restart-now-btn');
+      btn.disabled = true;
+      btn.textContent = 'Restarting...';
+      document.getElementById('restart-message').textContent = 'Restarting your computer...';
+
+      window.cerebroDesktop.restartComputer().then(function() {
+        // Command sent — app will be killed by the OS
+      }).catch(function() {
+        btn.textContent = 'Restart Now';
+        btn.disabled = false;
+        showStatus('restart-status', 'Restart failed. Please restart your computer manually.', 'error');
+        document.getElementById('restart-message').textContent = 'Please restart your computer manually, then reopen Cerebro.';
+      });
+    }
+
+    function restartLater() {
+      if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+      // State is already saved — app will resume on next launch
+      window.close();
+    }
+
+    function resumeAfterRestart(state) {
+      // Clear the state file so we don't loop
+      window.cerebroDesktop.clearSetupState();
+      // Restore plan info if saved
+      if (state && state.plan) activatedPlan = state.plan;
+      // Jump straight to Setup (step 5)
+      goToStep(5);
+    }
+
+    // Listen for resume signal from main process (post-restart)
+    if (window.cerebroDesktop.onResumeAfterRestart) {
+      window.cerebroDesktop.onResumeAfterRestart(function(state) {
+        resumeAfterRestart(state);
+      });
     }
 
     function delay(ms) {

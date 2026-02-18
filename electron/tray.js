@@ -66,7 +66,7 @@ function buildMenu(mainWindow, status) {
       click: (menuItem) => {
         app.setLoginItemSettings({
           openAtLogin: menuItem.checked,
-          path: app.getPath('exe'),
+          path: process.env.APPIMAGE || app.getPath('exe'),
         });
       },
     },
