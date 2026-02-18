@@ -615,7 +615,8 @@
       <h2>Cerebro is Ready!</h2>
       <div id="plan-badge-container"></div>
       <div class="subtitle">All systems operational. Welcome aboard.</div>
-      <button class="btn btn-primary" onclick="launchCerebro()">Launch Cerebro</button>
+      <button id="launch-btn" class="btn btn-primary" onclick="launchCerebro()">Launch Cerebro</button>
+      <div id="launch-status" class="status" style="margin-top: 12px;"></div>
     </div>
   </div>
 
@@ -968,7 +969,25 @@
     }
 
     function launchCerebro() {
-      window.cerebroDesktop.wizardComplete();
+      var btn = document.getElementById('launch-btn');
+      btn.disabled = true;
+      btn.textContent = 'Starting Cerebro...';
+      showStatus('launch-status', 'Starting containers and loading frontend...', 'loading');
+
+      window.cerebroDesktop.wizardComplete().then(function(result) {
+        if (result && result.success) {
+          showStatus('launch-status', 'Cerebro is loading...', 'success');
+          // The main process will navigate the window to the frontend
+        } else {
+          btn.disabled = false;
+          btn.textContent = 'Launch Cerebro';
+          showStatus('launch-status', result && result.error ? result.error : 'Failed to start. Please try again.', 'error');
+        }
+      }).catch(function(err) {
+        btn.disabled = false;
+        btn.textContent = 'Launch Cerebro';
+        showStatus('launch-status', err.message || 'Failed to start. Please try again.', 'error');
+      });
     }
 
     function markStep(id, state) {

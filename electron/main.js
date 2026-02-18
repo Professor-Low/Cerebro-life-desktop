@@ -141,6 +141,10 @@ async function startDockerStack() {
 
 async function loadFrontend() {
   updateSplashStatus('Loading Cerebro...');
+
+  let retries = 0;
+  const maxRetries = 15;
+
   mainWindow.loadURL('http://localhost:59000');
 
   mainWindow.webContents.on('did-finish-load', () => {
@@ -156,10 +160,16 @@ async function loadFrontend() {
   });
 
   mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
-    console.error(`[Main] Frontend failed to load: ${errorCode} ${errorDescription}`);
-    setTimeout(() => {
-      if (mainWindow) mainWindow.loadURL('http://localhost:59000');
-    }, 2000);
+    retries++;
+    console.error(`[Main] Frontend failed to load (attempt ${retries}/${maxRetries}): ${errorCode} ${errorDescription}`);
+    if (retries < maxRetries) {
+      setTimeout(() => {
+        if (mainWindow) mainWindow.loadURL('http://localhost:59000');
+      }, 2000);
+    } else {
+      console.error('[Main] Frontend failed to load after max retries, showing wizard');
+      if (mainWindow) showSetupWizard();
+    }
   });
 }
 
