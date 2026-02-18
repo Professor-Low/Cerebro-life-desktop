@@ -603,7 +603,8 @@ class DockerManager extends EventEmitter {
           fs.writeFileSync(wrapperPath, [
             '#!/bin/sh',
             // Sync package database first — stale DB causes 404s on mirrors
-            'pacman -Sy --noconfirm docker',
+            // docker-compose provides the 'docker compose' V2 plugin
+            'pacman -Sy --noconfirm docker docker-compose',
             'systemctl enable docker',
             'systemctl start docker',
             `usermod -aG docker "${user}"`,
