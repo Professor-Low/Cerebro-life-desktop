@@ -107,12 +107,26 @@ class DockerManager extends EventEmitter {
    * Check if Claude Code CLI is installed.
    */
   async isClaudeInstalled() {
+    // Try PATH first
     try {
       const result = await this._run('claude', ['--version'], { timeout: 5000 });
       return { installed: true, version: result };
     } catch {
-      return { installed: false };
+      // PATH lookup failed — check common install locations
     }
+
+    const claudePath = await this.getClaudeCliPath();
+    if (claudePath) {
+      try {
+        const result = await this._run(claudePath, ['--version'], { timeout: 5000 });
+        return { installed: true, version: result, path: claudePath };
+      } catch {
+        // Binary exists but --version failed, still count as installed
+        return { installed: true, path: claudePath };
+      }
+    }
+
+    return { installed: false };
   }
 
   /**
@@ -125,8 +139,15 @@ class DockerManager extends EventEmitter {
       return result.split('\n')[0].trim();
     } catch {
       const fallbacks = isWin
-        ? [path.join(os.homedir(), '.claude', 'local', 'claude.exe'), 'C:\\Program Files\\Claude\\claude.exe']
-        : ['/usr/local/bin/claude', path.join(os.homedir(), '.claude', 'local', 'claude')];
+        ? [
+            path.join(os.homedir(), '.claude', 'local', 'claude.exe'),
+            'C:\\Program Files\\Claude\\claude.exe',
+          ]
+        : [
+            path.join(os.homedir(), '.local', 'bin', 'claude'),
+            path.join(os.homedir(), '.claude', 'local', 'claude'),
+            '/usr/local/bin/claude',
+          ];
       for (const p of fallbacks) {
         if (fs.existsSync(p)) return p;
       }
