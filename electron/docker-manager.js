@@ -476,7 +476,7 @@ class DockerManager extends EventEmitter {
   /**
    * Install Docker Desktop silently.
    * Windows: uses PowerShell Start-Process -Verb RunAs for elevation.
-   * Linux: uses pkexec with get-docker.sh script.
+   * Linux: uses _runAsRoot (pkexec → terminal fallback) with get-docker.sh.
    * Returns { success, needsRestart, error }
    */
   async installDocker(onProgress) {
@@ -516,24 +516,49 @@ class DockerManager extends EventEmitter {
       return { success: true, needsRestart };
 
     } else {
-      // Linux: use get-docker.sh
+      // Linux: download get-docker.sh, then run as root
       if (onProgress) onProgress({ stage: 'downloading', message: 'Downloading Docker install script...' });
-      const scriptPath = path.join(os.tmpdir(), 'get-docker.sh');
+      const getDockerScript = path.join(os.tmpdir(), 'get-docker.sh');
 
       try {
         await new Promise((resolve, reject) => {
-          const file = fs.createWriteStream(scriptPath);
+          const file = fs.createWriteStream(getDockerScript);
           https.get('https://get.docker.com', (res) => {
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+              file.close();
+              https.get(res.headers.location, (r) => {
+                r.pipe(file);
+                file.on('finish', () => file.close(resolve));
+              }).on('error', reject);
+              return;
+            }
             res.pipe(file);
             file.on('finish', () => file.close(resolve));
           }).on('error', reject);
         });
 
-        if (onProgress) onProgress({ stage: 'installing', message: 'Installing Docker (sudo prompt)...' });
+        if (onProgress) onProgress({ stage: 'installing', message: 'Installing Docker (password required)...' });
         const user = os.userInfo().username;
-        await this._run('pkexec', ['sh', '-c', `sh ${scriptPath} && usermod -aG docker ${user}`], { timeout: 300000 });
 
-        if (onProgress) onProgress({ stage: 'done', message: 'Docker installed successfully!' });
+        // Write a wrapper script that installs Docker and adds user to group
+        const wrapperPath = path.join(os.tmpdir(), 'cerebro-install-docker.sh');
+        const markerPath = path.join(os.tmpdir(), 'cerebro-docker-install-done');
+        // Clean up any old marker
+        try { fs.unlinkSync(markerPath); } catch {}
+
+        fs.writeFileSync(wrapperPath, [
+          '#!/bin/sh',
+          `sh "${getDockerScript}"`,
+          `usermod -aG docker "${user}"`,
+          'RESULT=$?',
+          `echo $RESULT > "${markerPath}"`,
+          'exit $RESULT',
+        ].join('\n'));
+        fs.chmodSync(wrapperPath, '755');
+
+        await this._runAsRoot(wrapperPath, [], { timeout: 300000, markerPath });
+
+        if (onProgress) onProgress({ stage: 'done', message: 'Docker installed! You may need to log out and back in for group changes.' });
         return { success: true, needsRestart: false };
       } catch (err) {
         return { success: false, needsRestart: false, error: `Installation failed: ${err.message}` };
@@ -601,9 +626,20 @@ class DockerManager extends EventEmitter {
         return { success: false, error: 'Docker Desktop executable not found' };
       }
     } else {
-      // Linux: start via systemctl
+      // Linux: start via systemctl with root elevation
       try {
-        await this._run('pkexec', ['systemctl', 'start', 'docker'], { timeout: 15000 });
+        const startScript = path.join(os.tmpdir(), 'cerebro-start-docker.sh');
+        const markerPath = path.join(os.tmpdir(), 'cerebro-docker-start-done');
+        try { fs.unlinkSync(markerPath); } catch {}
+        fs.writeFileSync(startScript, [
+          '#!/bin/sh',
+          'systemctl start docker',
+          'RESULT=$?',
+          `echo $RESULT > "${markerPath}"`,
+          'exit $RESULT',
+        ].join('\n'));
+        fs.chmodSync(startScript, '755');
+        await this._runAsRoot(startScript, [], { timeout: 30000, markerPath });
       } catch (err) {
         return { success: false, error: `Failed to start Docker: ${err.message}` };
       }
@@ -625,6 +661,129 @@ class DockerManager extends EventEmitter {
     }
 
     return { success: false, error: `Docker daemon did not start within ${timeoutSec}s` };
+  }
+
+  /**
+   * Run a script as root on Linux.
+   * Tries pkexec first (works if graphical polkit agent is running).
+   * Falls back to spawning a terminal emulator with sudo for password entry.
+   */
+  async _runAsRoot(scriptPath, args, options = {}) {
+    // Try pkexec first
+    try {
+      await this._run('pkexec', [scriptPath, ...args], {
+        timeout: options.timeout || 300000,
+      });
+      return;
+    } catch (err) {
+      // If pkexec fails due to no agent/tty, try terminal fallback
+      const msg = err.message || '';
+      if (msg.includes('textual authentication agent') || msg.includes('/dev/tty') || msg.includes('No such device')) {
+        console.log('[Docker] pkexec failed (no polkit agent), falling back to terminal');
+      } else {
+        throw err;
+      }
+    }
+
+    // Fallback: spawn a visible terminal with sudo
+    await this._runInTerminal(scriptPath, options);
+  }
+
+  /**
+   * Run a script in a visible terminal window with sudo.
+   * Polls for a marker file to detect completion.
+   */
+  _runInTerminal(scriptPath, options = {}) {
+    return new Promise(async (resolve, reject) => {
+      const markerPath = options.markerPath || path.join(os.tmpdir(), 'cerebro-root-done');
+      try { fs.unlinkSync(markerPath); } catch {}
+
+      // Wrap in sudo with marker file
+      const wrapperPath = path.join(os.tmpdir(), 'cerebro-terminal-wrapper.sh');
+      fs.writeFileSync(wrapperPath, [
+        '#!/bin/sh',
+        `sudo "${scriptPath}"`,
+        'RESULT=$?',
+        `echo $RESULT > "${markerPath}"`,
+        'echo ""',
+        'if [ $RESULT -eq 0 ]; then echo "Done! This window will close in 3 seconds..."; else echo "Failed (exit $RESULT). This window will close in 5 seconds..."; fi',
+        'sleep 3',
+        'exit $RESULT',
+      ].join('\n'));
+      fs.chmodSync(wrapperPath, '755');
+
+      // Find an available terminal emulator
+      const terminal = await this._findTerminal();
+      if (!terminal) {
+        reject(new Error('No terminal emulator found. Please install Docker manually: curl -fsSL https://get.docker.com | sudo sh'));
+        return;
+      }
+
+      console.log(`[Docker] Using terminal: ${terminal.cmd}`);
+      const proc = spawn(terminal.cmd, [...terminal.args, wrapperPath], {
+        detached: true,
+        stdio: 'ignore',
+      });
+      proc.unref();
+
+      // Poll for the marker file
+      const timeout = options.timeout || 300000;
+      const startTime = Date.now();
+      const poll = setInterval(() => {
+        if (Date.now() - startTime > timeout) {
+          clearInterval(poll);
+          reject(new Error('Timed out waiting for installation to complete'));
+          return;
+        }
+        if (fs.existsSync(markerPath)) {
+          clearInterval(poll);
+          try {
+            const result = fs.readFileSync(markerPath, 'utf-8').trim();
+            fs.unlinkSync(markerPath);
+            if (result === '0') {
+              resolve();
+            } else {
+              reject(new Error(`Script exited with code ${result}`));
+            }
+          } catch (readErr) {
+            reject(readErr);
+          }
+        }
+      }, 1000);
+
+      proc.on('error', (err) => {
+        clearInterval(poll);
+        reject(err);
+      });
+    });
+  }
+
+  /**
+   * Find an available terminal emulator on Linux.
+   * Returns { cmd, args } where args come before the script path.
+   */
+  async _findTerminal() {
+    const terminals = [
+      { cmd: 'xterm', args: ['-T', 'Cerebro - Docker Setup', '-e'] },
+      { cmd: 'gnome-terminal', args: ['--title=Cerebro - Docker Setup', '--wait', '--'] },
+      { cmd: 'konsole', args: ['--noclose', '-e'] },
+      { cmd: 'xfce4-terminal', args: ['--title=Cerebro - Docker Setup', '-e'] },
+      { cmd: 'mate-terminal', args: ['--title=Cerebro - Docker Setup', '-e'] },
+      { cmd: 'lxterminal', args: ['--title=Cerebro - Docker Setup', '-e'] },
+      { cmd: 'alacritty', args: ['--title', 'Cerebro - Docker Setup', '-e'] },
+      { cmd: 'kitty', args: ['--title', 'Cerebro - Docker Setup'] },
+      { cmd: 'x-terminal-emulator', args: ['-e'] },
+    ];
+
+    for (const t of terminals) {
+      try {
+        await this._run('which', [t.cmd], { timeout: 2000 });
+        return t;
+      } catch {
+        continue;
+      }
+    }
+    return null;
   }
 
   isRunning() {
