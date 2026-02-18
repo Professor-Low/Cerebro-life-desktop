@@ -119,7 +119,7 @@ async function checkLicense() {
 }
 
 function showActivationScreen() {
-  // Close splash, show activation in main window
+  // Close splash, show activation wizard in main window
   if (splashWindow) {
     splashWindow.close();
     splashWindow = null;
@@ -245,6 +245,68 @@ function updateSplashStatus(message) {
   }
 }
 
+// --- Linux desktop integration (first launch) ---
+function installDesktopIntegration() {
+  if (process.platform !== 'linux') return;
+
+  const os = require('os');
+  const homeDir = os.homedir();
+  const markerPath = path.join(app.getPath('userData'), '.desktop-integrated');
+
+  // Only run once
+  if (fs.existsSync(markerPath)) return;
+
+  try {
+    const iconSrc = path.join(__dirname, '..', 'assets', 'icon-256.png');
+    // Fallback to icon.png if 256 doesn't exist
+    const iconFile = fs.existsSync(iconSrc) ? iconSrc : path.join(__dirname, '..', 'assets', 'icon.png');
+
+    if (!fs.existsSync(iconFile)) {
+      console.log('[Main] No icon file found, skipping desktop integration');
+      return;
+    }
+
+    // Install icon
+    const iconDestDir = path.join(homeDir, '.local', 'share', 'icons', 'hicolor', '256x256', 'apps');
+    fs.mkdirSync(iconDestDir, { recursive: true });
+    fs.copyFileSync(iconFile, path.join(iconDestDir, 'cerebro.png'));
+
+    // Create .desktop file
+    const desktopDir = path.join(homeDir, '.local', 'share', 'applications');
+    fs.mkdirSync(desktopDir, { recursive: true });
+
+    const appImagePath = process.env.APPIMAGE || process.execPath;
+    const desktopEntry = [
+      '[Desktop Entry]',
+      'Name=Cerebro',
+      'Comment=Your AI, Everywhere',
+      `Exec="${appImagePath}" %U`,
+      'Icon=cerebro',
+      'Type=Application',
+      'Categories=Utility;ArtificialIntelligence;Science;',
+      'StartupWMClass=cerebro-desktop',
+      'Terminal=false',
+    ].join('\n') + '\n';
+
+    fs.writeFileSync(path.join(desktopDir, 'cerebro.desktop'), desktopEntry);
+
+    // Update desktop database (best effort, no user input involved)
+    const { execFileSync } = require('child_process');
+    try {
+      execFileSync('update-desktop-database', [desktopDir], { timeout: 5000 });
+    } catch (_) { /* not critical */ }
+    try {
+      execFileSync('gtk-update-icon-cache', ['-f', '-t', path.join(homeDir, '.local', 'share', 'icons', 'hicolor')], { timeout: 5000 });
+    } catch (_) { /* not critical */ }
+
+    // Mark as done
+    fs.writeFileSync(markerPath, new Date().toISOString());
+    console.log('[Main] Desktop integration installed');
+  } catch (err) {
+    console.error('[Main] Desktop integration failed:', err.message);
+  }
+}
+
 async function shutdown() {
   console.log('[Main] Shutting down...');
 
@@ -276,6 +338,10 @@ async function shutdown() {
 // App lifecycle
 app.whenReady().then(async () => {
   console.log(`[Main] Edition: ${edition}`);
+
+  // Install .desktop file + icon on Linux first launch
+  installDesktopIntegration();
+
   createSplashWindow();
   createMainWindow();
 
@@ -287,7 +353,7 @@ app.whenReady().then(async () => {
   const licensed = await checkLicense();
   if (!licensed) {
     showActivationScreen();
-    return; // Don't start services until license is activated
+    return; // Don't start services until license is activated via wizard
   }
 
   await startServices();
@@ -351,14 +417,38 @@ ipcMain.handle('get-license-status', () => {
 ipcMain.handle('activate-license', async (_event, key) => {
   const result = await licenseManager.activate(key);
   if (result.success) {
-    // License activated — start services after a brief delay
-    console.log(`[Main] License activated (plan: ${result.plan}), starting services...`);
-    setTimeout(async () => {
-      await startServices();
-      updateTrayStatus(tray, 'running');
-    }, 500);
+    console.log(`[Main] License activated (plan: ${result.plan})`);
+    // Don't auto-start services — the wizard handles the flow
   }
   return result;
+});
+
+// Wizard IPC handlers
+ipcMain.handle('start-services', async () => {
+  try {
+    await startServices();
+    updateTrayStatus(tray, 'running');
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('wizard-complete', async () => {
+  // Wizard is done — services are already starting/started via start-services
+  // The frontend URL is already being loaded by startServices()
+  console.log('[Main] Wizard complete');
+  return { success: true };
+});
+
+ipcMain.handle('get-setup-status', () => {
+  return {
+    licensed: licenseManager.getStatus().valid,
+    edition,
+    backendRunning: backendManager?.isRunning() ?? false,
+    redisRunning: redisManager?.isRunning() ?? false,
+    mcpRunning: mcpManager?.isRunning() ?? false,
+  };
 });
 
 // Configure MCP for Claude Code (Full Stack only)

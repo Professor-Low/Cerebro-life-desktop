@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Cerebro - Activate License</title>
+  <title>Cerebro - Setup</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -15,38 +15,79 @@
       height: 100vh;
       overflow: hidden;
     }
-    .container {
+
+    .wizard {
+      width: 520px;
+      min-height: 480px;
+      position: relative;
+    }
+
+    .step {
+      display: none;
       background: radial-gradient(ellipse at center, #1a1025 0%, #0a0a0f 100%);
       border: 1px solid rgba(139, 92, 246, 0.3);
       border-radius: 20px;
       padding: 48px;
-      width: 460px;
       text-align: center;
       box-shadow: 0 0 60px rgba(139, 92, 246, 0.1);
+      animation: fadeIn 0.3s ease-out;
     }
-    .logo {
-      width: 64px;
-      height: 64px;
-      margin: 0 auto 16px;
+
+    .step.active { display: block; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
     }
-    .logo svg {
+
+    /* Orb logo */
+    .orb-container {
+      width: 96px;
+      height: 96px;
+      margin: 0 auto 24px;
+      position: relative;
+    }
+    .orb-container svg {
       width: 100%;
       height: 100%;
-      filter: drop-shadow(0 0 15px rgba(139, 92, 246, 0.4));
+      filter: drop-shadow(0 0 20px rgba(139, 92, 246, 0.5));
     }
+    @keyframes orbGlow {
+      0%, 100% { filter: drop-shadow(0 0 20px rgba(139, 92, 246, 0.4)); }
+      50% { filter: drop-shadow(0 0 35px rgba(139, 92, 246, 0.7)); }
+    }
+    .orb-animated svg {
+      animation: orbGlow 3s ease-in-out infinite;
+    }
+
     h1 {
-      font-size: 24px;
+      font-size: 28px;
       font-weight: 300;
-      letter-spacing: 4px;
+      letter-spacing: 6px;
       text-transform: uppercase;
-      margin-bottom: 4px;
+      margin-bottom: 8px;
+    }
+    h2 {
+      font-size: 20px;
+      font-weight: 300;
+      letter-spacing: 3px;
+      margin-bottom: 8px;
     }
     .subtitle {
       color: rgba(139, 92, 246, 0.6);
-      font-size: 12px;
-      letter-spacing: 2px;
+      font-size: 13px;
+      letter-spacing: 1px;
       margin-bottom: 32px;
+      line-height: 1.6;
     }
+    .tagline {
+      color: rgba(139, 92, 246, 0.7);
+      font-size: 15px;
+      letter-spacing: 2px;
+      margin-bottom: 40px;
+    }
+
+    /* Form elements */
     .form-group {
       margin-bottom: 20px;
       text-align: left;
@@ -59,14 +100,21 @@
       letter-spacing: 1px;
       margin-bottom: 8px;
     }
+    .input-hint {
+      font-size: 11px;
+      color: rgba(226, 232, 240, 0.3);
+      margin-top: 6px;
+      text-transform: none;
+      letter-spacing: 0;
+    }
     input[type="text"] {
       width: 100%;
-      padding: 12px 16px;
+      padding: 14px 16px;
       background: rgba(139, 92, 246, 0.05);
       border: 1px solid rgba(139, 92, 246, 0.2);
       border-radius: 8px;
       color: #e2e8f0;
-      font-size: 15px;
+      font-size: 16px;
       font-family: 'Courier New', monospace;
       letter-spacing: 2px;
       outline: none;
@@ -78,10 +126,13 @@
     input[type="text"]::placeholder {
       color: rgba(226, 232, 240, 0.2);
       letter-spacing: 1px;
+      font-size: 13px;
     }
+
+    /* Buttons */
     .btn {
       width: 100%;
-      padding: 12px;
+      padding: 14px;
       border: none;
       border-radius: 8px;
       font-size: 14px;
@@ -90,11 +141,11 @@
       text-transform: uppercase;
       cursor: pointer;
       transition: all 0.2s;
+      margin-bottom: 10px;
     }
     .btn-primary {
       background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
       color: white;
-      margin-bottom: 12px;
     }
     .btn-primary:hover {
       transform: translateY(-1px);
@@ -115,7 +166,18 @@
       border-color: rgba(139, 92, 246, 0.4);
       color: rgba(139, 92, 246, 0.9);
     }
-    #status {
+    .btn-ghost {
+      background: transparent;
+      color: rgba(226, 232, 240, 0.4);
+      font-size: 12px;
+      padding: 10px;
+    }
+    .btn-ghost:hover {
+      color: rgba(226, 232, 240, 0.7);
+    }
+
+    /* Status messages */
+    .status {
       margin-top: 16px;
       font-size: 13px;
       min-height: 20px;
@@ -123,8 +185,118 @@
     .status-error { color: #f87171; }
     .status-success { color: #4ade80; }
     .status-loading { color: rgba(139, 92, 246, 0.7); }
+
+    /* Progress bar */
+    .progress-container {
+      margin: 32px 0;
+    }
+    .progress-bar-track {
+      width: 100%;
+      height: 4px;
+      background: rgba(139, 92, 246, 0.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+      border-radius: 2px;
+      width: 0%;
+      transition: width 0.5s ease;
+    }
+    .progress-status {
+      margin-top: 16px;
+      font-size: 13px;
+      color: rgba(139, 92, 246, 0.7);
+      min-height: 40px;
+    }
+    .progress-step {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: rgba(226, 232, 240, 0.4);
+    }
+    .progress-step.done { color: #4ade80; }
+    .progress-step.active { color: rgba(139, 92, 246, 0.8); }
+    .progress-step .icon { width: 16px; text-align: center; }
+
+    /* Success checkmark */
+    .success-icon {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 24px;
+      border-radius: 50%;
+      background: rgba(74, 222, 128, 0.1);
+      border: 2px solid rgba(74, 222, 128, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: scaleIn 0.4s ease-out;
+    }
+    @keyframes scaleIn {
+      from { transform: scale(0.5); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .success-icon svg {
+      width: 40px;
+      height: 40px;
+      color: #4ade80;
+    }
+    .plan-badge {
+      display: inline-block;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin: 16px 0 24px;
+    }
+    .plan-pro { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+    .plan-pro-plus { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); }
+
+    /* MCP setup */
+    .mcp-info {
+      background: rgba(139, 92, 246, 0.05);
+      border: 1px solid rgba(139, 92, 246, 0.15);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 24px;
+      text-align: left;
+    }
+    .mcp-info-title {
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 8px;
+      color: #a78bfa;
+    }
+    .mcp-info-body {
+      font-size: 13px;
+      color: rgba(226, 232, 240, 0.5);
+      line-height: 1.5;
+    }
+
+    /* Step indicator */
+    .step-dots {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 32px;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(139, 92, 246, 0.2);
+      transition: all 0.3s;
+    }
+    .dot.active { background: #8b5cf6; transform: scale(1.2); }
+    .dot.done { background: #4ade80; }
+
     .links {
-      margin-top: 24px;
+      margin-top: 16px;
       font-size: 12px;
       color: rgba(226, 232, 240, 0.3);
     }
@@ -139,97 +311,278 @@
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="logo">
-      <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <radialGradient id="g" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stop-color="#a78bfa"/>
-            <stop offset="50%" stop-color="#8b5cf6"/>
-            <stop offset="100%" stop-color="#6d28d9"/>
-          </radialGradient>
-        </defs>
-        <circle cx="50" cy="50" r="42" fill="url(#g)" opacity="0.9"/>
-        <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(167,139,250,0.4)" stroke-width="1"/>
-        <circle cx="50" cy="30" r="3" fill="#e2e8f0" opacity="0.8"/>
-        <circle cx="35" cy="45" r="2.5" fill="#e2e8f0" opacity="0.6"/>
-        <circle cx="65" cy="45" r="2.5" fill="#e2e8f0" opacity="0.6"/>
-        <circle cx="40" cy="60" r="2" fill="#e2e8f0" opacity="0.5"/>
-        <circle cx="60" cy="60" r="2" fill="#e2e8f0" opacity="0.5"/>
-        <circle cx="50" cy="70" r="2.5" fill="#e2e8f0" opacity="0.7"/>
-        <line x1="50" y1="30" x2="35" y2="45" stroke="#e2e8f0" stroke-width="0.5" opacity="0.3"/>
-        <line x1="50" y1="30" x2="65" y2="45" stroke="#e2e8f0" stroke-width="0.5" opacity="0.3"/>
-        <line x1="35" y1="45" x2="40" y2="60" stroke="#e2e8f0" stroke-width="0.5" opacity="0.3"/>
-        <line x1="65" y1="45" x2="60" y2="60" stroke="#e2e8f0" stroke-width="0.5" opacity="0.3"/>
-        <line x1="40" y1="60" x2="50" y2="70" stroke="#e2e8f0" stroke-width="0.5" opacity="0.3"/>
-        <line x1="60" y1="60" x2="50" y2="70" stroke="#e2e8f0" stroke-width="0.5" opacity="0.3"/>
-      </svg>
+  <div class="wizard">
+    <!-- Step 1: Welcome -->
+    <div class="step active" id="step-welcome">
+      <div class="orb-container orb-animated">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="g1" cx="50%" cy="40%" r="50%">
+              <stop offset="0%" stop-color="#c4b5fd"/>
+              <stop offset="40%" stop-color="#8b5cf6"/>
+              <stop offset="100%" stop-color="#4c1d95"/>
+            </radialGradient>
+          </defs>
+          <circle cx="50" cy="50" r="44" fill="url(#g1)" opacity="0.9"/>
+          <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(167,139,250,0.3)" stroke-width="0.5"/>
+          <circle cx="50" cy="28" r="3" fill="#e2e8f0" opacity="0.8"/>
+          <circle cx="33" cy="42" r="2.5" fill="#e2e8f0" opacity="0.6"/>
+          <circle cx="67" cy="42" r="2.5" fill="#e2e8f0" opacity="0.6"/>
+          <circle cx="38" cy="60" r="2" fill="#e2e8f0" opacity="0.5"/>
+          <circle cx="62" cy="60" r="2" fill="#e2e8f0" opacity="0.5"/>
+          <circle cx="50" cy="72" r="2.5" fill="#e2e8f0" opacity="0.7"/>
+          <line x1="50" y1="28" x2="33" y2="42" stroke="#e2e8f0" stroke-width="0.5" opacity="0.3"/>
+          <line x1="50" y1="28" x2="67" y2="42" stroke="#e2e8f0" stroke-width="0.5" opacity="0.3"/>
+          <line x1="33" y1="42" x2="38" y2="60" stroke="#e2e8f0" stroke-width="0.5" opacity="0.3"/>
+          <line x1="67" y1="42" x2="62" y2="60" stroke="#e2e8f0" stroke-width="0.5" opacity="0.3"/>
+          <line x1="38" y1="60" x2="50" y2="72" stroke="#e2e8f0" stroke-width="0.5" opacity="0.3"/>
+          <line x1="62" y1="60" x2="50" y2="72" stroke="#e2e8f0" stroke-width="0.5" opacity="0.3"/>
+          <line x1="33" y1="42" x2="67" y2="42" stroke="#e2e8f0" stroke-width="0.3" opacity="0.2"/>
+          <line x1="38" y1="60" x2="62" y2="60" stroke="#e2e8f0" stroke-width="0.3" opacity="0.2"/>
+        </svg>
+      </div>
+      <h1>Cerebro</h1>
+      <div class="tagline">Your AI just came alive</div>
+      <button class="btn btn-primary" onclick="goToStep(2)">Get Started</button>
+      <div class="links">
+        <a href="https://cerebro.life" target="_blank">cerebro.life</a>
+      </div>
     </div>
-    <h1>Cerebro</h1>
-    <div class="subtitle">License Activation</div>
 
-    <div class="form-group">
-      <label for="license-key">License Key</label>
-      <input type="text" id="license-key" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false">
+    <!-- Step 2: Activate -->
+    <div class="step" id="step-activate">
+      <div class="step-dots">
+        <div class="dot done"></div>
+        <div class="dot active"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+      </div>
+      <h2>Activate Cerebro</h2>
+      <div class="subtitle">Enter your license key or activation code</div>
+
+      <div class="form-group">
+        <label for="license-input">License Key / Activation Code</label>
+        <input type="text" id="license-input" placeholder="CPRP-XXXXXXXX-... or KPWDH7PY" autocomplete="off" spellcheck="false">
+        <div class="input-hint">Accepts license keys (CPRO/CPRP-...) or 8-character activation codes</div>
+      </div>
+
+      <button class="btn btn-primary" id="activate-btn" onclick="activateLicense()">Activate</button>
+      <button class="btn btn-secondary" onclick="window.open('https://cerebro.life/pricing', '_blank')">Buy a License</button>
+
+      <div class="status" id="activate-status"></div>
     </div>
 
-    <button class="btn btn-primary" id="activate-btn" onclick="activate()">Activate</button>
-    <button class="btn btn-secondary" onclick="buyLicense()">Buy a License</button>
+    <!-- Step 3: MCP Setup -->
+    <div class="step" id="step-mcp">
+      <div class="step-dots">
+        <div class="dot done"></div>
+        <div class="dot done"></div>
+        <div class="dot active"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+      </div>
+      <h2>Claude Code Integration</h2>
+      <div class="subtitle">Optional: Connect Cerebro's cognitive tools to Claude Code</div>
 
-    <div id="status"></div>
+      <div class="mcp-info">
+        <div class="mcp-info-title">What does this do?</div>
+        <div class="mcp-info-body">This configures Claude Code to use Cerebro's MCP server, giving it access to 49 cognitive tools including memory, reasoning, and goal tracking. Your ~/.claude/mcp.json will be updated.</div>
+      </div>
 
-    <div class="links">
-      <a href="https://cerebro.life" target="_blank">cerebro.life</a>
+      <button class="btn btn-primary" id="mcp-setup-btn" onclick="setupMcp()">Yes, Set It Up</button>
+      <button class="btn btn-ghost" onclick="goToStep(4)">Skip for Now</button>
+
+      <div class="status" id="mcp-status"></div>
+    </div>
+
+    <!-- Step 4: Progress -->
+    <div class="step" id="step-progress">
+      <div class="step-dots">
+        <div class="dot done"></div>
+        <div class="dot done"></div>
+        <div class="dot done"></div>
+        <div class="dot active"></div>
+        <div class="dot"></div>
+      </div>
+      <h2>Starting Cerebro</h2>
+      <div class="subtitle">Launching services...</div>
+
+      <div class="progress-container">
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" id="progress-fill"></div>
+        </div>
+        <div class="progress-status" id="progress-steps">
+          <div class="progress-step" id="ps-redis"><span class="icon">&#9675;</span> Starting Redis...</div>
+          <div class="progress-step" id="ps-backend"><span class="icon">&#9675;</span> Starting backend...</div>
+          <div class="progress-step" id="ps-mcp"><span class="icon">&#9675;</span> Starting MCP server...</div>
+          <div class="progress-step" id="ps-frontend"><span class="icon">&#9675;</span> Loading Cerebro...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 5: Ready -->
+    <div class="step" id="step-ready">
+      <div class="step-dots">
+        <div class="dot done"></div>
+        <div class="dot done"></div>
+        <div class="dot done"></div>
+        <div class="dot done"></div>
+        <div class="dot done"></div>
+      </div>
+
+      <div class="success-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </div>
+
+      <h2>Cerebro is Ready!</h2>
+      <div id="plan-badge-container"></div>
+      <div class="subtitle">All systems operational. Welcome aboard.</div>
+
+      <button class="btn btn-primary" onclick="launchCerebro()">Launch Cerebro</button>
     </div>
   </div>
 
   <script>
-    const keyInput = document.getElementById('license-key');
-    const activateBtn = document.getElementById('activate-btn');
-    const statusEl = document.getElementById('status');
+    let currentStep = 1;
+    let activatedPlan = null;
 
-    keyInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') activate();
+    const licenseInput = document.getElementById('license-input');
+    const activateBtn = document.getElementById('activate-btn');
+
+    licenseInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') activateLicense();
     });
 
-    async function activate() {
-      const key = keyInput.value.trim();
+    function goToStep(step) {
+      document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+      currentStep = step;
+
+      const stepIds = ['step-welcome', 'step-activate', 'step-mcp', 'step-progress', 'step-ready'];
+      const el = document.getElementById(stepIds[step - 1]);
+      if (el) el.classList.add('active');
+
+      if (step === 2) {
+        setTimeout(() => licenseInput.focus(), 100);
+      }
+
+      if (step === 4) {
+        startServices();
+      }
+    }
+
+    async function activateLicense() {
+      const key = licenseInput.value.trim();
       if (!key) {
-        showStatus('Please enter a license key', 'error');
+        showStatus('activate-status', 'Please enter a license key or activation code', 'error');
         return;
       }
 
       activateBtn.disabled = true;
-      showStatus('Validating...', 'loading');
+      showStatus('activate-status', 'Validating...', 'loading');
 
       try {
         const result = await window.cerebroDesktop.activateLicense(key);
         if (result.success) {
-          showStatus('License activated! Loading Cerebro...', 'success');
+          activatedPlan = result.plan;
+          showStatus('activate-status', 'Activated!', 'success');
+          setTimeout(() => goToStep(3), 800);
         } else {
-          showStatus(result.error || 'Activation failed', 'error');
+          showStatus('activate-status', result.error || 'Activation failed', 'error');
           activateBtn.disabled = false;
         }
       } catch (err) {
-        showStatus('Connection error. Please check your internet.', 'error');
+        showStatus('activate-status', 'Connection error. Please check your internet.', 'error');
         activateBtn.disabled = false;
       }
     }
 
-    function buyLicense() {
-      // Open in default browser
-      const { shell } = require('electron');
-      // Since we're in a sandboxed context, use the preload bridge
-      window.open('https://cerebro.life/pricing', '_blank');
+    async function setupMcp() {
+      const btn = document.getElementById('mcp-setup-btn');
+      btn.disabled = true;
+      showStatus('mcp-status', 'Configuring...', 'loading');
+
+      try {
+        const result = await window.cerebroDesktop.configureMcp();
+        if (result.success) {
+          showStatus('mcp-status', 'MCP configured at ' + result.configPath, 'success');
+          setTimeout(() => goToStep(4), 1200);
+        } else {
+          showStatus('mcp-status', result.error || 'Configuration failed', 'error');
+          btn.disabled = false;
+        }
+      } catch (err) {
+        showStatus('mcp-status', 'Failed to configure MCP', 'error');
+        btn.disabled = false;
+      }
     }
 
-    function showStatus(msg, type) {
-      statusEl.textContent = msg;
-      statusEl.className = 'status-' + type;
+    async function startServices() {
+      const steps = ['ps-redis', 'ps-backend', 'ps-mcp', 'ps-frontend'];
+      const fill = document.getElementById('progress-fill');
+
+      try {
+        const result = await window.cerebroDesktop.startServices();
+
+        for (let i = 0; i < steps.length; i++) {
+          const el = document.getElementById(steps[i]);
+          el.classList.add('active');
+          el.querySelector('.icon').textContent = '\u25CB';
+          fill.style.width = ((i + 1) * 25) + '%';
+
+          await delay(800);
+
+          el.classList.remove('active');
+          el.classList.add('done');
+          el.querySelector('.icon').textContent = '\u2713';
+        }
+
+        showReadyStep();
+      } catch (err) {
+        for (let i = 0; i < steps.length; i++) {
+          const el = document.getElementById(steps[i]);
+          el.classList.add('done');
+          el.querySelector('.icon').textContent = '\u2713';
+          fill.style.width = ((i + 1) * 25) + '%';
+          await delay(500);
+        }
+        showReadyStep();
+      }
     }
 
-    // Focus the input on load
-    keyInput.focus();
+    function showReadyStep() {
+      const container = document.getElementById('plan-badge-container');
+      // Clear any existing content
+      while (container.firstChild) {
+        container.removeChild(container.firstChild);
+      }
+
+      if (activatedPlan) {
+        const isPlus = activatedPlan === 'pro-plus';
+        const badge = document.createElement('span');
+        badge.className = 'plan-badge ' + (isPlus ? 'plan-pro-plus' : 'plan-pro');
+        badge.textContent = isPlus ? 'Pro+' : 'Pro';
+        container.appendChild(badge);
+      }
+
+      goToStep(5);
+    }
+
+    function launchCerebro() {
+      window.cerebroDesktop.wizardComplete();
+    }
+
+    function showStatus(elementId, msg, type) {
+      const el = document.getElementById(elementId);
+      el.textContent = msg;
+      el.className = 'status status-' + type;
+    }
+
+    function delay(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
   </script>
 </body>
 </html>
