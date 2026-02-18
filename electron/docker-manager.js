@@ -103,15 +103,27 @@ class DockerManager extends EventEmitter {
 
   /**
    * Check if Docker daemon is running.
+   * Tries docker info first (needs socket access / docker group).
+   * Falls back to systemctl on Linux (works without docker group).
    */
   async isDockerRunning() {
-    const dockerCmd = this._findDockerPath() || 'docker';
+    const dockerCmd = this._dockerCmd();
     try {
       await this._run(dockerCmd, ['info'], { timeout: 10000 });
       return true;
     } catch {
-      return false;
+      // docker info may fail if user not in docker group yet (needs re-login)
     }
+    // Linux fallback: check systemd service status (no group needed)
+    if (process.platform !== 'win32') {
+      try {
+        const result = await this._run('systemctl', ['is-active', 'docker'], { timeout: 5000 });
+        return result.trim() === 'active';
+      } catch {
+        return false;
+      }
+    }
+    return false;
   }
 
   /**
