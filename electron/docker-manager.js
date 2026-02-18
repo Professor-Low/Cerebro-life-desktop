@@ -87,20 +87,57 @@ class DockerManager extends EventEmitter {
       await this._run('docker', ['--version']);
       return true;
     } catch {
-      return false;
+      // PATH lookup failed — check common install locations
     }
+    const dockerPath = this._findDockerPath();
+    if (dockerPath) {
+      try {
+        await this._run(dockerPath, ['--version']);
+        return true;
+      } catch {
+        return true; // Binary exists even if --version fails
+      }
+    }
+    return false;
   }
 
   /**
    * Check if Docker daemon is running.
    */
   async isDockerRunning() {
+    const dockerCmd = this._findDockerPath() || 'docker';
     try {
-      await this._run('docker', ['info'], { timeout: 10000 });
+      await this._run(dockerCmd, ['info'], { timeout: 10000 });
       return true;
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Find the Docker binary path (fallback when PATH doesn't include it).
+   * Caches the result for subsequent calls.
+   */
+  _findDockerPath() {
+    if (this._dockerPath !== undefined) return this._dockerPath;
+    const candidates = process.platform === 'win32'
+      ? ['C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe']
+      : ['/usr/bin/docker', '/usr/local/bin/docker'];
+    for (const p of candidates) {
+      if (fs.existsSync(p)) {
+        this._dockerPath = p;
+        return p;
+      }
+    }
+    this._dockerPath = null;
+    return null;
+  }
+
+  /**
+   * Get the docker command — resolved path or just 'docker' for PATH lookup.
+   */
+  _dockerCmd() {
+    return this._findDockerPath() || 'docker';
   }
 
   /**
@@ -230,7 +267,7 @@ class DockerManager extends EventEmitter {
 
     try {
       await this._spawnWithOutput(
-        'docker',
+        this._dockerCmd(),
         ['compose', '-f', COMPOSE_FILE, '--env-file', ENV_FILE, 'pull'],
         (line) => {
           if (onProgress) onProgress({ stage: 'pulling', message: line.trim() });
@@ -251,7 +288,7 @@ class DockerManager extends EventEmitter {
     this.emit('status', 'starting');
 
     try {
-      await this._run('docker', [
+      await this._run(this._dockerCmd(), [
         'compose', '-f', COMPOSE_FILE, '--env-file', ENV_FILE,
         'up', '-d', '--remove-orphans',
       ], { timeout: 60000 });
@@ -275,7 +312,7 @@ class DockerManager extends EventEmitter {
     this.emit('status', 'stopping');
 
     try {
-      await this._run('docker', [
+      await this._run(this._dockerCmd(), [
         'compose', '-f', COMPOSE_FILE, '--env-file', ENV_FILE,
         'down',
       ], { timeout: 30000 });
@@ -294,7 +331,7 @@ class DockerManager extends EventEmitter {
    */
   async getStatus() {
     try {
-      const output = await this._run('docker', [
+      const output = await this._run(this._dockerCmd(), [
         'compose', '-f', COMPOSE_FILE, '--env-file', ENV_FILE,
         'ps', '--format', 'json',
       ], { timeout: 10000 });
@@ -318,12 +355,12 @@ class DockerManager extends EventEmitter {
    */
   async checkForUpdates() {
     try {
-      const localBackend = await this._run('docker', [
+      const localBackend = await this._run(this._dockerCmd(), [
         'inspect', '--format', '{{index .RepoDigests 0}}',
         `${BACKEND_IMAGE}:latest`,
       ]).catch(() => null);
 
-      const remoteResult = await this._run('docker', [
+      const remoteResult = await this._run(this._dockerCmd(), [
         'manifest', 'inspect', `${BACKEND_IMAGE}:latest`,
       ], { timeout: 15000 }).catch(() => null);
 
@@ -358,7 +395,7 @@ class DockerManager extends EventEmitter {
    */
   async getLogs(lines = 50) {
     try {
-      return await this._run('docker', [
+      return await this._run(this._dockerCmd(), [
         'compose', '-f', COMPOSE_FILE, '--env-file', ENV_FILE,
         'logs', '--tail', String(lines),
       ], { timeout: 10000 });
