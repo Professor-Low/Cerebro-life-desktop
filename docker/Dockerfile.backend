@@ -1,0 +1,25 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install system dependencies for potential numpy/scipy usage
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY backend-src/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy backend source
+COPY backend-src/ .
+
+# Copy frontend (served as static files by FastAPI)
+COPY frontend/ /app/frontend/
+
+EXPOSE 59000
+
+HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:59000/health || exit 1
+
+CMD ["uvicorn", "main:socket_app", "--host", "0.0.0.0", "--port", "59000"]

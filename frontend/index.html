@@ -19659,6 +19659,40 @@
             background: var(--bg-hover);
         }
 
+        /* Claude Code banner */
+        .claude-banner {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            background: rgba(234, 179, 8, 0.08);
+            border-bottom: 1px solid rgba(234, 179, 8, 0.2);
+            font-size: 13px;
+            color: #eab308;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .claude-banner-icon { flex-shrink: 0; font-size: 16px; }
+        .claude-banner-text { flex: 1; }
+        .claude-banner-text a {
+            color: #f59e0b;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        .claude-banner-text a:hover { color: #fbbf24; }
+        .claude-banner-close {
+            flex-shrink: 0;
+            background: none;
+            border: none;
+            color: rgba(234, 179, 8, 0.6);
+            cursor: pointer;
+            font-size: 18px;
+            padding: 4px 8px;
+            line-height: 1;
+        }
+        .claude-banner-close:hover { color: #eab308; }
+
     </style>
 </head>
 <body>
@@ -19680,6 +19714,12 @@
 
         <!-- Main App -->
         <div id="main-app" class="hidden">
+            <!-- Claude Code Banner (Electron only, shown when Claude CLI not detected) -->
+            <div class="claude-banner" id="claude-banner" style="display:none;">
+                <span class="claude-banner-icon">&#9888;</span>
+                <span class="claude-banner-text">Claude Code not detected. Cerebro works best with Claude Code CLI for AI-powered features. <a href="https://docs.anthropic.com/en/docs/claude-code/overview" target="_blank">Install Claude Code</a></span>
+                <button class="claude-banner-close" id="claude-banner-close" title="Dismiss">&times;</button>
+            </div>
             <!-- Header -->
             <header class="header">
                 <div class="logo">
@@ -21951,6 +21991,30 @@
         let conversationalMode = false;
         let silenceTimer = null;
 
+        // ==================== CLAUDE CODE BANNER ====================
+        function checkClaudeCodeBanner() {
+            if (!window.cerebroDesktop) return; // Only in Electron context
+            if (sessionStorage.getItem('claude_banner_dismissed')) return;
+
+            window.cerebroDesktop.checkClaudeCode().then(function(claude) {
+                if (!claude.installed) {
+                    var banner = document.getElementById('claude-banner');
+                    if (banner) banner.style.display = 'flex';
+                }
+            }).catch(function() {
+                // Silent failure — don't show banner if check fails
+            });
+
+            var closeBtn = document.getElementById('claude-banner-close');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', function() {
+                    var banner = document.getElementById('claude-banner');
+                    if (banner) banner.style.display = 'none';
+                    sessionStorage.setItem('claude_banner_dismissed', '1');
+                });
+            }
+        }
+
         // ==================== AUTH ====================
         async function login() {
             const password = document.getElementById('password-input').value;
@@ -21993,6 +22057,9 @@
 
         // ==================== INIT ====================
         async function initApp() {
+            // Check Claude Code availability (Electron only)
+            checkClaudeCodeBanner();
+
             updateDateTime();
             setInterval(updateDateTime, 60000);
 

@@ -1,7 +1,7 @@
 appId: com.cerebro.desktop
 productName: Cerebro
 copyright: Copyright 2024-2026 Professor (Michael Anthony Lopez)
-artifactName: Cerebro-FullStack-Setup-${version}-${arch}.${ext}
+artifactName: Cerebro-Setup-${version}-${arch}.${ext}
 
 directories:
   output: dist
@@ -10,22 +10,9 @@ directories:
 files:
   - electron/**/*
   - frontend/**/*
+  - docker/**/*
   - assets/**/*
   - package.json
-
-extraResources:
-  - from: backend/
-    to: backend
-    filter:
-      - "**/*"
-  - from: redis/
-    to: redis
-    filter:
-      - "**/*"
-  - from: mcp-server/
-    to: mcp-server
-    filter:
-      - "**/*"
 
 asar: true
 asarUnpack:

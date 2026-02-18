@@ -1,6 +1,6 @@
 {
   "name": "cerebro-desktop",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Cerebro - Your AI, Everywhere",
   "author": "Professor (Michael Anthony Lopez) <lopez.michael19007@gmail.com>",
   "license": "AGPL-3.0",
@@ -8,14 +8,11 @@
   "scripts": {
     "start": "electron .",
     "start:dev": "cross-env CEREBRO_DEV=1 electron .",
-    "start:remote": "cross-env CEREBRO_REMOTE_URL=http://192.168.0.70:3000 electron .",
+    "build:win": "electron-builder --win -c build/electron-builder-fullstack.yml",
+    "build:linux": "electron-builder --linux -c build/electron-builder-fullstack.yml",
     "build:fullstack:win": "electron-builder --win -c build/electron-builder-fullstack.yml",
     "build:fullstack:linux": "electron-builder --linux -c build/electron-builder-fullstack.yml",
-    "build:client:win": "electron-builder --win -c build/electron-builder-client.yml",
-    "build:client:linux": "electron-builder --linux -c build/electron-builder-client.yml",
-    "build:backend": "bash scripts/build-backend.sh",
-    "build:mcp": "bash scripts/build-mcp-server.sh",
-    "build:prepare-fullstack": "npm run build:backend && npm run build:mcp",
+    "build:docker": "docker compose -f docker/docker-compose.yml build",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {

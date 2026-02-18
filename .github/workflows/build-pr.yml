@@ -16,11 +16,11 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
       - run: npm ci
-      - name: Build Client edition (quick validation)
-        run: npm run build:client:linux
+      - name: Build Electron shell (validation)
+        run: npm run build:linux
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Verify output exists
         run: |
           ls -la dist/
-          test -f dist/Cerebro-Client-Setup-*.AppImage
+          test -f dist/Cerebro-Setup-*.AppImage

@@ -1,0 +1,52 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "16379:6379"
+    volumes:
+      - cerebro-redis:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  backend:
+    image: ghcr.io/professor-low/cerebro-backend:latest
+    ports:
+      - "59000:59000"
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      AI_MEMORY_PATH: /data/memory
+      CEREBRO_CORS_ORIGINS: "http://localhost:59000"
+      CEREBRO_HOST: "0.0.0.0"
+      CEREBRO_PORT: "59000"
+      CEREBRO_STANDALONE: "1"
+      CEREBRO_SECRET: "${CEREBRO_SECRET}"
+    volumes:
+      - cerebro-data:/data/memory
+      - "${CLAUDE_CLI_PATH:-/usr/local/bin/claude}:/usr/local/bin/claude:ro"
+      - "${CLAUDE_CONFIG_PATH:-~/.claude}:/root/.claude:ro"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:59000/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  memory:
+    image: ghcr.io/professor-low/cerebro-memory:latest
+    volumes:
+      - cerebro-data:/data/memory
+    environment:
+      AI_MEMORY_PATH: /data/memory
+    restart: unless-stopped
+
+volumes:
+  cerebro-redis:
+  cerebro-data:

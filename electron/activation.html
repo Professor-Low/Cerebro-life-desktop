@@ -40,7 +40,6 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
-    /* Orb logo */
     .orb-container {
       width: 96px;
       height: 96px;
@@ -87,7 +86,6 @@
       margin-bottom: 40px;
     }
 
-    /* Form elements */
     .form-group {
       margin-bottom: 20px;
       text-align: left;
@@ -129,7 +127,6 @@
       font-size: 13px;
     }
 
-    /* Buttons */
     .btn {
       width: 100%;
       padding: 14px;
@@ -176,7 +173,6 @@
       color: rgba(226, 232, 240, 0.7);
     }
 
-    /* Status messages */
     .status {
       margin-top: 16px;
       font-size: 13px;
@@ -186,10 +182,103 @@
     .status-success { color: #4ade80; }
     .status-loading { color: rgba(139, 92, 246, 0.7); }
 
-    /* Progress bar */
-    .progress-container {
-      margin: 32px 0;
+    .prereq-list {
+      text-align: left;
+      margin: 24px 0;
     }
+    .prereq-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      background: rgba(139, 92, 246, 0.03);
+      border: 1px solid rgba(139, 92, 246, 0.1);
+      border-radius: 10px;
+      margin-bottom: 10px;
+      transition: all 0.3s;
+    }
+    .prereq-item.checking { border-color: rgba(139, 92, 246, 0.3); }
+    .prereq-item.pass {
+      border-color: rgba(74, 222, 128, 0.3);
+      background: rgba(74, 222, 128, 0.03);
+    }
+    .prereq-item.fail {
+      border-color: rgba(248, 113, 113, 0.3);
+      background: rgba(248, 113, 113, 0.03);
+    }
+    .prereq-icon {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .prereq-info { flex: 1; }
+    .prereq-name {
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 2px;
+    }
+    .prereq-detail {
+      font-size: 11px;
+      color: rgba(226, 232, 240, 0.4);
+    }
+    .prereq-link {
+      font-size: 11px;
+      color: rgba(139, 92, 246, 0.6);
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .prereq-link:hover {
+      color: rgba(139, 92, 246, 0.9);
+      text-decoration: underline;
+    }
+    .prereq-action { flex-shrink: 0; }
+    .prereq-action .btn-sm {
+      padding: 6px 14px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: white;
+    }
+    .btn-install {
+      background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+    }
+    .btn-install:hover {
+      box-shadow: 0 2px 12px rgba(139, 92, 246, 0.3);
+    }
+    .btn-start {
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    }
+    .btn-start:hover {
+      box-shadow: 0 2px 12px rgba(59, 130, 246, 0.3);
+    }
+    .prereq-item.info {
+      border-color: rgba(234, 179, 8, 0.3);
+      background: rgba(234, 179, 8, 0.03);
+    }
+    .prereq-item.info .prereq-icon { color: #eab308; }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(139, 92, 246, 0.2);
+      border-top: 2px solid #8b5cf6;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .progress-container { margin: 32px 0; }
     .progress-bar-track {
       width: 100%;
       height: 4px;
@@ -222,7 +311,6 @@
     .progress-step.active { color: rgba(139, 92, 246, 0.8); }
     .progress-step .icon { width: 16px; text-align: center; }
 
-    /* Success checkmark */
     .success-icon {
       width: 80px;
       height: 80px;
@@ -257,7 +345,6 @@
     .plan-pro { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
     .plan-pro-plus { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); }
 
-    /* MCP setup */
     .mcp-info {
       background: rgba(139, 92, 246, 0.05);
       border: 1px solid rgba(139, 92, 246, 0.15);
@@ -278,7 +365,6 @@
       line-height: 1.5;
     }
 
-    /* Step indicator */
     .step-dots {
       display: flex;
       justify-content: center;
@@ -357,71 +443,113 @@
         <div class="dot"></div>
         <div class="dot"></div>
         <div class="dot"></div>
+        <div class="dot"></div>
       </div>
       <h2>Activate Cerebro</h2>
       <div class="subtitle">Enter your license key or activation code</div>
-
       <div class="form-group">
         <label for="license-input">License Key / Activation Code</label>
         <input type="text" id="license-input" placeholder="CPRP-XXXXXXXX-... or KPWDH7PY" autocomplete="off" spellcheck="false">
         <div class="input-hint">Accepts license keys (CPRO/CPRP-...) or 8-character activation codes</div>
       </div>
-
       <button class="btn btn-primary" id="activate-btn" onclick="activateLicense()">Activate</button>
       <button class="btn btn-secondary" onclick="window.open('https://cerebro.life/pricing', '_blank')">Buy a License</button>
-
       <div class="status" id="activate-status"></div>
     </div>
 
-    <!-- Step 3: MCP Setup -->
+    <!-- Step 3: Prerequisites -->
+    <div class="step" id="step-prereqs">
+      <div class="step-dots">
+        <div class="dot done"></div>
+        <div class="dot done"></div>
+        <div class="dot active"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+      </div>
+      <h2>Prerequisites</h2>
+      <div class="subtitle">Cerebro needs Docker to run</div>
+      <div class="prereq-list">
+        <!-- Docker row -->
+        <div class="prereq-item" id="prereq-docker">
+          <div class="prereq-icon"><div class="spinner"></div></div>
+          <div class="prereq-info">
+            <div class="prereq-name">Docker Desktop</div>
+            <div class="prereq-detail" id="prereq-docker-detail">Checking...</div>
+          </div>
+          <div class="prereq-action" id="prereq-docker-action"></div>
+        </div>
+        <!-- Docker install progress (hidden by default) -->
+        <div class="prereq-item" id="prereq-docker-progress" style="display:none;">
+          <div class="prereq-info" style="width:100%;">
+            <div class="prereq-name" id="docker-progress-title">Installing Docker...</div>
+            <div class="progress-bar-track" style="margin-top:8px;">
+              <div class="progress-bar-fill" id="docker-progress-fill" style="width:0%;"></div>
+            </div>
+            <div class="prereq-detail" id="docker-progress-detail" style="margin-top:6px;">Preparing...</div>
+          </div>
+        </div>
+        <!-- Claude Code row (informational, not blocking) -->
+        <div class="prereq-item" id="prereq-claude">
+          <div class="prereq-icon"><div class="spinner"></div></div>
+          <div class="prereq-info">
+            <div class="prereq-name">Claude Code</div>
+            <div class="prereq-detail" id="prereq-claude-detail">Checking...</div>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="prereq-continue-btn" disabled onclick="goToStep(4)">Continue</button>
+      <button class="btn btn-ghost" onclick="checkPrerequisites()">Re-check</button>
+      <div class="status" id="prereq-status"></div>
+    </div>
+
+    <!-- Step 4: Setup -->
+    <div class="step" id="step-setup">
+      <div class="step-dots">
+        <div class="dot done"></div>
+        <div class="dot done"></div>
+        <div class="dot done"></div>
+        <div class="dot active"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+      </div>
+      <h2>Setting Up</h2>
+      <div class="subtitle">Downloading and configuring Cerebro</div>
+      <div class="progress-container">
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" id="setup-progress-fill"></div>
+        </div>
+        <div class="progress-status" id="setup-progress-steps">
+          <div class="progress-step" id="ps-config"><span class="icon">&#9675;</span> Writing configuration...</div>
+          <div class="progress-step" id="ps-pull"><span class="icon">&#9675;</span> Pulling Docker images...</div>
+          <div class="progress-step" id="ps-ready"><span class="icon">&#9675;</span> Verifying setup...</div>
+        </div>
+      </div>
+      <div class="status" id="setup-status"></div>
+    </div>
+
+    <!-- Step 5: MCP Configuration -->
     <div class="step" id="step-mcp">
       <div class="step-dots">
         <div class="dot done"></div>
         <div class="dot done"></div>
+        <div class="dot done"></div>
+        <div class="dot done"></div>
         <div class="dot active"></div>
-        <div class="dot"></div>
         <div class="dot"></div>
       </div>
       <h2>Claude Code Integration</h2>
       <div class="subtitle">Optional: Connect Cerebro's cognitive tools to Claude Code</div>
-
       <div class="mcp-info">
         <div class="mcp-info-title">What does this do?</div>
-        <div class="mcp-info-body">This configures Claude Code to use Cerebro's MCP server, giving it access to 49 cognitive tools including memory, reasoning, and goal tracking. Your ~/.claude/mcp.json will be updated.</div>
+        <div class="mcp-info-body">This configures Claude Code to use Cerebro's MCP server running in Docker, giving it access to 49 cognitive tools including memory, reasoning, and goal tracking. Your ~/.claude/mcp.json will be updated.</div>
       </div>
-
       <button class="btn btn-primary" id="mcp-setup-btn" onclick="setupMcp()">Yes, Set It Up</button>
-      <button class="btn btn-ghost" onclick="goToStep(4)">Skip for Now</button>
-
+      <button class="btn btn-ghost" onclick="goToStep(6)">Skip for Now</button>
       <div class="status" id="mcp-status"></div>
     </div>
 
-    <!-- Step 4: Progress -->
-    <div class="step" id="step-progress">
-      <div class="step-dots">
-        <div class="dot done"></div>
-        <div class="dot done"></div>
-        <div class="dot done"></div>
-        <div class="dot active"></div>
-        <div class="dot"></div>
-      </div>
-      <h2>Starting Cerebro</h2>
-      <div class="subtitle">Launching services...</div>
-
-      <div class="progress-container">
-        <div class="progress-bar-track">
-          <div class="progress-bar-fill" id="progress-fill"></div>
-        </div>
-        <div class="progress-status" id="progress-steps">
-          <div class="progress-step" id="ps-redis"><span class="icon">&#9675;</span> Starting Redis...</div>
-          <div class="progress-step" id="ps-backend"><span class="icon">&#9675;</span> Starting backend...</div>
-          <div class="progress-step" id="ps-mcp"><span class="icon">&#9675;</span> Starting MCP server...</div>
-          <div class="progress-step" id="ps-frontend"><span class="icon">&#9675;</span> Loading Cerebro...</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Step 5: Ready -->
+    <!-- Step 6: Ready -->
     <div class="step" id="step-ready">
       <div class="step-dots">
         <div class="dot done"></div>
@@ -429,18 +557,16 @@
         <div class="dot done"></div>
         <div class="dot done"></div>
         <div class="dot done"></div>
+        <div class="dot done"></div>
       </div>
-
       <div class="success-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="20 6 9 17 4 12"></polyline>
         </svg>
       </div>
-
       <h2>Cerebro is Ready!</h2>
       <div id="plan-badge-container"></div>
       <div class="subtitle">All systems operational. Welcome aboard.</div>
-
       <button class="btn btn-primary" onclick="launchCerebro()">Launch Cerebro</button>
     </div>
   </div>
@@ -448,33 +574,49 @@
   <script>
     let currentStep = 1;
     let activatedPlan = null;
+    let prereqsPassed = false;
 
     const licenseInput = document.getElementById('license-input');
     const activateBtn = document.getElementById('activate-btn');
 
-    licenseInput.addEventListener('keydown', (e) => {
+    licenseInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') activateLicense();
     });
 
+    if (window.cerebroDesktop.onPullProgress) {
+      window.cerebroDesktop.onPullProgress(function(data) {
+        var el = document.getElementById('setup-status');
+        if (el && data.message) {
+          el.textContent = data.message;
+          el.className = 'status status-loading';
+        }
+      });
+    }
+
     function goToStep(step) {
-      document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.step').forEach(function(s) { s.classList.remove('active'); });
       currentStep = step;
 
-      const stepIds = ['step-welcome', 'step-activate', 'step-mcp', 'step-progress', 'step-ready'];
-      const el = document.getElementById(stepIds[step - 1]);
+      var stepIds = ['step-welcome', 'step-activate', 'step-prereqs', 'step-setup', 'step-mcp', 'step-ready'];
+      var el = document.getElementById(stepIds[step - 1]);
       if (el) el.classList.add('active');
 
       if (step === 2) {
-        setTimeout(() => licenseInput.focus(), 100);
+        setTimeout(function() { licenseInput.focus(); }, 100);
       }
-
+      if (step === 3) {
+        checkPrerequisites();
+      }
       if (step === 4) {
-        startServices();
+        runSetup();
+      }
+      if (step === 6) {
+        showReadyStep();
       }
     }
 
-    async function activateLicense() {
-      const key = licenseInput.value.trim();
+    function activateLicense() {
+      var key = licenseInput.value.trim();
       if (!key) {
         showStatus('activate-status', 'Please enter a license key or activation code', 'error');
         return;
@@ -483,105 +625,321 @@
       activateBtn.disabled = true;
       showStatus('activate-status', 'Validating...', 'loading');
 
-      try {
-        const result = await window.cerebroDesktop.activateLicense(key);
+      window.cerebroDesktop.activateLicense(key).then(function(result) {
         if (result.success) {
           activatedPlan = result.plan;
           showStatus('activate-status', 'Activated!', 'success');
-          setTimeout(() => goToStep(3), 800);
+          setTimeout(function() { goToStep(3); }, 800);
         } else {
           showStatus('activate-status', result.error || 'Activation failed', 'error');
           activateBtn.disabled = false;
         }
-      } catch (err) {
+      }).catch(function() {
         showStatus('activate-status', 'Connection error. Please check your internet.', 'error');
         activateBtn.disabled = false;
+      });
+    }
+
+    function setPrereqResult(itemId, detailId, state, detailText, linkUrl, linkText) {
+      var item = document.getElementById(itemId);
+      var detail = document.getElementById(detailId);
+      var iconEl = item.querySelector('.prereq-icon');
+
+      item.className = 'prereq-item ' + state;
+
+      if (state === 'pass') {
+        iconEl.textContent = '\u2713';
+      } else if (state === 'fail') {
+        iconEl.textContent = '\u2717';
+      }
+
+      // Clear and rebuild detail content safely using DOM methods
+      while (detail.firstChild) detail.removeChild(detail.firstChild);
+      detail.appendChild(document.createTextNode(detailText + ' '));
+
+      if (linkUrl && linkText) {
+        var a = document.createElement('a');
+        a.className = 'prereq-link';
+        a.textContent = linkText;
+        a.addEventListener('click', function() { window.open(linkUrl, '_blank'); });
+        detail.appendChild(a);
       }
     }
 
-    async function setupMcp() {
-      const btn = document.getElementById('mcp-setup-btn');
+    // Listen for install/start progress events
+    if (window.cerebroDesktop.onDockerInstallProgress) {
+      window.cerebroDesktop.onDockerInstallProgress(function(data) {
+        var fill = document.getElementById('docker-progress-fill');
+        var detail = document.getElementById('docker-progress-detail');
+        var title = document.getElementById('docker-progress-title');
+        if (data.percent !== undefined && fill) fill.style.width = data.percent + '%';
+        if (data.message && detail) detail.textContent = data.message;
+        if (data.stage === 'installing' && title) title.textContent = 'Installing Docker...';
+        if (data.stage === 'downloading' && title) title.textContent = 'Downloading Docker...';
+      });
+    }
+    if (window.cerebroDesktop.onDockerStartProgress) {
+      window.cerebroDesktop.onDockerStartProgress(function(data) {
+        var detail = document.getElementById('docker-progress-detail');
+        if (data.message && detail) detail.textContent = data.message;
+      });
+    }
+
+    function checkPrerequisites() {
+      var dockerEl = document.getElementById('prereq-docker');
+      var claudeEl = document.getElementById('prereq-claude');
+      var actionEl = document.getElementById('prereq-docker-action');
+      var progressEl = document.getElementById('prereq-docker-progress');
+      var continueBtn = document.getElementById('prereq-continue-btn');
+
+      // Reset to checking state
+      dockerEl.className = 'prereq-item checking';
+      claudeEl.className = 'prereq-item checking';
+      dockerEl.querySelector('.prereq-icon').textContent = '';
+      claudeEl.querySelector('.prereq-icon').textContent = '';
+      while (actionEl.firstChild) actionEl.removeChild(actionEl.firstChild);
+      progressEl.style.display = 'none';
+
+      var spinnerA = document.createElement('div');
+      spinnerA.className = 'spinner';
+      dockerEl.querySelector('.prereq-icon').appendChild(spinnerA);
+
+      var spinnerB = document.createElement('div');
+      spinnerB.className = 'spinner';
+      claudeEl.querySelector('.prereq-icon').appendChild(spinnerB);
+
+      document.getElementById('prereq-docker-detail').textContent = 'Checking...';
+      document.getElementById('prereq-claude-detail').textContent = 'Checking...';
+      continueBtn.disabled = true;
+      showStatus('prereq-status', '', '');
+
+      var dockerReady = false;
+
+      // Check Docker
+      window.cerebroDesktop.checkDocker().then(function(docker) {
+        if (docker.installed && docker.running) {
+          // Docker installed + running = green check
+          setPrereqResult('prereq-docker', 'prereq-docker-detail', 'pass', 'Installed and running');
+          dockerReady = true;
+        } else if (docker.installed) {
+          // Docker installed but not running = show Start button
+          setPrereqResult('prereq-docker', 'prereq-docker-detail', 'fail', 'Installed but not running');
+          var btn = document.createElement('button');
+          btn.className = 'btn-sm btn-start';
+          btn.textContent = 'Start';
+          btn.addEventListener('click', startDockerFromWizard);
+          actionEl.appendChild(btn);
+        } else {
+          // Docker not installed = show Install button
+          setPrereqResult('prereq-docker', 'prereq-docker-detail', 'fail', 'Not installed');
+          var btn = document.createElement('button');
+          btn.className = 'btn-sm btn-install';
+          btn.textContent = 'Install';
+          btn.addEventListener('click', installDockerFromWizard);
+          actionEl.appendChild(btn);
+        }
+      }).catch(function() {
+        setPrereqResult('prereq-docker', 'prereq-docker-detail', 'fail', 'Check failed');
+        var btn = document.createElement('button');
+        btn.className = 'btn-sm btn-install';
+        btn.textContent = 'Install';
+        btn.addEventListener('click', installDockerFromWizard);
+        actionEl.appendChild(btn);
+      }).then(function() {
+        // Check Claude Code (non-blocking)
+        return window.cerebroDesktop.checkClaudeCode();
+      }).then(function(claude) {
+        if (claude.installed) {
+          setPrereqResult('prereq-claude', 'prereq-claude-detail', 'pass', claude.version || 'Installed');
+        } else {
+          // Yellow info state, NOT red fail — not a blocker
+          claudeEl.className = 'prereq-item info';
+          claudeEl.querySelector('.prereq-icon').textContent = '\u24D8';
+          var detail = document.getElementById('prereq-claude-detail');
+          while (detail.firstChild) detail.removeChild(detail.firstChild);
+          detail.appendChild(document.createTextNode('Not found (recommended) '));
+          var a = document.createElement('a');
+          a.className = 'prereq-link';
+          a.textContent = 'Install Claude Code';
+          a.addEventListener('click', function() { window.open('https://docs.anthropic.com/en/docs/claude-code/overview', '_blank'); });
+          detail.appendChild(a);
+        }
+      }).catch(function() {
+        claudeEl.className = 'prereq-item info';
+        claudeEl.querySelector('.prereq-icon').textContent = '\u24D8';
+        document.getElementById('prereq-claude-detail').textContent = 'Check failed (not required)';
+      }).then(function() {
+        // Only Docker is a hard prerequisite — Claude Code is not
+        continueBtn.disabled = !dockerReady;
+        if (!dockerReady) {
+          showStatus('prereq-status', 'Docker is required to continue', 'error');
+        }
+      });
+    }
+
+    function installDockerFromWizard() {
+      var actionEl = document.getElementById('prereq-docker-action');
+      var progressEl = document.getElementById('prereq-docker-progress');
+      while (actionEl.firstChild) actionEl.removeChild(actionEl.firstChild);
+      progressEl.style.display = 'block';
+      document.getElementById('docker-progress-fill').style.width = '0%';
+      document.getElementById('docker-progress-title').textContent = 'Downloading Docker...';
+      document.getElementById('docker-progress-detail').textContent = 'Starting download...';
+      showStatus('prereq-status', '', '');
+
+      window.cerebroDesktop.installDocker().then(function(result) {
+        if (result.success) {
+          if (result.needsRestart) {
+            document.getElementById('docker-progress-title').textContent = 'Restart Required';
+            document.getElementById('docker-progress-detail').textContent = 'Docker installed! Please restart your PC for WSL2, then reopen Cerebro.';
+            document.getElementById('docker-progress-fill').style.width = '100%';
+          } else {
+            // Install succeeded, no restart needed — auto-start Docker
+            document.getElementById('docker-progress-title').textContent = 'Starting Docker...';
+            document.getElementById('docker-progress-detail').textContent = 'Docker installed, now starting daemon...';
+            document.getElementById('docker-progress-fill').style.width = '100%';
+            startDockerFromWizard();
+          }
+        } else {
+          document.getElementById('docker-progress-title').textContent = 'Installation Failed';
+          document.getElementById('docker-progress-detail').textContent = result.error || 'Unknown error';
+          showStatus('prereq-status', 'Docker installation failed. Try installing manually.', 'error');
+        }
+      }).catch(function(err) {
+        document.getElementById('docker-progress-title').textContent = 'Installation Failed';
+        document.getElementById('docker-progress-detail').textContent = err.message || 'Unknown error';
+        showStatus('prereq-status', 'Docker installation failed. Try installing manually.', 'error');
+      });
+    }
+
+    function startDockerFromWizard() {
+      var actionEl = document.getElementById('prereq-docker-action');
+      var progressEl = document.getElementById('prereq-docker-progress');
+      while (actionEl.firstChild) actionEl.removeChild(actionEl.firstChild);
+      progressEl.style.display = 'block';
+      document.getElementById('docker-progress-title').textContent = 'Starting Docker...';
+      document.getElementById('docker-progress-detail').textContent = 'Waiting for Docker daemon...';
+      document.getElementById('docker-progress-fill').style.width = '50%';
+      showStatus('prereq-status', '', '');
+
+      window.cerebroDesktop.startDockerDaemon().then(function(result) {
+        if (result.success) {
+          progressEl.style.display = 'none';
+          setPrereqResult('prereq-docker', 'prereq-docker-detail', 'pass', 'Installed and running');
+          document.getElementById('prereq-continue-btn').disabled = false;
+          showStatus('prereq-status', '', '');
+        } else {
+          document.getElementById('docker-progress-title').textContent = 'Failed to Start';
+          document.getElementById('docker-progress-detail').textContent = result.error || 'Docker daemon did not respond in time';
+          showStatus('prereq-status', 'Could not start Docker. Try starting Docker Desktop manually.', 'error');
+        }
+      }).catch(function(err) {
+        document.getElementById('docker-progress-title').textContent = 'Failed to Start';
+        document.getElementById('docker-progress-detail').textContent = err.message || 'Unknown error';
+        showStatus('prereq-status', 'Could not start Docker. Try starting Docker Desktop manually.', 'error');
+      });
+    }
+
+    function runSetup() {
+      var fill = document.getElementById('setup-progress-fill');
+
+      // Step 1: Write config
+      markStep('ps-config', 'active');
+      fill.style.width = '10%';
+      showStatus('setup-status', 'Writing docker-compose.yml and .env...', 'loading');
+
+      window.cerebroDesktop.setupDocker().then(function(configResult) {
+        if (!configResult.success) {
+          throw new Error(configResult.error || 'Failed to write configuration');
+        }
+        markStep('ps-config', 'done');
+        fill.style.width = '33%';
+
+        // Step 2: Pull images
+        markStep('ps-pull', 'active');
+        showStatus('setup-status', 'Pulling Docker images (this may take a few minutes)...', 'loading');
+        return window.cerebroDesktop.pullImages();
+      }).then(function(pullResult) {
+        if (!pullResult.success) {
+          throw new Error(pullResult.error || 'Failed to pull images');
+        }
+        markStep('ps-pull', 'done');
+        fill.style.width = '80%';
+
+        // Step 3: Verify
+        markStep('ps-ready', 'active');
+        showStatus('setup-status', 'Verifying setup...', 'loading');
+        return delay(500);
+      }).then(function() {
+        markStep('ps-ready', 'done');
+        fill.style.width = '100%';
+        showStatus('setup-status', 'Setup complete!', 'success');
+        return delay(800);
+      }).then(function() {
+        goToStep(5);
+      }).catch(function(err) {
+        showStatus('setup-status', err.message, 'error');
+      });
+    }
+
+    function setupMcp() {
+      var btn = document.getElementById('mcp-setup-btn');
       btn.disabled = true;
       showStatus('mcp-status', 'Configuring...', 'loading');
 
-      try {
-        const result = await window.cerebroDesktop.configureMcp();
+      window.cerebroDesktop.configureMcp().then(function(result) {
         if (result.success) {
           showStatus('mcp-status', 'MCP configured at ' + result.configPath, 'success');
-          setTimeout(() => goToStep(4), 1200);
+          setTimeout(function() { goToStep(6); }, 1200);
         } else {
           showStatus('mcp-status', result.error || 'Configuration failed', 'error');
           btn.disabled = false;
         }
-      } catch (err) {
+      }).catch(function() {
         showStatus('mcp-status', 'Failed to configure MCP', 'error');
         btn.disabled = false;
-      }
-    }
-
-    async function startServices() {
-      const steps = ['ps-redis', 'ps-backend', 'ps-mcp', 'ps-frontend'];
-      const fill = document.getElementById('progress-fill');
-
-      try {
-        const result = await window.cerebroDesktop.startServices();
-
-        for (let i = 0; i < steps.length; i++) {
-          const el = document.getElementById(steps[i]);
-          el.classList.add('active');
-          el.querySelector('.icon').textContent = '\u25CB';
-          fill.style.width = ((i + 1) * 25) + '%';
-
-          await delay(800);
-
-          el.classList.remove('active');
-          el.classList.add('done');
-          el.querySelector('.icon').textContent = '\u2713';
-        }
-
-        showReadyStep();
-      } catch (err) {
-        for (let i = 0; i < steps.length; i++) {
-          const el = document.getElementById(steps[i]);
-          el.classList.add('done');
-          el.querySelector('.icon').textContent = '\u2713';
-          fill.style.width = ((i + 1) * 25) + '%';
-          await delay(500);
-        }
-        showReadyStep();
-      }
+      });
     }
 
     function showReadyStep() {
-      const container = document.getElementById('plan-badge-container');
-      // Clear any existing content
+      var container = document.getElementById('plan-badge-container');
       while (container.firstChild) {
         container.removeChild(container.firstChild);
       }
 
       if (activatedPlan) {
-        const isPlus = activatedPlan === 'pro-plus';
-        const badge = document.createElement('span');
+        var isPlus = activatedPlan === 'pro-plus';
+        var badge = document.createElement('span');
         badge.className = 'plan-badge ' + (isPlus ? 'plan-pro-plus' : 'plan-pro');
         badge.textContent = isPlus ? 'Pro+' : 'Pro';
         container.appendChild(badge);
       }
-
-      goToStep(5);
     }
 
     function launchCerebro() {
       window.cerebroDesktop.wizardComplete();
     }
 
+    function markStep(id, state) {
+      var el = document.getElementById(id);
+      el.className = 'progress-step ' + state;
+      if (state === 'done') {
+        el.querySelector('.icon').textContent = '\u2713';
+      } else if (state === 'active') {
+        el.querySelector('.icon').textContent = '\u25CB';
+      }
+    }
+
     function showStatus(elementId, msg, type) {
-      const el = document.getElementById(elementId);
+      if (!elementId) return;
+      var el = document.getElementById(elementId);
+      if (!el) return;
       el.textContent = msg;
       el.className = 'status status-' + type;
     }
 
     function delay(ms) {
-      return new Promise(resolve => setTimeout(resolve, ms));
+      return new Promise(function(resolve) { setTimeout(resolve, ms); });
     }
   </script>
 </body>

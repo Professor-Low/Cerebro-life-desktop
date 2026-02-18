@@ -1,0 +1,146 @@
+name: Docker Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  NODE_VERSION: '20'
+  REGISTRY: ghcr.io
+
+jobs:
+  # --- Build and push Docker images ---
+  docker-images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.backend
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/professor-low/cerebro-backend:latest
+            ${{ env.REGISTRY }}/professor-low/cerebro-backend:v${{ steps.version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push memory image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.memory
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/professor-low/cerebro-memory:latest
+            ${{ env.REGISTRY }}/professor-low/cerebro-memory:v${{ steps.version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # --- Build Electron shell (no Python binaries) ---
+  build-electron-win:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci
+      - name: Build Windows installer
+        run: npm run build:fullstack:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: electron-win
+          path: dist/Cerebro-Setup-*.exe
+          retention-days: 1
+
+  build-electron-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci
+      - name: Build Linux packages
+        run: npm run build:fullstack:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: electron-linux
+          path: |
+            dist/Cerebro-Setup-*.AppImage
+            dist/Cerebro-Setup-*.deb
+          retention-days: 1
+
+  # --- Create GitHub Release ---
+  release:
+    needs: [docker-images, build-electron-win, build-electron-linux]
+    runs-on: ubuntu-latest
+    env:
+      TAG_NAME: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+      - name: List artifacts
+        run: find artifacts/ -type f | sort
+      - name: Determine prerelease
+        id: prerelease
+        run: |
+          if echo "$TAG_NAME" | grep -qE '(alpha|beta|rc)'; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
+          generate_release_notes: true
+          body: |
+            ## Docker Images
+
+            ```bash
+            docker pull ghcr.io/professor-low/cerebro-backend:${{ github.ref_name }}
+            docker pull ghcr.io/professor-low/cerebro-memory:${{ github.ref_name }}
+            ```
+
+            ## Installation
+
+            1. Download the installer for your platform below
+            2. Ensure Docker is installed and running
+            3. Ensure Claude Code Desktop is installed with an active subscription
+            4. Run the installer and follow the setup wizard
+          files: |
+            artifacts/electron-win/*
+            artifacts/electron-linux/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
