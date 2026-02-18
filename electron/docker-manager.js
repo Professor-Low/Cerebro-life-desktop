@@ -540,11 +540,9 @@ class DockerManager extends EventEmitter {
       // Linux: detect distro and install Docker appropriately
       const user = os.userInfo().username;
       const wrapperPath = path.join(os.tmpdir(), 'cerebro-install-docker.sh');
-      const markerPath = path.join(os.tmpdir(), 'cerebro-docker-install-done');
-      // Clean up any old marker (may be root-owned from a previous failed run)
-      try { fs.unlinkSync(markerPath); } catch {
-        try { require('child_process').execFileSync('rm', ['-f', markerPath]); } catch {}
-      }
+      // Use ~/.cerebro/ for markers — /tmp has sticky bit so only root can unlink root-owned files
+      const markerPath = path.join(CEREBRO_DIR, '.docker-install-done');
+      try { fs.unlinkSync(markerPath); } catch {}
 
       try {
         const distro = this._detectLinuxDistro();
@@ -555,7 +553,8 @@ class DockerManager extends EventEmitter {
 
           fs.writeFileSync(wrapperPath, [
             '#!/bin/sh',
-            'pacman -S --noconfirm docker',
+            // Sync package database first — stale DB causes 404s on mirrors
+            'pacman -Sy --noconfirm docker',
             'systemctl enable docker',
             'systemctl start docker',
             `usermod -aG docker "${user}"`,
@@ -667,10 +666,8 @@ class DockerManager extends EventEmitter {
       // Linux: start via systemctl with root elevation
       try {
         const startScript = path.join(os.tmpdir(), 'cerebro-start-docker.sh');
-        const markerPath = path.join(os.tmpdir(), 'cerebro-docker-start-done');
-        try { fs.unlinkSync(markerPath); } catch {
-          try { require('child_process').execFileSync('rm', ['-f', markerPath]); } catch {}
-        }
+        const markerPath = path.join(CEREBRO_DIR, '.docker-start-done');
+        try { fs.unlinkSync(markerPath); } catch {}
         fs.writeFileSync(startScript, [
           '#!/bin/sh',
           'systemctl start docker',
@@ -733,23 +730,16 @@ class DockerManager extends EventEmitter {
    */
   _runInTerminal(scriptPath, options = {}) {
     return new Promise(async (resolve, reject) => {
-      const markerPath = options.markerPath || path.join(os.tmpdir(), 'cerebro-root-done');
-      // Clean up marker — may be root-owned from a previous run
-      try { fs.unlinkSync(markerPath); } catch {
-        try { require('child_process').execFileSync('rm', ['-f', markerPath]); } catch {}
-      }
+      const markerPath = options.markerPath || path.join(CEREBRO_DIR, '.root-done');
+      try { fs.unlinkSync(markerPath); } catch {}
 
-      // Wrap in sudo with marker file
+      // Wrap in sudo with marker file — marker is in ~/.cerebro/ (user-writable, no sticky bit)
       const wrapperPath = path.join(os.tmpdir(), 'cerebro-terminal-wrapper.sh');
       fs.writeFileSync(wrapperPath, [
         '#!/bin/sh',
-        // Clean any root-owned marker from a previous failed run
-        `sudo rm -f "${markerPath}"`,
         `sudo "${scriptPath}"`,
         'RESULT=$?',
-        // Write marker with sudo and make world-readable so Electron can read+delete it
-        `echo $RESULT | sudo tee "${markerPath}" > /dev/null`,
-        `sudo chmod 666 "${markerPath}"`,
+        `echo $RESULT > "${markerPath}"`,
         'echo ""',
         'if [ $RESULT -eq 0 ]; then echo "Done! This window will close in 3 seconds..."; else echo "Failed (exit $RESULT). This window will close in 5 seconds..."; fi',
         'sleep 3',
