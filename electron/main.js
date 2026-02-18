@@ -517,8 +517,8 @@ ipcMain.handle('enable-autostart', () => {
 });
 
 // Restart & setup state
-ipcMain.handle('needs-restart', () => {
-  return dockerManager.needsRestart();
+ipcMain.handle('needs-restart', async () => {
+  return dockerManager.checkNeedsRestart();
 });
 
 ipcMain.handle('save-setup-state', (_event, state) => {

@@ -913,6 +913,39 @@ class DockerManager extends EventEmitter {
     return this._needsRestart;
   }
 
+  /**
+   * Async check: does the user need a restart?
+   * True if Docker was installed this session, OR if Docker service is running
+   * but the user can't access the socket (docker group not active yet).
+   */
+  async checkNeedsRestart() {
+    if (this._needsRestart) return true;
+
+    // On Linux, check if Docker service runs but user lacks socket access
+    if (process.platform !== 'win32') {
+      const dockerCmd = this._dockerCmd();
+      let socketWorks = false;
+      let serviceRunning = false;
+
+      try {
+        await this._run(dockerCmd, ['info'], { timeout: 5000 });
+        socketWorks = true;
+      } catch {}
+
+      if (!socketWorks) {
+        try {
+          const result = await this._run('systemctl', ['is-active', 'docker'], { timeout: 5000 });
+          serviceRunning = result.trim() === 'active';
+        } catch {}
+      }
+
+      // Service runs but socket denied → needs re-login
+      if (serviceRunning && !socketWorks) return true;
+    }
+
+    return false;
+  }
+
   saveSetupState(state) {
     this._ensureCerebroDir();
     fs.writeFileSync(SETUP_STATE_FILE, JSON.stringify({ ...state, savedAt: Date.now() }));
