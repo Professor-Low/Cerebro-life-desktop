@@ -9526,6 +9526,109 @@
             display: none;
         }
 
+        /* ==================== ONBOARDING ==================== */
+        .onboarding-card {
+            background: rgba(15, 15, 30, 0.95);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 16px;
+            padding: 40px 36px;
+            width: 420px;
+            max-width: 90vw;
+            text-align: center;
+        }
+        .onboarding-progress {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            margin-bottom: 32px;
+        }
+        .onboarding-step {
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            border: 2px solid rgba(139, 92, 246, 0.3);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.8rem; font-weight: 600;
+            color: rgba(255,255,255,0.3);
+            transition: all 0.3s;
+        }
+        .onboarding-step.active {
+            border-color: var(--primary);
+            color: #fff;
+            background: rgba(139, 92, 246, 0.2);
+        }
+        .onboarding-step.done {
+            border-color: var(--green);
+            color: var(--green);
+            background: rgba(34, 197, 94, 0.15);
+        }
+        .onboarding-step-line {
+            width: 40px; height: 2px;
+            background: rgba(139, 92, 246, 0.2);
+        }
+        .onboarding-panel { min-height: 200px; }
+        .onboarding-nav {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+            justify-content: center;
+        }
+        .onboard-btn-secondary {
+            padding: 12px 28px;
+            border-radius: 8px;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.95rem;
+        }
+        .onboard-chips {
+            display: flex; flex-wrap: wrap; gap: 10px;
+            justify-content: center; margin-top: 16px;
+        }
+        .onboard-chip {
+            padding: 10px 18px;
+            border-radius: 20px;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            background: rgba(139, 92, 246, 0.08);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .onboard-chip input { display: none; }
+        .onboard-chip:has(input:checked) {
+            border-color: var(--primary);
+            background: rgba(139, 92, 246, 0.25);
+            color: #fff;
+        }
+        .onboard-styles {
+            display: flex; flex-direction: column; gap: 10px;
+            margin-top: 16px; text-align: left;
+        }
+        .onboard-style-option {
+            padding: 14px 18px;
+            border-radius: 10px;
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            background: rgba(139, 92, 246, 0.05);
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .onboard-style-option input { display: none; }
+        .onboard-style-option:has(input:checked) {
+            border-color: var(--primary);
+            background: rgba(139, 92, 246, 0.2);
+        }
+        .onboard-style-option span { font-weight: 600; color: #fff; }
+        .onboard-style-option small { color: var(--text-secondary); margin-left: auto; }
+        .onboarding-error {
+            color: var(--red);
+            font-size: 0.85rem;
+            margin-top: 12px;
+        }
+
         /* ==================== UTILITIES ==================== */
         .spinner {
             width: 24px;
@@ -21218,6 +21321,69 @@
                 <input type="password" class="login-input" id="password-input" placeholder="Enter password" autocomplete="current-password">
                 <button class="login-btn" onclick="login()">Sign In</button>
                 <div class="login-error" id="login-error">Invalid password</div>
+            </div>
+        </div>
+
+        <!-- Onboarding Wizard -->
+        <div class="login-view hidden" id="onboarding-view">
+            <div class="onboarding-card">
+                <div class="onboarding-progress">
+                    <div class="onboarding-step active" data-step="1">1</div>
+                    <div class="onboarding-step-line"></div>
+                    <div class="onboarding-step" data-step="2">2</div>
+                    <div class="onboarding-step-line"></div>
+                    <div class="onboarding-step" data-step="3">3</div>
+                    <div class="onboarding-step-line"></div>
+                    <div class="onboarding-step" data-step="4">4</div>
+                </div>
+
+                <!-- Step 1: Name -->
+                <div class="onboarding-panel" id="onboard-step-1">
+                    <div class="login-logo">C</div>
+                    <div class="login-title">Welcome to Cerebro</div>
+                    <div class="login-subtitle">Let's get you set up. What should I call you?</div>
+                    <input type="text" class="login-input" id="onboard-name" placeholder="Your name" autocomplete="name">
+                </div>
+
+                <!-- Step 2: Use Cases -->
+                <div class="onboarding-panel hidden" id="onboard-step-2">
+                    <div class="login-title">What will you use Cerebro for?</div>
+                    <div class="login-subtitle">Select all that apply</div>
+                    <div class="onboard-chips" id="onboard-usecases">
+                        <label class="onboard-chip"><input type="checkbox" value="coding"> Coding</label>
+                        <label class="onboard-chip"><input type="checkbox" value="research"> Research</label>
+                        <label class="onboard-chip"><input type="checkbox" value="writing"> Writing</label>
+                        <label class="onboard-chip"><input type="checkbox" value="automation"> Automation</label>
+                        <label class="onboard-chip"><input type="checkbox" value="learning"> Learning</label>
+                        <label class="onboard-chip"><input type="checkbox" value="business"> Business</label>
+                    </div>
+                </div>
+
+                <!-- Step 3: Communication Style -->
+                <div class="onboarding-panel hidden" id="onboard-step-3">
+                    <div class="login-title">Communication style</div>
+                    <div class="login-subtitle">How should Cerebro talk to you?</div>
+                    <div class="onboard-styles" id="onboard-style">
+                        <label class="onboard-style-option"><input type="radio" name="style" value="concise" checked> <span>Concise</span><small>Short, direct answers</small></label>
+                        <label class="onboard-style-option"><input type="radio" name="style" value="balanced"> <span>Balanced</span><small>Clear with context</small></label>
+                        <label class="onboard-style-option"><input type="radio" name="style" value="detailed"> <span>Detailed</span><small>Thorough explanations</small></label>
+                    </div>
+                </div>
+
+                <!-- Step 4: Password -->
+                <div class="onboarding-panel hidden" id="onboard-step-4">
+                    <div class="login-title">Set a password</div>
+                    <div class="login-subtitle">This protects your Cerebro instance</div>
+                    <input type="password" class="login-input" id="onboard-password" placeholder="Choose a password" autocomplete="new-password">
+                    <input type="password" class="login-input" id="onboard-password-confirm" placeholder="Confirm password" autocomplete="new-password" style="margin-top:10px">
+                </div>
+
+                <div class="onboarding-error hidden" id="onboard-error"></div>
+
+                <div class="onboarding-nav">
+                    <button class="onboard-btn-secondary hidden" id="onboard-back" onclick="onboardBack()">Back</button>
+                    <button class="login-btn" id="onboard-next" onclick="onboardNext()">Next</button>
+                </div>
             </div>
         </div>
 
@@ -42564,7 +42730,7 @@ Please proceed with implementing this recommendation. You have full permissions.
 
             tsParticles.load("particles-bg", {
                 particles: {
-                    number: { value: 40, density: { enable: true, value_area: 1000 } },
+                    number: { value: 15, density: { enable: true, value_area: 1200 } },
                     color: { value: ["#8b5cf6", "#a78bfa", "#6d28d9"] },
                     opacity: {
                         value: 0.3,
@@ -42601,7 +42767,7 @@ Please proceed with implementing this recommendation. You have full permissions.
                     }
                 },
                 detectRetina: true,
-                fpsLimit: 60
+                fpsLimit: 30
             });
         }
 
@@ -42698,6 +42864,87 @@ Please proceed with implementing this recommendation. You have full permissions.
             });
         }
 
+        // ==================== ONBOARDING ====================
+        let onboardStep = 1;
+        const ONBOARD_TOTAL = 4;
+
+        function showOnboarding() {
+            document.getElementById('login-view').classList.add('hidden');
+            document.getElementById('onboarding-view').classList.remove('hidden');
+            onboardStep = 1;
+            updateOnboardUI();
+        }
+
+        function updateOnboardUI() {
+            // Update step indicators
+            document.querySelectorAll('.onboarding-step').forEach(el => {
+                const s = parseInt(el.dataset.step);
+                el.classList.toggle('active', s === onboardStep);
+                el.classList.toggle('done', s < onboardStep);
+            });
+            // Show/hide panels
+            for (let i = 1; i <= ONBOARD_TOTAL; i++) {
+                const panel = document.getElementById(`onboard-step-${i}`);
+                if (panel) panel.classList.toggle('hidden', i !== onboardStep);
+            }
+            // Back button visibility
+            document.getElementById('onboard-back').classList.toggle('hidden', onboardStep === 1);
+            // Next button text
+            document.getElementById('onboard-next').textContent = onboardStep === ONBOARD_TOTAL ? 'Finish' : 'Next';
+            // Hide error
+            document.getElementById('onboard-error').classList.add('hidden');
+        }
+
+        function onboardBack() {
+            if (onboardStep > 1) { onboardStep--; updateOnboardUI(); }
+        }
+
+        async function onboardNext() {
+            const errEl = document.getElementById('onboard-error');
+            errEl.classList.add('hidden');
+
+            if (onboardStep === 1) {
+                const name = document.getElementById('onboard-name').value.trim();
+                if (!name) { errEl.textContent = 'Please enter your name'; errEl.classList.remove('hidden'); return; }
+            }
+
+            if (onboardStep === 4) {
+                const pw = document.getElementById('onboard-password').value;
+                const pw2 = document.getElementById('onboard-password-confirm').value;
+                if (pw.length < 4) { errEl.textContent = 'Password must be at least 4 characters'; errEl.classList.remove('hidden'); return; }
+                if (pw !== pw2) { errEl.textContent = 'Passwords do not match'; errEl.classList.remove('hidden'); return; }
+
+                // Submit setup
+                const name = document.getElementById('onboard-name').value.trim();
+                const useCases = Array.from(document.querySelectorAll('#onboard-usecases input:checked')).map(c => c.value);
+                const style = document.querySelector('#onboard-style input:checked')?.value || 'balanced';
+
+                try {
+                    document.getElementById('onboard-next').textContent = 'Setting up...';
+                    document.getElementById('onboard-next').disabled = true;
+                    const res = await fetch(`${API_URL}/auth/setup`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, password: pw, use_cases: useCases, style })
+                    });
+                    if (!res.ok) throw new Error((await res.json()).detail || 'Setup failed');
+                    const data = await res.json();
+                    token = data.token;
+                    localStorage.setItem('cerebro_token', token);
+                    document.getElementById('onboarding-view').classList.add('hidden');
+                    showApp();
+                } catch (e) {
+                    errEl.textContent = e.message; errEl.classList.remove('hidden');
+                    document.getElementById('onboard-next').textContent = 'Finish';
+                    document.getElementById('onboard-next').disabled = false;
+                }
+                return;
+            }
+
+            onboardStep++;
+            updateOnboardUI();
+        }
+
         // ==================== STARTUP ====================
         document.addEventListener('DOMContentLoaded', async () => {
             // Populate configurable display values
@@ -42710,6 +42957,22 @@ Please proceed with implementing this recommendation. You have full permissions.
             const presenceGreeting = document.getElementById('presence-greeting');
             if (presenceGreeting && presenceGreeting.textContent === 'Hey') {
                 presenceGreeting.textContent = `Hey ${CEREBRO_USERNAME}`;
+            }
+
+            // Check if setup is complete
+            try {
+                const statusRes = await fetch(`${API_URL}/auth/status`);
+                if (statusRes.ok) {
+                    const status = await statusRes.json();
+                    if (!status.setup_complete) {
+                        // First-time user — show onboarding
+                        document.getElementById('login-view').classList.add('hidden');
+                        showOnboarding();
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.error('Auth status check failed:', e);
             }
 
             if (token) {
@@ -42734,6 +42997,12 @@ Please proceed with implementing this recommendation. You have full permissions.
 
             document.getElementById('password-input').addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') login();
+            });
+
+            // Onboarding Enter key support
+            ['onboard-name', 'onboard-password', 'onboard-password-confirm'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('keydown', (e) => { if (e.key === 'Enter') onboardNext(); });
             });
 
             // Auto-resize chat input

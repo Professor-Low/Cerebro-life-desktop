@@ -2453,6 +2453,12 @@ class TaskRequest(BaseModel):
 class LoginRequest(BaseModel):
     password: str
 
+class SetupRequest(BaseModel):
+    name: str
+    password: str
+    use_cases: list = []
+    style: str = "balanced"
+
 class BriefingResponse(BaseModel):
     greeting: str
     time: str
@@ -3580,19 +3586,70 @@ You: [call delegate_to_claude with task="Run: Start-Process spotify"]
 
 @app.get("/")
 async def root():
-    return {"name": "Cerebro", "status": "online", "version": "1.0.0"}
+    return {"name": "Cerebro", "status": "online", "version": "1.5.0"}
+
+def _get_user_profile_path() -> Path:
+    return Path(config.AI_MEMORY_PATH) / "user_profile.json"
+
+def _load_user_profile() -> dict:
+    """Load user profile from persistent storage."""
+    p = _get_user_profile_path()
+    if p.exists():
+        try:
+            with open(p) as f:
+                return json.load(f)
+        except:
+            pass
+    return {}
+
+def _save_user_profile(profile: dict):
+    """Save user profile to persistent storage."""
+    p = _get_user_profile_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p, "w") as f:
+        json.dump(profile, f, indent=2)
+
+@app.get("/auth/status")
+async def auth_status():
+    """Check if initial setup is complete. No auth required."""
+    profile = _load_user_profile()
+    return {
+        "setup_complete": profile.get("setup_complete", False),
+        "username": profile.get("name", "")
+    }
+
+@app.post("/auth/setup")
+async def auth_setup(request: SetupRequest):
+    """First-time setup — save profile and set password. No auth required."""
+    profile = _load_user_profile()
+    if profile.get("setup_complete"):
+        raise HTTPException(status_code=400, detail="Setup already completed")
+
+    profile.update({
+        "name": request.name,
+        "password": request.password,
+        "use_cases": request.use_cases,
+        "style": request.style,
+        "setup_complete": True,
+        "created_at": datetime.now().isoformat()
+    })
+    _save_user_profile(profile)
+
+    token = create_token(request.name)
+    return {"token": token, "user": request.name}
 
 @app.post("/auth/login")
 async def login(request: LoginRequest):
-    """Simple password login - returns JWT."""
-    # In production, use proper password hashing
-    stored_password = os.environ.get("CEREBRO_PASSWORD", "professor")
+    """Password login — checks stored profile first, then env var fallback."""
+    profile = _load_user_profile()
+    stored_password = profile.get("password") or os.environ.get("CEREBRO_PASSWORD", "professor")
+    username = profile.get("name", "User")
 
     if request.password != stored_password:
         raise HTTPException(status_code=401, detail="Invalid password")
 
-    token = create_token("professor")
-    return {"token": token, "user": "professor"}
+    token = create_token(username)
+    return {"token": token, "user": username}
 
 @app.get("/briefing", response_model=BriefingResponse)
 async def get_briefing(user: str = Depends(verify_token)):
@@ -3654,8 +3711,12 @@ async def get_briefing(user: str = Depends(verify_token)):
     except:
         pass
 
+    profile = _load_user_profile()
+    username = profile.get("name", "")
+    greeting_text = f"{greeting}, {username}" if username else greeting
+
     return BriefingResponse(
-        greeting=f"{greeting}, Professor",
+        greeting=greeting_text,
         time=now.strftime("%A, %B %d, %Y at %I:%M %p"),
         pending_tasks=pending_tasks,
         suggestions=suggestions,
