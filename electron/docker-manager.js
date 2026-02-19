@@ -209,6 +209,7 @@ class DockerManager extends EventEmitter {
 
   /**
    * Write docker-compose.yml to ~/.cerebro/
+   * Strips Claude CLI volume mount if the binary doesn't exist on this host.
    */
   async writeComposeFile() {
     const composeSrc = path.join(__dirname, '..', 'docker', 'docker-compose.yml');
@@ -218,6 +219,26 @@ class DockerManager extends EventEmitter {
       content = fs.readFileSync(composeSrc, 'utf-8');
     } else {
       content = this._getDefaultComposeContent();
+    }
+
+    // Remove Claude CLI volume mount if binary doesn't exist on host
+    const cliPath = await this.getClaudeCliPath();
+    if (!cliPath) {
+      console.log('[Docker] Claude CLI not found, removing bind mount from compose file');
+      content = content.split('\n').filter(line => {
+        const trimmed = line.trim();
+        return !trimmed.includes('CLAUDE_CLI_PATH') && !trimmed.includes('claude:ro');
+      }).join('\n');
+    }
+
+    // Remove Claude config volume mount if config dir doesn't exist
+    const claudeConfigDir = path.join(os.homedir(), '.claude');
+    if (!fs.existsSync(claudeConfigDir)) {
+      console.log('[Docker] Claude config dir not found, removing bind mount from compose file');
+      content = content.split('\n').filter(line => {
+        const trimmed = line.trim();
+        return !trimmed.includes('CLAUDE_CONFIG_PATH') && !trimmed.includes('.claude:ro');
+      }).join('\n');
     }
 
     fs.writeFileSync(COMPOSE_FILE, content);

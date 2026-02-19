@@ -100,42 +100,40 @@ function showSetupWizard() {
 async function startDockerStack() {
   updateSplashStatus('Starting Docker containers...');
 
+  // 1. Check if Docker is installed — if not, wizard handles install
+  const installed = await dockerManager.isDockerInstalled();
+  if (!installed) {
+    console.log('[Main] Docker not installed, deferring to wizard');
+    return { ok: false, error: 'Docker is not installed' };
+  }
+
+  // 2. Check if Docker daemon is running — auto-start if not
+  const running = await dockerManager.isDockerRunning();
+  if (!running) {
+    updateSplashStatus('Starting Docker...');
+    const startResult = await dockerManager.startDockerDaemon((p) => {
+      updateSplashStatus(p.message || 'Starting Docker...');
+    });
+    if (!startResult.success) {
+      console.error('[Main] Failed to start Docker daemon:', startResult.error);
+      return { ok: false, error: `Failed to start Docker daemon: ${startResult.error}` };
+    }
+  }
+
+  // 3. Write/refresh config (always refresh compose to fix volume mounts)
+  updateSplashStatus('Writing configuration...');
+  await dockerManager.writeComposeFile();
+  dockerManager.writeEnvFile();
+  await dockerManager.setClaudeCliPath();
+
+  // 4. Start the compose stack
   try {
-    // 1. Check if Docker is installed — if not, wizard handles install
-    const installed = await dockerManager.isDockerInstalled();
-    if (!installed) {
-      console.log('[Main] Docker not installed, deferring to wizard');
-      return false;
-    }
-
-    // 2. Check if Docker daemon is running — auto-start if not
-    const running = await dockerManager.isDockerRunning();
-    if (!running) {
-      updateSplashStatus('Starting Docker...');
-      const startResult = await dockerManager.startDockerDaemon((p) => {
-        updateSplashStatus(p.message || 'Starting Docker...');
-      });
-      if (!startResult.success) {
-        console.error('[Main] Failed to start Docker daemon:', startResult.error);
-        return false;
-      }
-    }
-
-    // 3. Write config if needed
-    if (!dockerManager.isSetupComplete()) {
-      updateSplashStatus('Writing configuration...');
-      await dockerManager.writeComposeFile();
-      dockerManager.writeEnvFile();
-      await dockerManager.setClaudeCliPath();
-    }
-
-    // 4. Start the compose stack
     updateSplashStatus('Starting containers...');
     await dockerManager.startStack();
-    return true;
+    return { ok: true };
   } catch (err) {
     console.error('[Main] Docker stack failed to start:', err.message);
-    return false;
+    return { ok: false, error: err.message };
   }
 }
 
@@ -282,9 +280,10 @@ app.whenReady().then(async () => {
   }
 
   // Returning user: start Docker stack and load frontend
-  const dockerOk = await startDockerStack();
-  if (!dockerOk) {
+  const dockerResult = await startDockerStack();
+  if (!dockerResult.ok) {
     // Docker not running or not setup — show wizard
+    console.error('[Main] Docker start failed:', dockerResult.error);
     showSetupWizard();
     return;
   }
@@ -479,9 +478,9 @@ ipcMain.handle('configure-mcp', async () => {
 // Wizard completion: start stack and load frontend
 ipcMain.handle('wizard-complete', async () => {
   try {
-    const started = await startDockerStack();
-    if (!started) {
-      return { success: false, error: 'Failed to start Docker stack' };
+    const result = await startDockerStack();
+    if (!result.ok) {
+      return { success: false, error: result.error || 'Failed to start Docker stack' };
     }
     await loadFrontend();
     updateTrayStatus(tray, 'running');
