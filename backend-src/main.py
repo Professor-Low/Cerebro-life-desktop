@@ -49,6 +49,9 @@ except ImportError as e:
     COGNITIVE_LOOP_AVAILABLE = False
     CognitiveLoopManager = None
 
+# Standalone mode: skip NAS-dependent features (Docker deployments)
+STANDALONE = os.environ.get("CEREBRO_STANDALONE", "0") == "1"
+
 # Configuration
 class Config:
     SECRET_KEY = os.environ.get("CEREBRO_SECRET", "")
@@ -2218,21 +2221,23 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) 
 # Startup/Shutdown
 # ============================================================================
 
-@app.on_event("startup")
-async def startup():
-    global redis, proactive_manager, predictive_service, learning_injector
+def _create_data_directories():
+    """Create required directory tree under AI_MEMORY_PATH for standalone mode."""
+    base = Path(config.AI_MEMORY_PATH)
+    dirs = [
+        "agents", "cerebro", "cerebro/cognitive_loop", "cerebro/skills",
+        "cerebro/chrome_profile", "cerebro/recordings", "embeddings/chunks",
+        "learnings", "projects", "agent_contexts", "mood",
+        "conversations", "schedules",
+    ]
+    for d in dirs:
+        (base / d).mkdir(parents=True, exist_ok=True)
+    print(f"Cerebro: Data directories ensured under {base}")
 
-    # Initialize Redis
-    redis = await aioredis.from_url(config.REDIS_URL, decode_responses=True)
-    print("Cerebro started - Redis connected")
 
-    # Reload persisted agents into memory
-    reload_agents_from_persistence()
-
-    # Start background task listener
-    asyncio.create_task(redis_task_listener())
-
-    # Initialize Autonomy Services
+async def _init_autonomy_services():
+    """Initialize autonomy services in background (non-blocking)."""
+    global proactive_manager, predictive_service, learning_injector
     try:
         from predictive_interrupt import get_predictive_service
         from proactive_agent import get_proactive_manager
@@ -2265,6 +2270,27 @@ async def startup():
         print(f"Cerebro Autonomy: Some services not available - {e}")
     except Exception as e:
         print(f"Cerebro Autonomy: Initialization error - {e}")
+
+
+@app.on_event("startup")
+async def startup():
+    global redis
+
+    # Initialize Redis
+    redis = await aioredis.from_url(config.REDIS_URL, decode_responses=True)
+    print("Cerebro started - Redis connected")
+
+    # Ensure data directory tree exists (critical for standalone/Docker)
+    _create_data_directories()
+
+    # Reload persisted agents into memory
+    reload_agents_from_persistence()
+
+    # Start background task listener
+    asyncio.create_task(redis_task_listener())
+
+    # Initialize autonomy services in background so /health responds immediately
+    asyncio.create_task(_init_autonomy_services())
 
 @app.on_event("shutdown")
 async def shutdown():

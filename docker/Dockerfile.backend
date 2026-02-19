@@ -17,9 +17,14 @@ COPY backend-src/ .
 # Copy frontend (served as static files by FastAPI)
 COPY frontend/ /app/frontend/
 
+# Copy and set entrypoint (creates data directories before app starts)
+COPY docker/entrypoint-backend.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 EXPOSE 59000
 
 HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
   CMD curl -f http://localhost:59000/health || exit 1
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["uvicorn", "main:socket_app", "--host", "0.0.0.0", "--port", "59000"]

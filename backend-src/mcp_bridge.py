@@ -20,10 +20,19 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
 
-# Add NAS-cerebral-interface to path for imports
-MCP_PATH = Path(os.environ.get("CEREBRO_MCP_SRC", os.path.expanduser("~/NAS-cerebral-interface/src")))
-if str(MCP_PATH) not in sys.path:
-    sys.path.insert(0, str(MCP_PATH))
+# Standalone mode: skip NAS imports entirely
+_STANDALONE = os.environ.get("CEREBRO_STANDALONE", "0") == "1"
+# CEREBRO_MCP_SRC="" explicitly disables NAS imports (set in Docker compose)
+# When not set at all, fall back to default path (local dev)
+_MCP_SRC_EXPLICIT = "CEREBRO_MCP_SRC" in os.environ
+_MCP_SRC_ENV = os.environ.get("CEREBRO_MCP_SRC", "")
+
+if _STANDALONE or (_MCP_SRC_EXPLICIT and _MCP_SRC_ENV == ""):
+    MCP_PATH = None
+else:
+    MCP_PATH = Path(_MCP_SRC_ENV or os.path.expanduser("~/NAS-cerebral-interface/src"))
+    if str(MCP_PATH) not in sys.path:
+        sys.path.insert(0, str(MCP_PATH))
 
 # Configuration
 AI_MEMORY_PATH = Path(os.environ.get("AI_MEMORY_PATH", os.path.expanduser("~/.cerebro/data")))
@@ -51,6 +60,12 @@ class MCPBridge:
     async def _ensure_initialized(self):
         """Lazy initialization of modules."""
         if self._initialized:
+            return
+
+        # In standalone mode (Docker), skip NAS module imports entirely
+        if _STANDALONE or MCP_PATH is None:
+            self._initialized = True
+            print("[MCP Bridge] Standalone mode - NAS modules skipped")
             return
 
         loop = asyncio.get_event_loop()
@@ -85,6 +100,7 @@ class MCPBridge:
             self._initialized = True
             print("[MCP Bridge] Initialized successfully")
         else:
+            self._initialized = True  # Mark initialized to avoid retry loops
             print("[MCP Bridge] Failed to initialize - modules not available")
 
     # =========================================================================

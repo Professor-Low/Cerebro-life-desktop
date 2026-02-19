@@ -1023,6 +1023,8 @@ class DockerManager extends EventEmitter {
       CEREBRO_HOST: "0.0.0.0"
       CEREBRO_PORT: "59000"
       CEREBRO_STANDALONE: "1"
+      CEREBRO_NAS_IP: ""
+      CEREBRO_MCP_SRC: ""
       CEREBRO_SECRET: "\${CEREBRO_SECRET}"
     volumes:
       - cerebro-data:/data/memory
@@ -1045,6 +1047,8 @@ class DockerManager extends EventEmitter {
       - cerebro-data:/data/memory
     environment:
       AI_MEMORY_PATH: /data/memory
+      CEREBRO_STANDALONE: "1"
+      CEREBRO_NAS_IP: ""
     restart: unless-stopped
 
 volumes:

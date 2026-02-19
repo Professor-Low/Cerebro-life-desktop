@@ -15,4 +15,9 @@ ENV AI_MEMORY_PATH=/data/memory
 
 VOLUME ["/data/memory"]
 
+# Copy and set entrypoint (runs cerebro init before serve)
+COPY docker/entrypoint-memory.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["cerebro", "serve"]
