@@ -69,6 +69,7 @@ DEFAULT_HEARTBEAT_CONFIG = {
         "file_changes": {"enabled": True},
         "memory_health": {"enabled": True},
         "system_health": {"enabled": True},
+        "screen_monitor": {"enabled": False},
     },
 }
 
@@ -77,6 +78,7 @@ MONITOR_DISPLAY_NAMES = {
     "file_changes": "File Changes",
     "memory_health": "Memory Health",
     "system_health": "System Health",
+    "screen_monitor": "Screen Monitor",
 }
 
 
@@ -223,6 +225,64 @@ def _save_stored_items(items: list):
 
 
 # ---------------------------------------------------------------------------
+# Screen capture helper
+# ---------------------------------------------------------------------------
+
+SCREENSHOTS_DIR = AI_MEMORY_PATH / "cerebro" / "screenshots"
+
+
+def capture_screen() -> Optional[Dict]:
+    """Capture the screen using mss + xdotool. Returns dict with path info or None."""
+    try:
+        from PIL import Image
+        import mss
+    except ImportError:
+        logger.debug("[capture_screen] mss or Pillow not installed, skipping")
+        return None
+
+    try:
+        # Get active window title via xdotool
+        window_title = "Unknown"
+        try:
+            result = subprocess.run(
+                ["xdotool", "getactivewindow", "getwindowname"],
+                capture_output=True, text=True, timeout=3,
+            )
+            window_title = result.stdout.strip() or "Unknown"
+        except Exception:
+            pass
+
+        # Grab primary monitor
+        with mss.mss() as sct:
+            monitor = sct.monitors[1]  # Primary monitor
+            screenshot = sct.grab(monitor)
+            img = Image.frombytes("RGB", screenshot.size, screenshot.rgb)
+
+        # Resize if wider than 1920px
+        max_w = 1920
+        if img.width > max_w:
+            ratio = max_w / img.width
+            new_h = int(img.height * ratio)
+            img = img.resize((max_w, new_h), Image.LANCZOS)
+
+        # Save as JPEG
+        SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filepath = SCREENSHOTS_DIR / f"screen_monitor_{timestamp}.jpg"
+        img.save(str(filepath), "JPEG", quality=85)
+
+        return {
+            "path": str(filepath),
+            "window_title": window_title,
+            "width": img.width,
+            "height": img.height,
+        }
+    except Exception as exc:
+        logger.debug("[capture_screen] Failed: %s", exc)
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
 
@@ -346,6 +406,7 @@ class HeartbeatEngine:
             "memory_health": self._monitor_memory_health,
             "system_health": self._monitor_system_health,
             "network_devices": self._monitor_network_devices,
+            "screen_monitor": self._monitor_screen,
         }.get(name)
         if handler is None:
             return MonitorResult(monitor=name, changed=False, summary="", details="unknown monitor", severity="info")
@@ -604,6 +665,30 @@ class HeartbeatEngine:
         summary = "; ".join(alert_parts) if alert_parts else "Network monitoring OK"
         details = "\n".join(checks)
         return MonitorResult(monitor="network_devices", changed=False, summary=summary, details=details, severity=severity)
+
+    async def _monitor_screen(self) -> MonitorResult:
+        """Capture a screenshot and return it as a monitor finding."""
+        result = capture_screen()
+        if result is None:
+            return MonitorResult(
+                monitor="screen_monitor",
+                changed=False,
+                summary="Screen capture unavailable",
+                details="mss/Pillow not installed or no display available",
+                severity="info",
+            )
+        details = (
+            f"Screenshot: {result['path']}\n"
+            f"Window: {result['window_title']}\n"
+            f"Resolution: {result['width']}x{result['height']}"
+        )
+        return MonitorResult(
+            monitor="screen_monitor",
+            changed=False,
+            summary=f"Screen captured ({result['window_title'][:40]})",
+            details=details,
+            severity="observation",
+        )
 
 
 # ---------------------------------------------------------------------------

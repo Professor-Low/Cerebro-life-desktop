@@ -50,9 +50,6 @@ except ImportError as e:
     COGNITIVE_LOOP_AVAILABLE = False
     CognitiveLoopManager = None
 
-# Standalone mode: skip NAS-dependent features (Docker deployments)
-STANDALONE = os.environ.get("CEREBRO_STANDALONE", "0") == "1"
-
 # Configuration
 class Config:
     SECRET_KEY = os.environ.get("CEREBRO_SECRET", "")
@@ -477,12 +474,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Frontend path — check sibling directory first (Docker: /app/frontend/),
-# then parent-of-parent (local dev: backend-src/../frontend/)
-_frontend_candidate = Path(__file__).parent / "frontend"
-if not _frontend_candidate.exists():
-    _frontend_candidate = Path(__file__).parent.parent / "frontend"
-FRONTEND_DIR = _frontend_candidate
+# Frontend path
+FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 
 # Serve static files (socket.io, etc.) from frontend/static/
 STATIC_DIR = FRONTEND_DIR / "static"
@@ -730,13 +723,15 @@ def reload_agents_from_persistence():
                 active_agents[agent_id] = entry
                 loaded += 1
 
-        print(f"[Startup] Reloaded {loaded} agents from persistence")
+        # Populate used_call_signs from loaded agents to prevent collisions
+        used_call_signs.update(active_agents.keys())
+        print(f"[Startup] Reloaded {loaded} agents from persistence ({len(used_call_signs)} call signs tracked)")
     except Exception as e:
         print(f"[Startup] Error reloading agents: {e}")
 
 
 # Concurrent agent queue system
-MAX_CONCURRENT_AGENTS = 5
+MAX_CONCURRENT_AGENTS = 4
 _agent_spawn_queue: list[dict] = []  # FIFO queue of { agent_id, run_args, queued_at }
 
 # Track background question processing
@@ -751,6 +746,7 @@ class AgentStatus:
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    STOPPED = "stopped"
 
 
 # ============================================================================
@@ -809,8 +805,8 @@ NATO_ALPHABET = [
     "X-Ray", "Yankee", "Zulu"
 ]
 
-# Track agent counter for unique call signs
-agent_counter = 0
+# Track used call signs to prevent collisions on restart
+used_call_signs: set = set()
 
 # ============================================================================
 # Platform Detection — agents get OS-appropriate instructions
@@ -1224,21 +1220,28 @@ You are Agent {call_sign}. Complete the browsing task thoroughly.""",
 active_workflows = {}  # workflow_id -> workflow_info
 
 def generate_call_sign() -> str:
-    """Generate a military-style call sign for agents."""
-    global agent_counter
-    agent_counter += 1
+    """Generate a collision-free military-style call sign for agents."""
+    # Try base NATO names first (random order)
+    available = [n for n in NATO_ALPHABET if n not in used_call_signs]
+    if available:
+        name = random.choice(available)
+        used_call_signs.add(name)
+        return name
 
-    # Get NATO letter based on counter
-    letter_index = (agent_counter - 1) % len(NATO_ALPHABET)
-    nato_letter = NATO_ALPHABET[letter_index]
+    # All 26 base names used — add random numeric suffix
+    for _ in range(100):
+        base = random.choice(NATO_ALPHABET)
+        suffix = random.randint(2, 99)
+        name = f"{base}-{suffix}"
+        if name not in used_call_signs:
+            used_call_signs.add(name)
+            return name
 
-    # Add number for uniqueness (Alpha-1, Alpha-2, etc.)
-    number = ((agent_counter - 1) // len(NATO_ALPHABET)) + 1
-
-    if number == 1:
-        return nato_letter
-    else:
-        return f"{nato_letter}-{number}"
+    # Ultimate fallback: UUID-based short ID
+    import uuid
+    name = f"Agent-{uuid.uuid4().hex[:6].upper()}"
+    used_call_signs.add(name)
+    return name
 
 def sanitize_agent_for_emit(agent: dict) -> dict:
     """
@@ -1265,9 +1268,16 @@ async def create_agent(
     source: str = "user",  # "user", "cerebro", or "idle"
     timeout: int = 3600,  # seconds (0 = unlimited, default 1 hour)
     source_agents: list[str] = None,  # Agent IDs for context fusion (merge & spawn)
-    project_id: str = None  # Project assignment
+    project_id: str = None,  # Project assignment
+    model: str = "sonnet"  # Model shorthand: sonnet, opus, haiku (or full model ID)
 ) -> str:
     """Create a new background agent to handle a task."""
+    # Auto-inherit project_id from parent if not explicitly set
+    if parent_agent_id and not project_id:
+        parent = active_agents.get(parent_agent_id)
+        if parent and parent.get("project_id"):
+            project_id = parent["project_id"]
+
     call_sign = generate_call_sign()
     agent_id = call_sign  # Use call sign as the ID
 
@@ -1313,6 +1323,8 @@ async def create_agent(
         "source_agents": source_agents or [],
         # Project assignment
         "project_id": project_id,
+        # Model selection
+        "model": model,
     }
 
     active_agents[agent_id] = agent_info
@@ -1323,21 +1335,36 @@ async def create_agent(
     # Gate spawning on concurrency limit
     running_count = _count_running_agents()
     if running_count < MAX_CONCURRENT_AGENTS:
-        asyncio.create_task(run_agent(agent_id, task, agent_type, context, expected_output, resources, context_refs, timeout, source_agents))
+        asyncio.create_task(run_agent(agent_id, task, agent_type, context, expected_output, resources, context_refs, timeout, source_agents, model))
     else:
         _agent_spawn_queue.append({
             "agent_id": agent_id,
-            "run_args": (agent_id, task, agent_type, context, expected_output, resources, context_refs, timeout, source_agents),
+            "run_args": (agent_id, task, agent_type, context, expected_output, resources, context_refs, timeout, source_agents, model),
             "queued_at": datetime.now(timezone.utc).isoformat(),
         })
-        await sio.emit("cerebro_narration", {
-            "content": f"Agent {call_sign} queued (position #{len(_agent_spawn_queue)}). {running_count}/{MAX_CONCURRENT_AGENTS} agents busy.",
+        position = len(_agent_spawn_queue)
+        await sio.emit("cerebro_progress", {
+            "status": f"Agent {call_sign} queued (position #{position})",
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "agent_id": agent_id, "is_idle": False,
+            "agent_id": agent_id,
+            "step_number": 0,
+            "estimated_total": 10,
+            "directive_text": task[:120] if task else "",
+            "current_phase": "queued",
+        }, room=os.environ.get("CEREBRO_ROOM", "default"))
+        # Notify in chat via narration
+        await sio.emit("cerebro_narration", {
+            "id": f"queue_{agent_id}",
+            "content": f"Task queued (position #{position}) — {running_count}/{MAX_CONCURRENT_AGENTS} agents busy. Will start when a slot opens.",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "is_idle": False,
+            "is_summary": False,
+            "message_type": "queue",
+            "phase": "queue",
         }, room=os.environ.get("CEREBRO_ROOM", "default"))
         await create_notification(
             notif_type="agent_queued", title=f"Agent {call_sign} Queued",
-            message=f"Position #{len(_agent_spawn_queue)}. {running_count}/{MAX_CONCURRENT_AGENTS} slots in use.",
+            message=f"Position #{position}. {running_count}/{MAX_CONCURRENT_AGENTS} slots in use.",
             link=f"/agents/{agent_id}", agent_id=agent_id
         )
 
@@ -1351,12 +1378,92 @@ async def _process_agent_queue():
         agent = active_agents.get(agent_id)
         if not agent or agent.get("status") != AgentStatus.QUEUED:
             continue  # Agent was cancelled/removed while queued
-        await sio.emit("cerebro_narration", {
-            "content": f"Agent {agent.get('call_sign', agent_id)} starting from queue. {len(_agent_spawn_queue)} still waiting.",
+        await sio.emit("cerebro_progress", {
+            "status": f"Agent {agent.get('call_sign', agent_id)} starting from queue",
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "agent_id": agent_id, "is_idle": False,
+            "agent_id": agent_id,
+            "step_number": 0,
+            "estimated_total": 10,
+            "directive_text": entry.get("run_args", ("", ""))[1][:120] if entry.get("run_args") else "",
+            "current_phase": "starting",
         }, room=os.environ.get("CEREBRO_ROOM", "default"))
         asyncio.create_task(run_agent(*entry["run_args"]))
+
+async def _generate_agent_summary(agent: dict, full_output: str):
+    """Generate a clean 1-2 sentence summary of what an agent accomplished."""
+    call_sign = agent.get("call_sign", agent.get("id", "Agent"))
+    task = agent.get("task", "")
+    output_excerpt = full_output[-3000:] if len(full_output) > 3000 else full_output
+    summary_text = ""
+
+    # Try claude -p subprocess first (30s timeout)
+    try:
+        summary_prompt = (
+            f"Summarize what was accomplished in 1-2 clean sentences. Be concise and specific.\n\n"
+            f"Task: {task}\n\nOutput (excerpt):\n{output_excerpt[-1500:]}"
+        )
+        import subprocess as _sp
+        result = _sp.run(
+            ["claude", "-p", summary_prompt, "--output-format", "text"],
+            capture_output=True, text=True, timeout=30,
+            env={**os.environ, "CLAUDECODE": ""},
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            summary_text = result.stdout.strip()
+    except Exception as e:
+        print(f"[Agent Summary] claude -p failed ({e}), trying Ollama...")
+
+    # Fallback: Ollama
+    if not summary_text:
+        try:
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{config.OLLAMA_URL}/api/chat",
+                    json={
+                        "model": config.OLLAMA_MODEL,
+                        "messages": [
+                            {"role": "system", "content": "Summarize what was accomplished in 1-2 sentences. Be concise."},
+                            {"role": "user", "content": f"Task: {task}\n\nOutput:\n{output_excerpt[-1500:]}\n\nSummarize."}
+                        ],
+                        "stream": False,
+                        "options": {"num_predict": 128, "temperature": 0.5}
+                    },
+                    timeout=aiohttp.ClientTimeout(total=15)
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        summary_text = data.get("message", {}).get("content", "").strip()
+        except Exception as e:
+            print(f"[Agent Summary] Ollama also failed ({e}), using extraction fallback")
+
+    # Final fallback: extract first 2 sentences
+    if not summary_text:
+        # Extract first 2 meaningful sentences from output
+        sentences = [s.strip() for s in re.split(r'[.!?]+', full_output[:500]) if len(s.strip()) > 20]
+        if sentences:
+            summary_text = ". ".join(sentences[:2]) + "."
+        else:
+            summary_text = f"Agent {call_sign} completed: {task[:100]}"
+
+    if not summary_text:
+        return
+
+    msg_id = f"agent_summary_{uuid.uuid4().hex[:12]}"
+    timestamp = datetime.now(timezone.utc).isoformat()
+
+    await sio.emit("cerebro_narration", {
+        "id": msg_id,
+        "content": summary_text,
+        "timestamp": timestamp,
+        "agent_id": agent.get("id", ""),
+        "directive_id": agent.get("directive_id", ""),
+        "is_summary": True,
+        "is_final": True,
+        "is_idle": False,
+        "message_type": "message",
+    }, room=os.environ.get("CEREBRO_ROOM", "default"))
+
 
 async def auto_categorize_agent(agent: dict):
     """Auto-categorize agent into a project using Ollama.
@@ -1607,6 +1714,33 @@ async def save_agent_to_memory(agent: dict):
     except Exception as e:
         print(f"[Agent {agent['id']}] Failed to save to memory: {e}")
 
+
+def _get_progress_enrichment(directive_id: str, step_counter: int, directive_text: str) -> dict:
+    """Get progress enrichment fields for cerebro_progress events.
+    Tries narration engine first, falls back to local step counter."""
+    enrichment = {
+        "step_number": step_counter,
+        "estimated_total": max(step_counter + 1, 10),
+        "directive_text": directive_text,
+        "current_phase": "working",
+    }
+
+    # Try to get richer progress from narration engine
+    if cognitive_loop_manager and directive_id:
+        try:
+            progress = cognitive_loop_manager.narration.get_directive_progress(directive_id)
+            if progress.get("step_number", 0) > 0:
+                enrichment["step_number"] = progress["step_number"]
+                enrichment["estimated_total"] = progress["estimated_total"]
+                enrichment["current_phase"] = progress.get("phase", "working")
+                if progress.get("directive_text"):
+                    enrichment["directive_text"] = progress["directive_text"]
+        except Exception:
+            pass  # Fall back to local counter
+
+    return enrichment
+
+
 async def run_agent(
     agent_id: str,
     task: str,
@@ -1616,7 +1750,8 @@ async def run_agent(
     resources: list[str] = None,
     context_refs: list[dict] = None,
     timeout: int = 3600,
-    source_agents: list[str] = None
+    source_agents: list[str] = None,
+    model: str = "sonnet"
 ):
     """Run an agent in the background with role-specific behavior."""
     import shutil
@@ -1828,7 +1963,7 @@ When tasks mention "Spark" or "DGX" — use `ssh spark`. When tasks mention "dar
 
     full_prompt = "".join(full_prompt_parts)
 
-    print(f"[Agent {agent_id}] Starting as {role_config['name']} with claude at: {claude_path}")
+    print(f"[Agent {agent_id}] Starting as {role_config['name']} with claude at: {claude_path} (model: {model})")
     print(f"[Agent {agent_id}] Task: {task[:100]}...")
 
     try:
@@ -1838,8 +1973,17 @@ When tasks mention "Spark" or "DGX" — use `ssh spark`. When tasks mention "dar
         import threading
         import queue
 
+        # Resolve model shorthand to full model ID
+        model_map = {
+            "opus": "claude-opus-4-6",
+            "sonnet": "claude-sonnet-4-6",
+            "haiku": "claude-haiku-4-5-20251001",
+        }
+        resolved_model = model_map.get(model, model)
+
         # Build command args
         cmd_args = [claude_path, "-p", full_prompt,
+             "--model", resolved_model,
              "--output-format", "stream-json",
              "--verbose",
              "--dangerously-skip-permissions"]
@@ -1851,6 +1995,8 @@ When tasks mention "Spark" or "DGX" — use `ssh spark`. When tasks mention "dar
         # Strip CLAUDECODE env var so spawned CLI doesn't think it's nested
         agent_env = os.environ.copy()
         agent_env.pop("CLAUDECODE", None)
+        # Signal hooks to exit immediately (avoids brain_maintenance, wake-nas, etc.)
+        agent_env["CEREBRO_AGENT"] = "1"
 
         process = sp.Popen(
             cmd_args,
@@ -1869,6 +2015,9 @@ When tasks mention "Spark" or "DGX" — use `ssh spark`. When tasks mention "dar
         raw_lines = []  # Keep raw output for debugging
         update_counter = 0
         _narration_seen = set()  # Dedup narration content to prevent duplicate cards
+        _progress_step_counter = 0  # Step counter for progress enrichment
+        _agent_directive_id = agent.get("directive_id", "")
+        _agent_directive_text = task[:120] if task else ""
 
         # Thread-based line reader (feeds queue from blocking stdout.readline)
         line_queue = queue.Queue()
@@ -1928,12 +2077,16 @@ When tasks mention "Spark" or "DGX" — use `ssh spark`. When tasks mention "dar
                                 _narr_key = block_text[:200].strip()
                                 if block_text.strip() and _narr_key not in _narration_seen:
                                     _narration_seen.add(_narr_key)
-                                    await sio.emit("cerebro_narration", {
-                                        "content": block_text[:500],
-                                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                                    _progress_step_counter += 1
+                                    _progress_enrichment = _get_progress_enrichment(
+                                        _agent_directive_id, _progress_step_counter, _agent_directive_text
+                                    )
+                                    await sio.emit("cerebro_progress", {
+                                        "status": block_text[:120],
+                                        "content": block_text,
                                         "agent_id": agent_id,
-                                        "is_idle": False,
-                                        "phases": [{"phase": "act", "summary": block_text[:100]}],
+                                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                                        **_progress_enrichment,
                                     }, room=os.environ.get("CEREBRO_ROOM", "default"))
                             elif block.get("type") == "tool_use":
                                 tool_name = block.get("name", "unknown")
@@ -1956,17 +2109,31 @@ When tasks mention "Spark" or "DGX" — use `ssh spark`. When tasks mention "dar
                                     "reasoning": "",
                                     "agent_id": agent_id,
                                 }, room=os.environ.get("CEREBRO_ROOM", "default"))
+                                # Also emit as progress content for live output panel
+                                _progress_step_counter += 1
+                                await sio.emit("cerebro_progress", {
+                                    "status": f"Using {tool_name}...",
+                                    "content": f"[{tool_name}] {tool_detail}",
+                                    "agent_id": agent_id,
+                                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                                    "is_tool": True,
+                                }, room=os.environ.get("CEREBRO_ROOM", "default"))
                     elif isinstance(text, str) and text:
                         full_output += text
-                        # === v2.0: Stream text narration (deduped) ===
+                        # === v2.0: Stream agent text as progress (deduped) ===
                         _narr_key = text[:200].strip()
                         if text.strip() and _narr_key not in _narration_seen:
                             _narration_seen.add(_narr_key)
-                            await sio.emit("cerebro_narration", {
-                                "content": text[:500],
-                                "timestamp": datetime.now(timezone.utc).isoformat(),
+                            _progress_step_counter += 1
+                            _progress_enrichment = _get_progress_enrichment(
+                                _agent_directive_id, _progress_step_counter, _agent_directive_text
+                            )
+                            await sio.emit("cerebro_progress", {
+                                "status": text[:120],
+                                "content": text,
                                 "agent_id": agent_id,
-                                "is_idle": False,
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
+                                **_progress_enrichment,
                             }, room=os.environ.get("CEREBRO_ROOM", "default"))
 
                 elif msg_type == "tool_use":
@@ -1995,26 +2162,19 @@ When tasks mention "Spark" or "DGX" — use `ssh spark`. When tasks mention "dar
                     result_text = data.get("result", "")
                     if result_text and result_text not in full_output:
                         full_output += "\n\n" + result_text
-                    # === v2.0: Stream final result as narration (deduped) ===
-                    _narr_key = result_text[:200].strip()
-                    if result_text and _narr_key not in _narration_seen:
-                        _narration_seen.add(_narr_key)
-                        await sio.emit("cerebro_narration", {
-                            "content": result_text[:500],
-                            "timestamp": datetime.now(timezone.utc).isoformat(),
-                            "agent_id": agent_id,
-                            "is_idle": False,
-                            "is_final": True,
-                        }, room=os.environ.get("CEREBRO_ROOM", "default"))
-                    elif result_text:
-                        # Still emit is_final flag so frontend knows agent is done
-                        await sio.emit("cerebro_narration", {
-                            "content": "",
-                            "timestamp": datetime.now(timezone.utc).isoformat(),
-                            "agent_id": agent_id,
-                            "is_idle": False,
-                            "is_final": True,
-                        }, room=os.environ.get("CEREBRO_ROOM", "default"))
+                    # === v3.0: Final result — just emit progress done signal ===
+                    # Summary will be generated after agent completes
+                    _progress_step_counter += 1
+                    _progress_enrichment = _get_progress_enrichment(
+                        _agent_directive_id, _progress_step_counter, _agent_directive_text
+                    )
+                    await sio.emit("cerebro_progress", {
+                        "status": "Wrapping up...",
+                        "agent_id": agent_id,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "is_final": True,
+                        **_progress_enrichment,
+                    }, room=os.environ.get("CEREBRO_ROOM", "default"))
 
                 elif msg_type == "error":
                     error_msg = data.get("error", {}).get("message", str(data))
@@ -2058,38 +2218,86 @@ When tasks mention "Spark" or "DGX" — use `ssh spark`. When tasks mention "dar
         if not full_output:
             full_output = f"Agent completed but no output was captured. Exit code: {process.returncode}"
 
-        agent["status"] = AgentStatus.COMPLETED
-        agent["completed_at"] = datetime.now(timezone.utc).isoformat()
-        agent["output"] = full_output
-        print(f"[Agent {agent_id}] Completed. Output length: {len(full_output)}")
+        # If agent was already stopped by user, don't overwrite status — just update output
+        if agent.get("status") == AgentStatus.STOPPED:
+            # Agent was gracefully stopped — update output if we got more, but keep status
+            if full_output and len(full_output) > len(agent.get("output") or ""):
+                agent["output"] = full_output
+                await save_agent_to_memory(agent)
+            print(f"[Agent {agent_id}] Process exited after user stop. Output length: {len(full_output)}")
+        else:
+            agent["status"] = AgentStatus.COMPLETED
+            agent["completed_at"] = datetime.now(timezone.utc).isoformat()
+            agent["output"] = full_output
+            print(f"[Agent {agent_id}] Completed. Output length: {len(full_output)}")
 
-        # Update execution status if this is a scheduled agent
-        if agent.get("execution_id"):
-            update_execution_status(agent["execution_id"], "success")
+            # Generate and emit friendly agent summary (non-blocking)
+            asyncio.create_task(_generate_agent_summary(agent, full_output))
 
-        # Save to AI Memory for persistence
-        await save_agent_to_memory(agent)
+            # Update execution status if this is a scheduled agent
+            if agent.get("execution_id"):
+                update_execution_status(agent["execution_id"], "success")
 
-        # Auto-categorize into project (non-blocking)
-        asyncio.create_task(auto_categorize_agent(agent))
+            # Save to AI Memory for persistence
+            await save_agent_to_memory(agent)
 
-        # Create notification for completed agent
-        await create_notification(
-            notif_type="agent_complete",
-            title=f"Agent {agent.get('call_sign', agent_id)} Completed",
-            message=agent["task"][:100] + ("..." if len(agent["task"]) > 100 else ""),
-            link=f"/agents/{agent_id}",
-            agent_id=agent_id
-        )
+            # Auto-categorize into project (non-blocking)
+            asyncio.create_task(auto_categorize_agent(agent))
 
-        # AUTO-COMPLETE DIRECTIVE: If agent was spawned for a directive, mark it complete
-        if agent.get("directive_id"):
-            directive_id = agent["directive_id"]
-            print(f"[Agent {agent_id}] Agent completed - auto-completing directive {directive_id}")
-            try:
-                await auto_complete_directive_from_agent(directive_id, agent_id, agent.get("output", ""))
-            except Exception as e:
-                print(f"[Agent {agent_id}] Failed to auto-complete directive: {e}")
+            # Create notification for completed agent
+            await create_notification(
+                notif_type="agent_complete",
+                title=f"Agent {agent.get('call_sign', agent_id)} Completed",
+                message=agent["task"][:100] + ("..." if len(agent["task"]) > 100 else ""),
+                link=f"/agents/{agent_id}",
+                agent_id=agent_id
+            )
+
+            # AUTO-COMPLETE DIRECTIVE: If agent was spawned for a directive, mark it complete
+            if agent.get("directive_id"):
+                directive_id = agent["directive_id"]
+                print(f"[Agent {agent_id}] Agent completed - auto-completing directive {directive_id}")
+                try:
+                    await auto_complete_directive_from_agent(directive_id, agent_id, agent.get("output", ""))
+                except Exception as e:
+                    print(f"[Agent {agent_id}] Failed to auto-complete directive: {e}")
+
+            # SCREEN OBSERVATION: Emit cerebro_observation event for screen monitor agents
+            if agent.get("source") == "screen_observation":
+                try:
+                    # Extract screenshot path from resources
+                    screenshot_path = ""
+                    for r in agent.get("resources", []):
+                        if "screenshots" in str(r):
+                            screenshot_path = str(r)
+                            break
+
+                    # Extract window title from task string
+                    window_title = "Unknown"
+                    task_str = agent.get("task", "")
+                    if "window:" in task_str.lower():
+                        # Try to extract "window: Title" pattern
+                        wt_match = re.search(r'window:\s*(.+?)(?:\n|$)', task_str, re.IGNORECASE)
+                        if wt_match:
+                            window_title = wt_match.group(1).strip()
+                    elif "title:" in task_str.lower():
+                        wt_match = re.search(r'title:\s*(.+?)(?:\n|$)', task_str, re.IGNORECASE)
+                        if wt_match:
+                            window_title = wt_match.group(1).strip()
+
+                    obs_event = {
+                        "id": f"obs_{agent_id}_{int(time.time())}",
+                        "content": full_output,
+                        "screenshot_path": screenshot_path,
+                        "window_title": window_title,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "agent_id": agent_id,
+                        "source": "screen_monitor"
+                    }
+                    await sio.emit("cerebro_observation", obs_event, room=os.environ.get("CEREBRO_ROOM", "default"))
+                    print(f"[Agent {agent_id}] Emitted cerebro_observation for screen monitor")
+                except Exception as e:
+                    print(f"[Agent {agent_id}] Failed to emit observation: {e}")
 
     except asyncio.TimeoutError:
         # Kill the process on timeout
@@ -2120,24 +2328,28 @@ When tasks mention "Spark" or "DGX" — use `ssh spark`. When tasks mention "dar
             agent_id=agent_id
         )
     except Exception as e:
-        agent["status"] = AgentStatus.FAILED
-        agent["error"] = f"{type(e).__name__}: {str(e)}"
-        print(f"[Agent {agent_id}] Exception: {e}")
-        import traceback
-        traceback.print_exc()
+        # Don't overwrite stopped status with failed
+        if agent.get("status") != AgentStatus.STOPPED:
+            agent["status"] = AgentStatus.FAILED
+            agent["error"] = f"{type(e).__name__}: {str(e)}"
+            print(f"[Agent {agent_id}] Exception: {e}")
+            import traceback
+            traceback.print_exc()
 
-        # Update execution status if this is a scheduled agent
-        if agent.get("execution_id"):
-            update_execution_status(agent["execution_id"], "failed", str(e))
+            # Update execution status if this is a scheduled agent
+            if agent.get("execution_id"):
+                update_execution_status(agent["execution_id"], "failed", str(e))
 
-        # Create notification for failed agent
-        await create_notification(
-            notif_type="agent_failed",
-            title=f"Agent {agent.get('call_sign', agent_id)} Failed",
-            message=str(e)[:100],
-            link=f"/agents/{agent_id}",
-            agent_id=agent_id
-        )
+            # Create notification for failed agent
+            await create_notification(
+                notif_type="agent_failed",
+                title=f"Agent {agent.get('call_sign', agent_id)} Failed",
+                message=str(e)[:100],
+                link=f"/agents/{agent_id}",
+                agent_id=agent_id
+            )
+        else:
+            print(f"[Agent {agent_id}] Exception after user stop (expected): {e}")
 
     # Emit final status to frontend
     print(f"[Agent {agent_id}] Emitting completion events. Status: {agent['status']}")
@@ -2235,67 +2447,13 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) 
 # Startup/Shutdown
 # ============================================================================
 
-def _create_data_directories():
-    """Create required directory tree under AI_MEMORY_PATH for standalone mode."""
-    base = Path(config.AI_MEMORY_PATH)
-    dirs = [
-        "agents", "cerebro", "cerebro/cognitive_loop", "cerebro/skills",
-        "cerebro/chrome_profile", "cerebro/recordings", "embeddings/chunks",
-        "learnings", "projects", "agent_contexts", "mood",
-        "conversations", "schedules",
-    ]
-    for d in dirs:
-        (base / d).mkdir(parents=True, exist_ok=True)
-    print(f"Cerebro: Data directories ensured under {base}")
-
-
-async def _init_autonomy_services():
-    """Initialize autonomy services in background (non-blocking)."""
-    global proactive_manager, predictive_service, learning_injector
-    try:
-        from predictive_interrupt import get_predictive_service
-        from proactive_agent import get_proactive_manager
-        from learning_injector import get_learning_injector
-
-        # Initialize MCP Bridge (already imported above)
-        await mcp_bridge._ensure_initialized()
-
-        # Initialize predictive interrupt service
-        predictive_service = get_predictive_service(mcp_bridge)
-        print("Cerebro Autonomy: Predictive service initialized")
-
-        # Initialize learning injector
-        learning_injector = get_learning_injector(mcp_bridge, Path(config.AI_MEMORY_PATH))
-        print("Cerebro Autonomy: Learning injector initialized")
-
-        # Initialize proactive agent manager (start monitoring in background)
-        proactive_manager = get_proactive_manager(
-            mcp_bridge=mcp_bridge,
-            create_agent_func=create_agent,
-            notify_func=create_notification,
-            storage_path=Path(config.AI_MEMORY_PATH)
-        )
-        if proactive_manager:
-            # Start proactive monitoring loop (runs in background)
-            asyncio.create_task(proactive_manager.start_monitoring())
-            print("Cerebro Autonomy: Proactive agent manager started")
-
-    except ImportError as e:
-        print(f"Cerebro Autonomy: Some services not available - {e}")
-    except Exception as e:
-        print(f"Cerebro Autonomy: Initialization error - {e}")
-
-
 @app.on_event("startup")
 async def startup():
-    global redis
+    global redis, proactive_manager, predictive_service, learning_injector
 
     # Initialize Redis
     redis = await aioredis.from_url(config.REDIS_URL, decode_responses=True)
     print("Cerebro started - Redis connected")
-
-    # Ensure data directory tree exists (critical for standalone/Docker)
-    _create_data_directories()
 
     # Reload persisted agents into memory
     reload_agents_from_persistence()
@@ -2303,8 +2461,43 @@ async def startup():
     # Start background task listener
     asyncio.create_task(redis_task_listener())
 
-    # Initialize autonomy services in background so /health responds immediately
-    asyncio.create_task(_init_autonomy_services())
+    # Initialize Autonomy Services (non-blocking)
+    async def _init_autonomy():
+        global proactive_manager, predictive_service, learning_injector
+        try:
+            from predictive_interrupt import get_predictive_service
+            from proactive_agent import get_proactive_manager
+            from learning_injector import get_learning_injector
+
+            # Initialize MCP Bridge (may be slow on first load)
+            await mcp_bridge._ensure_initialized()
+
+            # Initialize predictive interrupt service
+            predictive_service = get_predictive_service(mcp_bridge)
+            print("Cerebro Autonomy: Predictive service initialized")
+
+            # Initialize learning injector
+            learning_injector = get_learning_injector(mcp_bridge, Path(config.AI_MEMORY_PATH))
+            print("Cerebro Autonomy: Learning injector initialized")
+
+            # Initialize proactive agent manager (start monitoring in background)
+            proactive_manager = get_proactive_manager(
+                mcp_bridge=mcp_bridge,
+                create_agent_func=create_agent,
+                notify_func=create_notification,
+                storage_path=Path(config.AI_MEMORY_PATH)
+            )
+            if proactive_manager:
+                asyncio.create_task(proactive_manager.start_monitoring())
+                print("Cerebro Autonomy: Proactive agent manager started")
+
+        except ImportError as e:
+            print(f"Cerebro Autonomy: Some services not available - {e}")
+        except Exception as e:
+            print(f"Cerebro Autonomy: Initialization error - {e}")
+
+    # Run autonomy init in background so startup completes immediately
+    asyncio.create_task(_init_autonomy())
 
 @app.on_event("shutdown")
 async def shutdown():
@@ -2599,6 +2792,7 @@ async def chat_message(sid, data):
     content = data.get("content", "")
     session_id = data.get("session_id") or "default"
     model = data.get("model")
+    image_path = data.get("image_path")
 
     # Validate model if provided
     if model and model not in VALID_MODEL_IDS:
@@ -2627,7 +2821,7 @@ async def chat_message(sid, data):
 
     # Stream response, accumulating full text
     full_response = ""
-    async for chunk in process_chat_stream(content, session_id, model=model):
+    async for chunk in process_chat_stream(content, session_id, model=model, image_path=image_path):
         await sio.emit("chat_response", chunk, room=os.environ.get("CEREBRO_ROOM", "default"))
         if chunk.get("type") == "text":
             full_response += chunk.get("content", "")
@@ -2789,17 +2983,17 @@ async def save_chat_to_memory(session_id: str, user_content: str, assistant_cont
 # Claude Agent Integration
 # ============================================================================
 
-async def process_chat_stream(content: str, session_id: Optional[str] = None, model: Optional[str] = None):
+async def process_chat_stream(content: str, session_id: Optional[str] = None, model: Optional[str] = None, image_path: Optional[str] = None):
     """
     Process a chat message using Claude Code CLI directly.
 
-    Architecture: User â†' Cerebro â†' Claude Code CLI â†' Response
+    Architecture: User -> Cerebro -> Claude Code CLI -> Response
     No middle LLM - messages go straight to Claude Code for maximum capability.
     """
-    async for chunk in process_with_claude_code(content, model=model):
+    async for chunk in process_with_claude_code(content, model=model, image_path=image_path):
         yield chunk
 
-async def process_with_claude_code(content: str, model: Optional[str] = None) -> AsyncGenerator[dict, None]:
+async def process_with_claude_code(content: str, model: Optional[str] = None, image_path: Optional[str] = None) -> AsyncGenerator[dict, None]:
     """
     Process chat using the REAL Claude Code CLI!
     This spawns an actual Claude Code session and streams the output.
@@ -2809,6 +3003,10 @@ async def process_with_claude_code(content: str, model: Optional[str] = None) ->
     """
     import shutil
     import threading
+
+    # If an image is attached, prepend instructions to view it
+    if image_path:
+        content = f"[Image attached at: {image_path}]\nUse the Read tool to view this image, then respond.\n\nUser: {content}"
 
     # Find claude executable
     claude_path = shutil.which("claude")
@@ -3759,6 +3957,8 @@ class AgentRequest(BaseModel):
     source_agents: Optional[list[str]] = None
     # Project assignment
     project_id: Optional[str] = None
+    # Model selection (sonnet, opus, haiku, or full model ID)
+    model: Optional[str] = "sonnet"
 
 class WorkflowRequest(BaseModel):
     task: str
@@ -3781,7 +3981,8 @@ async def spawn_agent(request: AgentRequest, user: str = Depends(verify_token)):
         directive_id=request.directive_id,  # Link to directive for auto-completion
         timeout=request.timeout or 3600,
         source_agents=request.source_agents,
-        project_id=request.project_id
+        project_id=request.project_id,
+        model=request.model or "sonnet"
     )
     return {"agent_id": agent_id, "status": "spawned"}
 
@@ -3943,6 +4144,218 @@ async def assign_agent_project(agent_id: str, request: ProjectAssignRequest, use
         return {"status": "error", "error": str(e)}
 
 
+class CreateProjectRequest(BaseModel):
+    name: str
+
+
+class RenameProjectRequest(BaseModel):
+    name: str
+
+
+@app.post("/agents/projects/create")
+async def create_project(request: CreateProjectRequest, user: str = Depends(verify_token)):
+    """Create a new agent project group."""
+    try:
+        project_id = request.name.lower().replace(" ", "-").replace("_", "-")
+        # Remove non-alphanumeric chars except hyphens
+        project_id = "".join(c for c in project_id if c.isalnum() or c == "-").strip("-")
+        if not project_id:
+            return {"status": "error", "error": "Invalid project name"}
+
+        tracker_path = Path("/mnt/nas/AI_MEMORY/projects/tracker.json")
+        tracker_data = {}
+        if tracker_path.exists():
+            try:
+                with open(tracker_path, "r", encoding="utf-8") as f:
+                    tracker_data = json.load(f)
+            except Exception:
+                pass
+
+        if project_id in tracker_data:
+            return {"status": "error", "error": "Project already exists"}
+
+        tracker_data[project_id] = {
+            "project_id": project_id,
+            "name": request.name,
+            "status": "active",
+            "technologies": [],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        tracker_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(tracker_path, "w", encoding="utf-8") as f:
+            json.dump(tracker_data, f, indent=2, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+
+        await sio.emit("project_created", {
+            "project_id": project_id,
+            "name": request.name,
+        }, room=os.environ.get("CEREBRO_ROOM", "default"))
+
+        return {"status": "ok", "project_id": project_id, "name": request.name}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.post("/agents/projects/{project_id}/rename")
+async def rename_project(project_id: str, request: RenameProjectRequest, user: str = Depends(verify_token)):
+    """Rename an agent project group."""
+    try:
+        tracker_path = Path("/mnt/nas/AI_MEMORY/projects/tracker.json")
+        tracker_data = {}
+        if tracker_path.exists():
+            with open(tracker_path, "r", encoding="utf-8") as f:
+                tracker_data = json.load(f)
+
+        if project_id in tracker_data:
+            tracker_data[project_id]["name"] = request.name
+        else:
+            tracker_data[project_id] = {
+                "project_id": project_id,
+                "name": request.name,
+                "status": "active",
+                "technologies": [],
+            }
+
+        with open(tracker_path, "w", encoding="utf-8") as f:
+            json.dump(tracker_data, f, indent=2, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+
+        await sio.emit("project_renamed", {
+            "project_id": project_id,
+            "name": request.name,
+        }, room=os.environ.get("CEREBRO_ROOM", "default"))
+
+        return {"status": "ok", "project_id": project_id, "name": request.name}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.delete("/agents/projects/{project_id}")
+async def delete_project(project_id: str, user: str = Depends(verify_token)):
+    """Delete a project group and reassign its agents to uncategorized."""
+    try:
+        reassigned = 0
+
+        # Reassign all agents with this project_id
+        agents_dir = Path(config.AI_MEMORY_PATH) / "agents"
+        for a in active_agents.values():
+            if a.get("project_id") == project_id:
+                a["project_id"] = ""
+                reassigned += 1
+
+        # Update persisted agent files
+        if agents_dir.exists():
+            for date_dir in agents_dir.iterdir():
+                if date_dir.is_dir() and not date_dir.name.endswith(".json"):
+                    for agent_file in date_dir.glob("*.json"):
+                        try:
+                            with open(agent_file, "r", encoding="utf-8") as f:
+                                agent_data = json.load(f)
+                            if agent_data.get("project_id") == project_id:
+                                agent_data["project_id"] = ""
+                                with open(agent_file, "w", encoding="utf-8") as f:
+                                    json.dump(agent_data, f, indent=2, ensure_ascii=False)
+                                    f.flush()
+                                    os.fsync(f.fileno())
+                        except Exception:
+                            continue
+
+        # Update index
+        index_file = agents_dir / "index.json"
+        if index_file.exists():
+            with open(index_file, "r", encoding="utf-8") as f:
+                index = json.load(f)
+            for entry in index.get("agents", []):
+                if entry.get("project_id") == project_id:
+                    entry["project_id"] = ""
+            with open(index_file, "w", encoding="utf-8") as f:
+                json.dump(index, f, indent=2, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+
+        # Remove from tracker
+        tracker_path = Path("/mnt/nas/AI_MEMORY/projects/tracker.json")
+        if tracker_path.exists():
+            with open(tracker_path, "r", encoding="utf-8") as f:
+                tracker_data = json.load(f)
+            tracker_data.pop(project_id, None)
+            with open(tracker_path, "w", encoding="utf-8") as f:
+                json.dump(tracker_data, f, indent=2, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+
+        await sio.emit("project_deleted", {
+            "project_id": project_id,
+            "reassigned_count": reassigned,
+        }, room=os.environ.get("CEREBRO_ROOM", "default"))
+
+        return {"status": "ok", "project_id": project_id, "reassigned_count": reassigned}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+class ClearAgentsRequest(BaseModel):
+    exclude_ids: list[str] = []
+
+
+@app.post("/agents/clear")
+async def clear_agents(request: ClearAgentsRequest, user: str = Depends(verify_token)):
+    """Clear all agents except starred/excluded ones."""
+    try:
+        exclude = set(request.exclude_ids)
+        agents_dir = Path(config.AI_MEMORY_PATH) / "agents"
+        deleted_count = 0
+        preserved_count = 0
+
+        # Remove non-excluded agents from memory
+        to_remove = [aid for aid in active_agents if aid not in exclude]
+        for aid in to_remove:
+            del active_agents[aid]
+            used_call_signs.discard(aid)
+            deleted_count += 1
+
+        # Remove non-excluded agent files, preserve excluded
+        if agents_dir.exists():
+            for date_dir in agents_dir.iterdir():
+                if date_dir.is_dir() and not date_dir.name.endswith(".json"):
+                    for agent_file in list(date_dir.glob("*.json")):
+                        agent_id = agent_file.stem
+                        if agent_id in exclude:
+                            preserved_count += 1
+                            continue
+                        agent_file.unlink()
+                    # Remove empty date dirs
+                    remaining = list(date_dir.glob("*.json"))
+                    if not remaining:
+                        import shutil
+                        shutil.rmtree(date_dir)
+
+            # Rebuild index with only preserved agents
+            index_file = agents_dir / "index.json"
+            if index_file.exists():
+                with open(index_file, "r", encoding="utf-8") as f:
+                    index = json.load(f)
+                index["agents"] = [e for e in index.get("agents", []) if e.get("id") in exclude]
+                index["last_updated"] = datetime.now(timezone.utc).isoformat()
+                with open(index_file, "w", encoding="utf-8") as f:
+                    json.dump(index, f, indent=2, ensure_ascii=False)
+                    f.flush()
+                    os.fsync(f.fileno())
+
+        await sio.emit("agents_cleared", {
+            "deleted_count": deleted_count,
+            "preserved_count": preserved_count,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }, room=os.environ.get("CEREBRO_ROOM", "default"))
+
+        return {"status": "ok", "deleted": deleted_count, "preserved": preserved_count}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
 @app.post("/agents/wipe")
 async def wipe_all_agents(user: str = Depends(verify_token)):
     """Delete all agent data (date subdirs + index) but preserve other AI Memory data."""
@@ -3965,8 +4378,9 @@ async def wipe_all_agents(user: str = Depends(verify_token)):
                 f.flush()
                 os.fsync(f.fileno())
 
-        # Clear in-memory agents
+        # Clear in-memory agents and call sign tracking
         active_agents.clear()
+        used_call_signs.clear()
 
         # Notify frontend
         await sio.emit("agents_wiped", {
@@ -4178,19 +4592,77 @@ async def get_agent(agent_id: str, user: str = Depends(verify_token)):
 
 @app.delete("/agents/{agent_id}")
 async def stop_agent(agent_id: str, user: str = Depends(verify_token)):
-    """Stop a running agent."""
+    """Gracefully stop a running agent — kills process, captures partial output, persists to NAS."""
     agent = active_agents.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    # Mark as failed/stopped
-    agent["status"] = AgentStatus.FAILED
-    agent["error"] = "Stopped by user"
-    await sio.emit("agent_update", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
+    was_running = agent.get("status") in (AgentStatus.RUNNING, AgentStatus.QUEUED)
 
     # Remove from queue if it was queued (not yet running)
     global _agent_spawn_queue
     _agent_spawn_queue = [e for e in _agent_spawn_queue if e["agent_id"] != agent_id]
+
+    # Gracefully terminate the subprocess
+    process = agent.get("_process")
+    pid = agent.get("pid")
+    if process and process.poll() is None:
+        try:
+            process.terminate()  # SIGTERM — gives Claude CLI time to flush
+            try:
+                process.wait(timeout=10)
+            except sp.TimeoutExpired:
+                process.kill()  # Force kill if it didn't exit
+                process.wait(timeout=5)
+            print(f"[Stop] Agent {agent_id} process terminated gracefully (PID: {pid})")
+        except Exception as e:
+            print(f"[Stop] Error terminating agent {agent_id} process: {e}")
+    elif pid and was_running:
+        # Process object not available, try via PID
+        try:
+            import signal as sig_mod
+            os.kill(pid, sig_mod.SIGTERM)
+            # Give it time to flush
+            await asyncio.sleep(3)
+            try:
+                os.kill(pid, 0)  # Check if still alive
+                os.kill(pid, sig_mod.SIGKILL)  # Force kill
+            except ProcessLookupError:
+                pass  # Already exited
+            print(f"[Stop] Agent {agent_id} killed via PID {pid}")
+        except ProcessLookupError:
+            print(f"[Stop] Agent {agent_id} PID {pid} already dead")
+        except Exception as e:
+            print(f"[Stop] Error killing agent {agent_id} PID {pid}: {e}")
+
+    # Capture any partial output already collected
+    partial_output = agent.get("output") or ""
+    if not partial_output:
+        # Try to get output from the process stdout buffer
+        if process and hasattr(process, 'stdout') and process.stdout:
+            try:
+                remaining = process.stdout.read()
+                if remaining:
+                    partial_output = remaining if isinstance(remaining, str) else remaining.decode('utf-8', errors='replace')
+            except Exception:
+                pass
+
+    # Mark as stopped (not failed — this was intentional)
+    agent["status"] = AgentStatus.STOPPED
+    agent["error"] = "Stopped by user"
+    agent["completed_at"] = datetime.now(timezone.utc).isoformat()
+    if partial_output:
+        agent["output"] = partial_output
+
+    # Persist to NAS so output is queryable later
+    try:
+        await save_agent_to_memory(agent)
+        print(f"[Stop] Agent {agent_id} persisted to NAS (output: {len(partial_output)} chars)")
+    except Exception as e:
+        print(f"[Stop] Failed to persist agent {agent_id}: {e}")
+
+    # Emit update to frontend
+    await sio.emit("agent_update", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
 
     # Unregister from cognitive loop
     if cognitive_loop_manager:
@@ -4199,7 +4671,80 @@ async def stop_agent(agent_id: str, user: str = Depends(verify_token)):
     # Process queue — stopped agent frees a slot
     await _process_agent_queue()
 
-    return {"status": "stopped"}
+    return {"status": "stopped", "agent_id": agent_id, "output_saved": bool(partial_output)}
+
+
+@app.post("/agents/stop-all")
+async def stop_all_agents(user: str = Depends(verify_token)):
+    """Gracefully stop ALL running/queued agents — persists partial output for each."""
+    running = [
+        (aid, a) for aid, a in active_agents.items()
+        if a.get("status") in (AgentStatus.RUNNING, AgentStatus.QUEUED)
+    ]
+    if not running:
+        return {"status": "ok", "stopped": 0, "message": "No running agents"}
+
+    stopped = 0
+    for agent_id, agent in running:
+        try:
+            # Terminate process
+            process = agent.get("_process")
+            pid = agent.get("pid")
+            if process and process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=8)
+                except sp.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5)
+            elif pid:
+                try:
+                    import signal as sig_mod
+                    os.kill(pid, sig_mod.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                except Exception:
+                    pass
+
+            # Capture partial output
+            partial_output = agent.get("output") or ""
+            if not partial_output and process and hasattr(process, 'stdout') and process.stdout:
+                try:
+                    remaining = process.stdout.read()
+                    if remaining:
+                        partial_output = remaining if isinstance(remaining, str) else remaining.decode('utf-8', errors='replace')
+                except Exception:
+                    pass
+
+            # Mark as stopped and persist
+            agent["status"] = AgentStatus.STOPPED
+            agent["error"] = "Stopped by user (stop all)"
+            agent["completed_at"] = datetime.now(timezone.utc).isoformat()
+            if partial_output:
+                agent["output"] = partial_output
+
+            try:
+                await save_agent_to_memory(agent)
+            except Exception as e:
+                print(f"[StopAll] Failed to persist agent {agent_id}: {e}")
+
+            await sio.emit("agent_update", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
+
+            if cognitive_loop_manager:
+                cognitive_loop_manager.register_agent_completed(agent_id)
+
+            stopped += 1
+        except Exception as e:
+            print(f"[StopAll] Error stopping agent {agent_id}: {e}")
+
+    # Clear queue
+    global _agent_spawn_queue
+    _agent_spawn_queue = []
+
+    # Process queue (empty now, but resets state)
+    await _process_agent_queue()
+
+    return {"status": "ok", "stopped": stopped, "total_were_running": len(running)}
 
 
 # ============================================================================
@@ -4349,9 +4894,21 @@ async def run_agent_continuation(agent_id: str, call_sign: str, task: str, agent
         # Strip CLAUDECODE env var so spawned CLI doesn't think it's nested
         agent_env = os.environ.copy()
         agent_env.pop("CLAUDECODE", None)
+        # Signal hooks to exit immediately (avoids brain_maintenance, wake-nas, etc.)
+        agent_env["CEREBRO_AGENT"] = "1"
+
+        # Resolve model for continuation (inherit from agent_data or default to sonnet)
+        cont_model = agent_data.get("model", "sonnet")
+        cont_model_map = {
+            "opus": "claude-opus-4-6",
+            "sonnet": "claude-sonnet-4-6",
+            "haiku": "claude-haiku-4-5-20251001",
+        }
+        cont_resolved_model = cont_model_map.get(cont_model, cont_model)
 
         process = sp.Popen(
             [claude_path, "-p", full_prompt,
+             "--model", cont_resolved_model,
              "--output-format", "stream-json",
              "--verbose",
              "--dangerously-skip-permissions"],
@@ -4978,9 +5535,10 @@ class AgentQuestionRequest(BaseModel):
     question: str
     background: bool = False  # If True, process in background and notify when ready
     context_refs: Optional[list[dict]] = None  # Context references (click-to-attach)
+    parent_thread_id: Optional[str] = None  # For threaded conversations
 
 
-async def process_question_background(question_id: str, agent_id: str, question: str, user: str, context_refs: list = None):
+async def process_question_background(question_id: str, agent_id: str, question: str, user: str, context_refs: list = None, parent_thread_id: str = None):
     """Process a question in the background using Claude Code CLI and notify when complete."""
     import shutil
 
@@ -5075,8 +5633,9 @@ Please answer the user's question based on the agent's output above. If referenc
 
         # Store the Q&A in the agent's conversation history
         now = datetime.now(timezone.utc).isoformat()
-        user_msg = {"role": "user", "content": question, "timestamp": now}
-        assistant_msg = {"role": "assistant", "content": answer, "timestamp": now}
+        thread_id = str(uuid.uuid4())[:8]
+        user_msg = {"role": "user", "content": question, "timestamp": now, "thread_id": thread_id, "parent_thread_id": parent_thread_id}
+        assistant_msg = {"role": "assistant", "content": answer, "timestamp": now, "thread_id": thread_id, "parent_thread_id": parent_thread_id}
 
         if agent_id in active_agents:
             if "conversation" not in active_agents[agent_id]:
@@ -5113,7 +5672,9 @@ Please answer the user's question based on the agent's output above. If referenc
             "question_id": question_id,
             "agent_id": agent_id,
             "question": question,
-            "answer": answer
+            "answer": answer,
+            "thread_id": thread_id,
+            "parent_thread_id": parent_thread_id
         }, room=os.environ.get("CEREBRO_ROOM", "default"))
 
         # Create notification
@@ -5150,7 +5711,7 @@ async def ask_agent_question(agent_id: str, request: AgentQuestionRequest, user:
         }
 
         # Start background task with context refs
-        asyncio.create_task(process_question_background(question_id, agent_id, request.question, user, request.context_refs))
+        asyncio.create_task(process_question_background(question_id, agent_id, request.question, user, request.context_refs, request.parent_thread_id))
 
         return {
             "question_id": question_id,
@@ -5238,25 +5799,59 @@ Please answer the user's question based on the agent's output above. If referenc
             process.kill()
             answer = "Request timed out."
 
-        # Store the Q&A in conversation history
+        # Store the Q&A in conversation history (threaded)
+        thread_id = str(uuid.uuid4())[:8]
+        now_ts = datetime.now(timezone.utc).isoformat()
         if agent_id in active_agents:
             if "conversation" not in active_agents[agent_id]:
                 active_agents[agent_id]["conversation"] = []
             active_agents[agent_id]["conversation"].append({
                 "role": "user",
                 "content": request.question,
-                "timestamp": datetime.now(timezone.utc).isoformat()
+                "timestamp": now_ts,
+                "thread_id": thread_id,
+                "parent_thread_id": request.parent_thread_id
             })
             active_agents[agent_id]["conversation"].append({
                 "role": "assistant",
                 "content": answer,
-                "timestamp": datetime.now(timezone.utc).isoformat()
+                "timestamp": now_ts,
+                "thread_id": thread_id,
+                "parent_thread_id": request.parent_thread_id
             })
+
+        # Also persist to file for durability
+        try:
+            agents_dir = Path(config.AI_MEMORY_PATH) / "agents"
+            for date_dir in agents_dir.iterdir():
+                if date_dir.is_dir() and not date_dir.name.endswith('.json'):
+                    agent_file = date_dir / f"{agent_id}.json"
+                    if agent_file.exists():
+                        with open(agent_file, 'r', encoding='utf-8') as f:
+                            agent_data = json.load(f)
+                        if "conversation" not in agent_data:
+                            agent_data["conversation"] = []
+                        agent_data["conversation"].append({
+                            "role": "user", "content": request.question,
+                            "timestamp": now_ts, "thread_id": thread_id,
+                            "parent_thread_id": request.parent_thread_id
+                        })
+                        agent_data["conversation"].append({
+                            "role": "assistant", "content": answer,
+                            "timestamp": now_ts, "thread_id": thread_id,
+                            "parent_thread_id": request.parent_thread_id
+                        })
+                        with open(agent_file, 'w', encoding='utf-8') as f:
+                            json.dump(agent_data, f, indent=2, ensure_ascii=False)
+                        break
+        except Exception as e:
+            print(f"Failed to persist conversation: {e}")
 
         return {
             "question": request.question,
             "answer": answer,
-            "agent_id": agent_id
+            "agent_id": agent_id,
+            "thread_id": thread_id
         }
 
     except Exception as e:
@@ -6255,15 +6850,25 @@ async def search_memory(q: str, limit: int = 10, user: str = Depends(verify_toke
 # ============================================================================
 
 from mcp_bridge import get_mcp_bridge
+from cognitive_loop.goal_pursuit import get_goal_pursuit_engine, GoalMode
 
 # Pydantic models for MCP endpoints
 class GoalCreate(BaseModel):
     description: str
     priority: str = "medium"
+    deadline: Optional[str] = None      # ISO date string
+    target_value: Optional[float] = None
+    target_unit: str = ""
+    mode: str = "monitor"               # monitor | think | act
 
 class GoalUpdate(BaseModel):
     status: Optional[str] = None
     priority: Optional[str] = None
+    mode: Optional[str] = None
+    description: Optional[str] = None
+    deadline: Optional[str] = None
+    target_value: Optional[float] = None
+    target_unit: Optional[str] = None
     add_blocker: Optional[str] = None
     add_subgoal: Optional[str] = None
     progress_update: Optional[str] = None
@@ -6277,29 +6882,36 @@ mcp_bridge = get_mcp_bridge()
 
 @app.get("/api/goals")
 async def list_goals(user: str = Depends(verify_token)):
-    """List all active goals."""
-    result = await mcp_bridge.goals("list_active")
-    if not result.get("success"):
-        raise HTTPException(status_code=500, detail=result.get("error", "Failed to list goals"))
-    return result
+    """List all goals with progress metrics via GoalPursuitEngine."""
+    try:
+        engine = get_goal_pursuit_engine()
+        goals_with_progress = engine.get_goals_with_progress()
+        return {"success": True, "goals": goals_with_progress}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list goals: {e}")
 
 
 @app.post("/api/goals")
 async def create_goal(goal: GoalCreate, user: str = Depends(verify_token)):
-    """Create a new goal manually."""
-    result = await mcp_bridge.goals(
-        "add",
-        description=goal.description,
-        priority=goal.priority
-    )
-    if not result.get("success"):
-        raise HTTPException(status_code=500, detail=result.get("error", "Failed to create goal"))
-    return result
+    """Create a new goal via GoalPursuitEngine."""
+    try:
+        engine = get_goal_pursuit_engine()
+        new_goal = engine.create_goal(
+            description=goal.description,
+            priority=goal.priority,
+            deadline=goal.deadline,
+            target_value=goal.target_value,
+            target_unit=goal.target_unit,
+            mode=goal.mode,
+        )
+        return {"success": True, "goal": new_goal.to_dict()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create goal: {e}")
 
 
 @app.post("/api/goals/detect")
 async def detect_goals(request: ChatAnalyzeRequest, user: str = Depends(verify_token)):
-    """Detect goals from user text."""
+    """Detect goals from user text (still via MCP bridge)."""
     result = await mcp_bridge.goals("detect", text=request.message)
     if not result.get("success"):
         raise HTTPException(status_code=500, detail=result.get("error", "Failed to detect goals"))
@@ -6308,41 +6920,103 @@ async def detect_goals(request: ChatAnalyzeRequest, user: str = Depends(verify_t
 
 @app.get("/api/goals/{goal_id}")
 async def get_goal(goal_id: str, user: str = Depends(verify_token)):
-    """Get a specific goal by ID."""
-    result = await mcp_bridge.goals("get", goal_id=goal_id)
-    if not result.get("success"):
-        raise HTTPException(status_code=404, detail=result.get("error", "Goal not found"))
-    return result
+    """Get a specific goal by ID via GoalPursuitEngine."""
+    try:
+        engine = get_goal_pursuit_engine()
+        goal = engine.get_goal(goal_id)
+        if not goal:
+            raise HTTPException(status_code=404, detail="Goal not found")
+        return {"success": True, "goal": goal.to_dict()}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get goal: {e}")
 
 
 @app.patch("/api/goals/{goal_id}")
 async def update_goal(goal_id: str, update: GoalUpdate, user: str = Depends(verify_token)):
-    """Update a goal's status, blockers, or subgoals."""
-    kwargs = {"goal_id": goal_id}
-    if update.status:
-        kwargs["status"] = update.status
-    if update.priority:
-        kwargs["priority"] = update.priority
-    if update.add_blocker:
-        kwargs["add_blocker"] = update.add_blocker
-    if update.add_subgoal:
-        kwargs["add_subgoal"] = update.add_subgoal
-    if update.progress_update:
-        kwargs["progress_update"] = update.progress_update
+    """Update goal fields directly via GoalPursuitEngine."""
+    try:
+        engine = get_goal_pursuit_engine()
+        goal = engine.get_goal(goal_id)
+        if not goal:
+            raise HTTPException(status_code=404, detail="Goal not found")
 
-    result = await mcp_bridge.goals("update", **kwargs)
-    if not result.get("success"):
-        raise HTTPException(status_code=500, detail=result.get("error", "Failed to update goal"))
-    return result
+        if update.status is not None:
+            goal.status = update.status
+        if update.priority is not None:
+            goal.priority = update.priority
+        if update.mode is not None:
+            goal.mode = update.mode
+        if update.description is not None:
+            goal.description = update.description
+        if update.deadline is not None:
+            goal.deadline = update.deadline
+        if update.target_value is not None:
+            goal.target_value = update.target_value
+        if update.target_unit is not None:
+            goal.target_unit = update.target_unit
+
+        goal.updated_at = datetime.now(timezone.utc).isoformat()
+        engine._save_goal(goal_id)
+
+        return {"success": True, "goal": goal.to_dict()}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update goal: {e}")
 
 
 @app.post("/api/goals/{goal_id}/complete")
 async def complete_goal(goal_id: str, user: str = Depends(verify_token)):
-    """Mark a goal as completed."""
-    result = await mcp_bridge.goals("complete", goal_id=goal_id)
-    if not result.get("success"):
-        raise HTTPException(status_code=500, detail=result.get("error", "Failed to complete goal"))
-    return result
+    """Mark a goal as completed and create a stored item."""
+    try:
+        engine = get_goal_pursuit_engine()
+        goal = engine.complete_goal(goal_id)
+        if not goal:
+            raise HTTPException(status_code=404, detail="Goal not found")
+
+        # Create "goal_complete" stored item
+        item = {
+            "id": f"goal_complete_{int(datetime.now().timestamp())}_{uuid.uuid4().hex[:6]}",
+            "type": "goal_complete",
+            "title": f"Goal Complete: {goal.description[:80]}",
+            "content": f"Goal \"{goal.description}\" has been marked as completed.",
+            "metadata": {"goal_id": goal_id, "source": "heartbeat_goals"},
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "status": "pending",
+            "source_id": goal_id,
+        }
+        items = _load_stored_items()
+        items.insert(0, item)
+        _save_stored_items(items)
+        await sio.emit("cerebro_stored_item_added", item, room=os.environ.get("CEREBRO_ROOM", "default"))
+
+        return {"success": True, "goal": goal.to_dict()}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to complete goal: {e}")
+
+
+@app.delete("/api/goals/{goal_id}")
+async def delete_goal(goal_id: str, user: str = Depends(verify_token)):
+    """Abandon (soft-delete) a goal."""
+    try:
+        engine = get_goal_pursuit_engine()
+        goal = engine.get_goal(goal_id)
+        if not goal:
+            raise HTTPException(status_code=404, detail="Goal not found")
+
+        goal.status = "abandoned"
+        goal.updated_at = datetime.now(timezone.utc).isoformat()
+        engine._save_goal(goal_id)
+
+        return {"success": True, "goal": goal.to_dict()}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete goal: {e}")
 
 
 @app.get("/api/predictions")
@@ -8430,6 +9104,7 @@ class DirectiveRequest(BaseModel):
     text: str
     directive_type: str = None  # "task" or "goal" - auto-detected if not provided
     auto_awake: bool = True  # Whether to auto-start cognitive loop on send
+    image_path: Optional[str] = None  # Attached image path for vision tasks
 
 
 def classify_directive_type(text: str) -> str:
@@ -8524,7 +9199,8 @@ async def create_directive(request: DirectiveRequest, user: str = Depends(verify
         "type": directive_type,  # "task" or "goal"
         "status": "pending",
         "created_at": datetime.now().isoformat(),
-        "created_by": user
+        "created_by": user,
+        "image_path": request.image_path
     }
 
     directives.insert(0, directive)
@@ -10484,10 +11160,11 @@ async def get_tamagotchi_state():
 
 
 # ============================================================================
-# Network Device Monitor — Alert Endpoints
+# Network Device Monitor — Known Devices Registry & Alert Endpoints
 # ============================================================================
 
 NETWORK_ALERTS_FILE = Path(config.AI_MEMORY_PATH) / "cerebro" / "network_alerts.json"
+KNOWN_NETWORK_DEVICES_FILE = Path(config.AI_MEMORY_PATH) / "cerebro" / "known_network_devices.json"
 
 def _load_network_alerts() -> list:
     """Load network alerts from file."""
@@ -10506,9 +11183,107 @@ def _save_network_alerts(alerts: list):
         alerts = alerts[:200]
     NETWORK_ALERTS_FILE.write_text(json.dumps(alerts, indent=2, default=str))
 
+def _load_known_devices() -> dict:
+    """Load known network devices registry. Keyed by MAC address."""
+    if KNOWN_NETWORK_DEVICES_FILE.exists():
+        try:
+            data = json.loads(KNOWN_NETWORK_DEVICES_FILE.read_text())
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            pass
+    return {}
+
+def _save_known_devices(devices: dict):
+    """Save known network devices registry."""
+    KNOWN_NETWORK_DEVICES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    KNOWN_NETWORK_DEVICES_FILE.write_text(json.dumps(devices, indent=2, default=str))
+
+def _find_known_device(mac: str) -> dict | None:
+    """Look up a device by MAC address in the known devices registry."""
+    devices = _load_known_devices()
+    mac_upper = mac.upper().strip()
+    return devices.get(mac_upper)
+
+# --- Known Network Devices CRUD ---
+
+@app.get("/api/network/devices")
+async def get_known_devices(user: str = Depends(verify_token)):
+    """List all registered known network devices."""
+    devices = _load_known_devices()
+    return {"devices": list(devices.values()), "count": len(devices)}
+
+@app.post("/api/network/devices")
+async def register_known_device(request: Request, user: str = Depends(verify_token)):
+    """Register a network device as known (trusted). Body: {mac, name, ip?, vendor?, notes?}"""
+    data = await request.json()
+    mac = data.get("mac", "").upper().strip()
+    name = data.get("name", "").strip()
+
+    if not mac or not name:
+        raise HTTPException(status_code=400, detail="Both 'mac' and 'name' are required")
+
+    devices = _load_known_devices()
+    now = datetime.now(timezone.utc).isoformat()
+
+    devices[mac] = {
+        "mac": mac,
+        "name": name,
+        "ip": data.get("ip", ""),
+        "vendor": data.get("vendor", ""),
+        "notes": data.get("notes", ""),
+        "registered_at": now,
+        "last_seen": now,
+        "seen_count": 1,
+    }
+    _save_known_devices(devices)
+
+    # Auto-resolve any unresolved alerts for this MAC
+    alerts = _load_network_alerts()
+    resolved_count = 0
+    for alert in alerts:
+        if alert.get("mac", "").upper() == mac and alert.get("status") == "unresolved":
+            alert["status"] = "resolved"
+            alert["resolved_by"] = "device_registration"
+            alert["resolved_at"] = now
+            alert["notes"] = f"Registered as: {name}"
+            resolved_count += 1
+    if resolved_count:
+        _save_network_alerts(alerts)
+
+    print(f"[NetworkDevices] Registered '{name}' (MAC: {mac}), auto-resolved {resolved_count} alerts")
+    return {"success": True, "device": devices[mac], "alerts_resolved": resolved_count}
+
+@app.delete("/api/network/devices/{mac}")
+async def remove_known_device(mac: str, user: str = Depends(verify_token)):
+    """Remove a device from the known devices registry."""
+    mac_upper = mac.upper().strip()
+    devices = _load_known_devices()
+    if mac_upper not in devices:
+        raise HTTPException(status_code=404, detail="Device not found")
+    removed = devices.pop(mac_upper)
+    _save_known_devices(devices)
+    return {"success": True, "removed": removed}
+
+@app.patch("/api/network/devices/{mac}")
+async def update_known_device(mac: str, request: Request, user: str = Depends(verify_token)):
+    """Update a known device's info (name, notes, etc.)."""
+    mac_upper = mac.upper().strip()
+    devices = _load_known_devices()
+    if mac_upper not in devices:
+        raise HTTPException(status_code=404, detail="Device not found")
+    data = await request.json()
+    for key in ("name", "ip", "vendor", "notes"):
+        if key in data:
+            devices[mac_upper][key] = data[key]
+    _save_known_devices(devices)
+    return {"success": True, "device": devices[mac_upper]}
+
+# --- Alert Endpoints ---
+
 @app.post("/api/network/alert")
 async def receive_network_alert(request: Request):
-    """Receive unknown device alert from Darkhorse network monitor. No auth (LAN-only service)."""
+    """Receive unknown device alert from Darkhorse network monitor. No auth (LAN-only service).
+    Known devices get a quiet chat notification. Unknown devices get the full critical popup."""
     data = await request.json()
     unknown_devices = data.get("unknown_devices", [])
     source = data.get("source", "unknown")
@@ -10519,65 +11294,104 @@ async def receive_network_alert(request: Request):
 
     alerts = _load_network_alerts()
     created_alerts = []
+    truly_unknown = []
+    known_rejoined = []
 
     for dev in unknown_devices:
-        alert_id = f"net_{int(datetime.now().timestamp())}_{uuid.uuid4().hex[:6]}"
-        alert = {
-            "id": alert_id,
-            "ip": dev.get("ip", "?"),
-            "mac": dev.get("mac", "?"),
-            "vendor": dev.get("vendor", "Unknown"),
-            "source": source,
-            "status": "unresolved",
-            "detected_at": timestamp,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
-        alerts.insert(0, alert)
-        created_alerts.append(alert)
+        mac = dev.get("mac", "?")
+        known = _find_known_device(mac)
 
-        # Create notification (toast + bell)
-        device_label = f"{dev.get('ip', '?')} ({dev.get('mac', '?')[:8]}...)"
-        await create_notification(
-            notif_type="system",
-            title="Unknown Device Detected",
-            message=f"New device on network: {device_label} - Vendor: {dev.get('vendor', 'Unknown')}",
-        )
+        if known:
+            # Known device — update last_seen and bump count
+            devices = _load_known_devices()
+            mac_upper = mac.upper().strip()
+            if mac_upper in devices:
+                devices[mac_upper]["last_seen"] = datetime.now(timezone.utc).isoformat()
+                devices[mac_upper]["seen_count"] = devices[mac_upper].get("seen_count", 0) + 1
+                if dev.get("ip"):
+                    devices[mac_upper]["ip"] = dev["ip"]
+                _save_known_devices(devices)
 
-        # Create stored item (card in Stored tab)
-        stored_item = {
-            "id": f"stored_{alert_id}",
-            "type": "alert",
-            "title": f"Unknown Network Device: {dev.get('ip', '?')}",
-            "content": (
-                f"**IP:** {dev.get('ip', '?')}\n"
-                f"**MAC:** {dev.get('mac', '?')}\n"
-                f"**Vendor:** {dev.get('vendor', 'Unknown')}\n"
-                f"**Detected:** {timestamp}\n"
-                f"**Source:** {source}"
-            ),
-            "metadata": {"alert_id": alert_id, "category": "network_security"},
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "status": "pending",
-            "source_id": source,
-        }
-        items = _load_stored_items()
-        items.insert(0, stored_item)
-        _save_stored_items(items)
-        await sio.emit("cerebro_stored_item_added", stored_item,
-                        room=os.environ.get("CEREBRO_ROOM", "default"))
+            known_rejoined.append({
+                "name": known["name"],
+                "ip": dev.get("ip", known.get("ip", "?")),
+                "mac": mac,
+            })
+        else:
+            # Truly unknown — full alert flow
+            alert_id = f"net_{int(datetime.now().timestamp())}_{uuid.uuid4().hex[:6]}"
+            alert = {
+                "id": alert_id,
+                "ip": dev.get("ip", "?"),
+                "mac": mac,
+                "vendor": dev.get("vendor", "Unknown"),
+                "source": source,
+                "status": "unresolved",
+                "detected_at": timestamp,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            alerts.insert(0, alert)
+            created_alerts.append(alert)
+
+            # Create notification (toast + bell)
+            device_label = f"{dev.get('ip', '?')} ({mac[:8]}...)"
+            await create_notification(
+                notif_type="system",
+                title="Unknown Device Detected",
+                message=f"New device on network: {device_label} - Vendor: {dev.get('vendor', 'Unknown')}",
+            )
+
+            # Create stored item (card in Stored tab)
+            stored_item = {
+                "id": f"stored_{alert_id}",
+                "type": "alert",
+                "title": f"Unknown Network Device: {dev.get('ip', '?')}",
+                "content": (
+                    f"**IP:** {dev.get('ip', '?')}\n"
+                    f"**MAC:** {mac}\n"
+                    f"**Vendor:** {dev.get('vendor', 'Unknown')}\n"
+                    f"**Detected:** {timestamp}\n"
+                    f"**Source:** {source}"
+                ),
+                "metadata": {"alert_id": alert_id, "category": "network_security"},
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "status": "pending",
+                "source_id": source,
+            }
+            items = _load_stored_items()
+            items.insert(0, stored_item)
+            _save_stored_items(items)
+            await sio.emit("cerebro_stored_item_added", stored_item,
+                            room=os.environ.get("CEREBRO_ROOM", "default"))
+
+            truly_unknown.append(dev)
 
     _save_network_alerts(alerts)
 
-    # Emit prominent security alert to frontend (full-screen popup + sound)
-    await sio.emit("network_security_alert", {
-        "devices": unknown_devices,
-        "timestamp": timestamp,
-        "source": source,
-        "alert_count": len(created_alerts),
-    }, room=os.environ.get("CEREBRO_ROOM", "default"))
+    # Emit quiet chat notification for known devices
+    if known_rejoined:
+        await sio.emit("network_device_joined", {
+            "devices": known_rejoined,
+            "timestamp": timestamp,
+            "source": source,
+        }, room=os.environ.get("CEREBRO_ROOM", "default"))
+        print(f"[NetworkAlert] {len(known_rejoined)} known device(s) rejoined: {', '.join(d['name'] for d in known_rejoined)}")
 
-    print(f"[NetworkAlert] {len(created_alerts)} unknown device(s) from {source}")
-    return {"success": True, "alerts_created": len(created_alerts)}
+    # Emit prominent security alert ONLY for truly unknown devices
+    if truly_unknown:
+        await sio.emit("network_security_alert", {
+            "devices": truly_unknown,
+            "timestamp": timestamp,
+            "source": source,
+            "alert_count": len(created_alerts),
+        }, room=os.environ.get("CEREBRO_ROOM", "default"))
+        print(f"[NetworkAlert] {len(created_alerts)} unknown device(s) from {source}")
+
+    return {
+        "success": True,
+        "alerts_created": len(created_alerts),
+        "known_devices_seen": len(known_rejoined),
+    }
 
 @app.get("/api/network/alerts")
 async def get_network_alerts(
@@ -10734,6 +11548,108 @@ async def screenshot_image(screenshot_id: str):
     from starlette.responses import FileResponse
     return FileResponse(filepath, media_type="image/jpeg")
 
+
+@app.get("/api/screenshot/file")
+async def screenshot_file(path: str):
+    """Serve screenshot file by absolute path (no auth — for <img> tags).
+    Security: Only serves files from the screenshots directory."""
+    screenshots_base = os.path.realpath(str(SCREENSHOTS_DIR))
+    real_path = os.path.realpath(path)
+    if not real_path.startswith(screenshots_base + os.sep) and real_path != screenshots_base:
+        raise HTTPException(status_code=403, detail="Access denied: path outside screenshots directory")
+    if not os.path.isfile(real_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(real_path, media_type="image/jpeg")
+
+
+# Upload directory for user-attached images
+UPLOADS_DIR = Path(config.AI_MEMORY_PATH) / "cerebro" / "uploads"
+
+ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+
+
+@app.post("/api/upload/image")
+async def upload_image(request: Request, user: str = Depends(verify_token)):
+    """Upload an image via base64 JSON or multipart form."""
+    content_type = request.headers.get("content-type", "")
+
+    image_bytes = None
+    original_filename = "image.png"
+
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        file = form.get("file")
+        if not file:
+            raise HTTPException(status_code=400, detail="Missing 'file' field")
+        image_bytes = await file.read()
+        original_filename = getattr(file, "filename", "image.png") or "image.png"
+    else:
+        try:
+            data = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON")
+
+        image_b64 = data.get("image_base64", "")
+        original_filename = data.get("filename", "image.png")
+
+        # Strip data URI prefix if present
+        if "," in image_b64 and image_b64.startswith("data:"):
+            image_b64 = image_b64.split(",", 1)[1]
+
+        if not image_b64:
+            raise HTTPException(status_code=400, detail="Missing image_base64")
+
+        try:
+            image_bytes = base64.b64decode(image_b64)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid base64 data")
+
+    # Validate extension
+    ext = os.path.splitext(original_filename)[1].lower()
+    if ext not in ALLOWED_IMAGE_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Invalid image extension: {ext}. Allowed: {', '.join(ALLOWED_IMAGE_EXTENSIONS)}")
+
+    # Generate upload ID and save
+    upload_id = f"upload_{uuid.uuid4().hex[:8]}"
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    save_filename = f"{upload_id}{ext}"
+    save_path = UPLOADS_DIR / save_filename
+    save_path.write_bytes(image_bytes)
+
+    print(f"[Upload] Saved image: {save_filename} ({len(image_bytes)} bytes)")
+
+    return {
+        "success": True,
+        "upload_id": upload_id,
+        "filename": original_filename,
+        "path": str(save_path),
+        "url": f"/api/upload/{upload_id}/image"
+    }
+
+
+@app.get("/api/upload/{upload_id}/image")
+async def serve_uploaded_image(upload_id: str):
+    """Serve uploaded image by upload_id prefix match (no auth — for <img> tags)."""
+    uploads_base = os.path.realpath(str(UPLOADS_DIR))
+
+    if not UPLOADS_DIR.exists():
+        raise HTTPException(status_code=404, detail="No uploads directory")
+
+    # Find file matching upload_id prefix
+    for f in UPLOADS_DIR.iterdir():
+        if f.name.startswith(upload_id) and f.is_file():
+            real_path = os.path.realpath(str(f))
+            if not real_path.startswith(uploads_base + os.sep) and real_path != uploads_base:
+                raise HTTPException(status_code=403, detail="Access denied")
+            # Determine media type from extension
+            ext = f.suffix.lower()
+            media_types = {
+                ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp"
+            }
+            return FileResponse(str(f), media_type=media_types.get(ext, "image/jpeg"))
+
+    raise HTTPException(status_code=404, detail="Upload not found")
 
 
 # ============================================================================

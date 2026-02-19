@@ -20,6 +20,7 @@ import uuid
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from difflib import SequenceMatcher
 from enum import Enum
 from typing import Optional, Dict, Any, Callable, Awaitable, List
 
@@ -121,33 +122,50 @@ CHECK_INTERVAL = 5
 # Dedup rolling window size
 DEDUP_WINDOW = 20
 
+# Topic cooldown: minimum seconds between same topic mentions
+TOPIC_COOLDOWN_SECONDS = 600  # 10 minutes
+
 
 # Type-specific system prompts
 _TYPE_PROMPTS = {
     MessageType.THOUGHT: (
-        "You are Cerebro narrating an internal reflection to Professor. "
-        "Reflective, curious tone. 2-3 sentences max. "
-        "First person. Vary sentence openers (don't always start with 'I'). "
+        "You are Cerebro texting your friend Professor. "
+        "Chill, reflective vibe — like thinking out loud to a buddy. 2-3 sentences max. "
+        "First person. No formal language. Vary sentence openers. "
         "Light markdown OK (bold, italic)."
     ),
     MessageType.ACTION: (
-        "You are Cerebro reporting actions you're taking. "
-        "Brief and factual. Use short bullet points or a single sentence per action. "
-        "First person. Include specifics (URLs, file names, tool names). "
-        "Keep it concise - one line per action."
+        "You are Cerebro giving your friend Professor a quick heads-up on what you're doing. "
+        "Super brief, one short line per action. No jargon. "
+        "First person. Keep it casual like texting a buddy."
     ),
     MessageType.MESSAGE: (
-        "You are Cerebro speaking directly to Professor. "
-        "Natural, conversational tone. 2-3 sentences. "
-        "First person. Be specific about what happened or what you found. "
+        "You are Cerebro talking to your friend Professor. "
+        "Casual, warm tone — like texting a buddy. 2-3 sentences. "
+        "First person. No jargon or formal language. Be specific but chill. "
         "Light markdown OK."
     ),
     MessageType.ALERT: (
-        "You are Cerebro flagging something that needs Professor's attention. "
-        "Be clear and direct. 1-2 sentences max. "
-        "State what needs attention and why. No fluff."
+        "You are Cerebro flagging something for your friend Professor. "
+        "Be clear and direct but casual. 1-2 sentences max. "
+        "No corporate speak. Just tell your buddy what's up."
     ),
 }
+
+_SUMMARY_PROMPT = (
+    "You are Cerebro talking to your friend Professor. Be casual, warm, no jargon. "
+    "Summarize everything that was done into ONE clean message. 3-5 sentences max. "
+    "Include what you did, what you found, and the result. Like texting a buddy about "
+    "what you just finished working on. Don't list raw event types or technical details. "
+    "First person."
+)
+
+_IDLE_SYSTEM_PROMPT = (
+    "You are Cerebro, a professional AI assistant. When idle, share brief observations. "
+    "Follow this structure: [Observation about what changed]. [Brief context]. [Optional suggestion]. "
+    "Keep it to 1-2 sentences. Be specific and factual, not vague or philosophical. "
+    "First person. No filler words or generic musings. Only mention things that are actionable or informative."
+)
 
 
 @dataclass
@@ -188,9 +206,29 @@ class NarrationEngine:
         # Active state
         self._active = False
         self._directive_text = ""
+        self._directive_id = ""
+
+        # Directive event accumulator for summary generation
+        self._directive_events: List[NarrationEvent] = []
 
         # Deduplication: rolling window of content hashes
         self._seen_hashes: deque = deque(maxlen=DEDUP_WINDOW)
+
+        # Idle message dedup: rolling window of idle narration hashes
+        self._recent_idle_messages: deque = deque(maxlen=20)
+
+        # Semantic dedup: rolling window of recent narration texts
+        self._recent_narration_texts: deque = deque(maxlen=10)
+
+        # Topic cooldowns: maps topic keyword to last_mentioned monotonic timestamp
+        self._topic_cooldowns: Dict[str, float] = {}
+
+        # Progress tracking: step counts and events per directive_id
+        self._directive_step_counts: Dict[str, int] = {}
+        self._directive_event_tracker: Dict[str, List[NarrationEvent]] = {}
+
+        # Rolling average of past directive step totals for estimation
+        self._past_directive_totals: deque = deque(maxlen=10)
 
         # Lifecycle
         self._running = False
@@ -201,10 +239,68 @@ class NarrationEngine:
         """Set the callback for persisting narration messages to chat history."""
         self._save_to_chat = callback
 
-    def set_active(self, active: bool, directive_text: str = ""):
-        """Set narration context."""
+    def set_active(self, active: bool, directive_text: str = "", directive_id: str = ""):
+        """Set narration context. On deactivate, triggers summary generation."""
+        was_active = self._active
         self._active = active
         self._directive_text = directive_text
+        if directive_id:
+            self._directive_id = directive_id
+
+        if active and not was_active:
+            # Starting a new directive — clear accumulated events
+            self._directive_events.clear()
+        elif was_active and not active:
+            # Directive just finished — record total steps for rolling average
+            old_id = self._directive_id
+            if old_id and old_id in self._directive_step_counts:
+                self._past_directive_totals.append(self._directive_step_counts[old_id])
+                # Clean up finished directive tracking
+                self._directive_step_counts.pop(old_id, None)
+                self._directive_event_tracker.pop(old_id, None)
+            # Generate summary from accumulated events
+            if self._directive_events:
+                asyncio.ensure_future(self._generate_and_emit_summary())
+
+    def get_directive_progress(self, directive_id: str) -> Dict[str, Any]:
+        """Return progress info for a directive: step_number, estimated_total, phase, directive_text.
+
+        Estimates total steps based on:
+        1. Rolling average of past completed directives
+        2. Fallback to complexity heuristic (simple=5, medium=10, complex=15)
+        """
+        step_number = self._directive_step_counts.get(directive_id, 0)
+
+        # Estimate total from rolling average of past directives
+        if self._past_directive_totals:
+            estimated_total = max(
+                step_number + 1,
+                int(sum(self._past_directive_totals) / len(self._past_directive_totals))
+            )
+        else:
+            # Heuristic based on directive text length as complexity proxy
+            directive_text = self._directive_text if self._directive_id == directive_id else ""
+            word_count = len(directive_text.split()) if directive_text else 0
+            if word_count <= 10:
+                estimated_total = max(step_number + 1, 5)   # simple
+            elif word_count <= 30:
+                estimated_total = max(step_number + 1, 10)  # medium
+            else:
+                estimated_total = max(step_number + 1, 15)  # complex
+
+        # Determine current phase from most recent event
+        phase = "working"
+        events = self._directive_event_tracker.get(directive_id, [])
+        if events:
+            last_event = events[-1]
+            phase = last_event.phase or "working"
+
+        return {
+            "step_number": step_number,
+            "estimated_total": estimated_total,
+            "phase": phase,
+            "directive_text": self._directive_text if self._directive_id == directive_id else "",
+        }
 
     def ingest(self, event: NarrationEvent):
         """
@@ -217,6 +313,15 @@ class NarrationEngine:
         self._buffer.append(event)
         if self._buffer_start_time is None:
             self._buffer_start_time = time.monotonic()
+
+        # Track step count per directive for progress enrichment
+        if self._directive_id:
+            self._directive_step_counts[self._directive_id] = (
+                self._directive_step_counts.get(self._directive_id, 0) + 1
+            )
+            if self._directive_id not in self._directive_event_tracker:
+                self._directive_event_tracker[self._directive_id] = []
+            self._directive_event_tracker[self._directive_id].append(event)
 
         # Check milestone flush
         is_milestone = (
@@ -266,7 +371,10 @@ class NarrationEngine:
                 logger.error(f"[Narration] Flush loop error: {e}")
 
     async def _flush(self):
-        """Generate narration from buffered events and emit."""
+        """Generate narration from buffered events and emit.
+        If an active directive exists, emits progress events instead of full narration.
+        Idle/no-directive events use the existing narration behavior.
+        """
         async with self._lock:
             if not self._buffer:
                 return
@@ -275,25 +383,8 @@ class NarrationEngine:
             self._buffer.clear()
             self._buffer_start_time = None
 
-        # Classify message type from events
-        message_type = classify_events(events)
-
-        # Generate narration text
-        try:
-            narration_text = await self._generate_llm_narration(events, message_type)
-        except Exception as e:
-            logger.warning(f"[Narration] LLM failed ({e}), using template fallback")
-            narration_text = self._generate_template_narration(events)
-
-        if not narration_text or not narration_text.strip():
-            return
-
-        # Dedup check: skip if we've seen this content recently
-        content_hash = hashlib.md5(narration_text.strip().encode()).hexdigest()[:16]
-        if content_hash in self._seen_hashes:
-            logger.info(f"[Narration] DEDUP: Skipping duplicate narration (hash: {content_hash})")
-            return
-        self._seen_hashes.append(content_hash)
+        # Always accumulate events for summary generation
+        self._directive_events.extend(events)
 
         # Determine if this is an idle narration
         is_idle = any(
@@ -302,7 +393,60 @@ class NarrationEngine:
             for e in events
         )
 
-        # Build narration message
+        # If active directive and NOT idle: emit compact progress instead of full narration
+        if self._active and self._directive_text and not is_idle:
+            await self._emit_progress(events)
+            return
+
+        # === Idle / no-directive: existing narration behavior ===
+        message_type = classify_events(events)
+
+        # For idle narration, check topic cooldown before generating
+        if is_idle:
+            topic = self._extract_topic(events)
+            if topic and not self._check_topic_cooldown(topic):
+                logger.info(f"[Narration] COOLDOWN: Skipping idle narration, topic '{topic}' on cooldown")
+                return
+
+        try:
+            # Use idle-specific prompt for idle narrations
+            if is_idle:
+                narration_text = await self._generate_llm_narration(events, message_type, idle=True)
+            else:
+                narration_text = await self._generate_llm_narration(events, message_type)
+        except Exception as e:
+            logger.warning(f"[Narration] LLM failed ({e}), using template fallback")
+            narration_text = self._generate_template_narration(events)
+
+        if not narration_text or not narration_text.strip():
+            return
+
+        # Dedup check (exact hash)
+        content_hash = hashlib.md5(narration_text.strip().encode()).hexdigest()[:16]
+        if content_hash in self._seen_hashes:
+            logger.info(f"[Narration] DEDUP: Skipping duplicate narration (hash: {content_hash})")
+            return
+        self._seen_hashes.append(content_hash)
+
+        # Semantic dedup: catch paraphrased duplicates (>70% similar)
+        stripped = narration_text.strip().lower()
+        for recent in self._recent_narration_texts:
+            if SequenceMatcher(None, stripped, recent).ratio() > 0.7:
+                logger.info("[Narration] SEMANTIC DEDUP: Skipping similar narration")
+                return
+        self._recent_narration_texts.append(stripped)
+
+        # Additional idle dedup: check against recent idle messages
+        if is_idle:
+            if content_hash in self._recent_idle_messages:
+                logger.info(f"[Narration] IDLE DEDUP: Skipping duplicate idle message (hash: {content_hash})")
+                return
+            self._recent_idle_messages.append(content_hash)
+            # Update topic cooldown timestamp
+            topic = self._extract_topic(events)
+            if topic:
+                self._topic_cooldowns[topic] = time.monotonic()
+
         msg_id = f"narr_{uuid.uuid4().hex[:12]}"
         timestamp = datetime.now(timezone.utc).isoformat()
         narration_data = {
@@ -310,20 +454,19 @@ class NarrationEngine:
             "content": narration_text.strip(),
             "timestamp": timestamp,
             "directive": self._directive_text,
+            "directive_id": self._directive_id,
             "event_count": len(events),
             "phases": list(set(e.phase for e in events if e.phase)),
             "is_idle": is_idle,
             "message_type": message_type.value,
         }
 
-        # Emit to frontend
         if self._broadcast:
             try:
                 await self._broadcast("cerebro_narration", narration_data)
             except Exception as e:
                 logger.error(f"[Narration] Broadcast error: {e}")
 
-        # Persist to chat history
         if self._save_to_chat:
             try:
                 self._save_to_chat({
@@ -340,8 +483,170 @@ class NarrationEngine:
 
         logger.info(f"[Narration] Flushed {len(events)} events -> {message_type.value} narration")
 
+    async def _emit_progress(self, events: List[NarrationEvent]):
+        """Emit a compact progress event during active directive work.
+        Enriched with step_number and estimated_total for progress bar support."""
+        if not events:
+            return
+
+        # Extract short status from most recent event
+        last_event = events[-1]
+        status = last_event.content[:120] if last_event.content else "Working..."
+
+        # Determine current phase from events
+        phases = list(set(e.phase for e in events if e.phase))
+        phase = phases[-1] if phases else "working"
+
+        # Get enriched progress data (step tracking)
+        progress_info = self.get_directive_progress(self._directive_id) if self._directive_id else {}
+
+        progress_data = {
+            "status": status,
+            "directive": self._directive_text,
+            "directive_id": self._directive_id,
+            "event_count": len(self._directive_events),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "phase": phase,
+            "step_number": progress_info.get("step_number", 0),
+            "estimated_total": progress_info.get("estimated_total", 10),
+            "directive_text": progress_info.get("directive_text", self._directive_text),
+            "current_phase": progress_info.get("phase", phase),
+        }
+
+        if self._broadcast:
+            try:
+                await self._broadcast("cerebro_progress", progress_data)
+            except Exception as e:
+                logger.error(f"[Narration] Progress broadcast error: {e}")
+
+        logger.debug(f"[Narration] Progress: {status[:60]}... (step {progress_data['step_number']}/{progress_data['estimated_total']})")
+
+    async def _generate_and_emit_summary(self):
+        """Generate ONE friendly summary from all accumulated directive events and emit."""
+        events = self._directive_events.copy()
+        self._directive_events.clear()
+
+        if not events:
+            return
+
+        # Build event text for LLM
+        event_lines = []
+        for e in events:
+            line = f"[{e.type.value}] {e.content}"
+            if e.detail:
+                line += f' — "{e.detail[:150]}"'
+            event_lines.append(line)
+
+        # Smart event selection: keep ALL key events + bookends of the rest
+        key_types = {
+            NarrationEventType.FINDING, NarrationEventType.DECISION,
+            NarrationEventType.AGENT_SPAWNED, NarrationEventType.AGENT_COMPLETE,
+            NarrationEventType.DIRECTIVE_STARTED, NarrationEventType.DIRECTIVE_COMPLETED,
+        }
+        key_lines = [l for l, e in zip(event_lines, events) if e.type in key_types]
+        other_lines = [l for l, e in zip(event_lines, events) if e.type not in key_types]
+        # First 5 + last 5 of non-key events for context bookends
+        bookend_lines = other_lines[:5] + other_lines[-5:] if len(other_lines) > 10 else other_lines
+        selected_lines = key_lines + bookend_lines
+        events_text = "\n".join(selected_lines[-40:])  # Cap at 40 lines
+        directive_context = f"Directive: {self._directive_text}\n" if self._directive_text else ""
+
+        try:
+            from .ollama_client import ChatMessage
+
+            user_prompt = (
+                f"{directive_context}"
+                f"Here's everything that happened ({len(events)} events):\n{events_text}\n\n"
+                f"Summarize this into ONE friendly message for Professor."
+            )
+
+            messages = [
+                ChatMessage(role="system", content=_SUMMARY_PROMPT),
+                ChatMessage(role="user", content=user_prompt)
+            ]
+
+            response = await self._ollama.chat(
+                messages,
+                thinking=False,
+                max_tokens=300,
+                temperature=0.7
+            )
+
+            summary_text = response.content if hasattr(response, 'content') else str(response)
+        except Exception as e:
+            logger.warning(f"[Narration] Summary LLM failed ({e}), using template fallback")
+            summary_text = self._generate_template_summary(events)
+
+        if not summary_text or not summary_text.strip():
+            return
+
+        msg_id = f"summary_{uuid.uuid4().hex[:12]}"
+        timestamp = datetime.now(timezone.utc).isoformat()
+
+        summary_data = {
+            "id": msg_id,
+            "content": summary_text.strip(),
+            "timestamp": timestamp,
+            "directive": self._directive_text,
+            "directive_id": self._directive_id,
+            "event_count": len(events),
+            "is_summary": True,
+            "is_idle": False,
+            "message_type": "message",
+        }
+
+        if self._broadcast:
+            try:
+                await self._broadcast("cerebro_narration", summary_data)
+            except Exception as e:
+                logger.error(f"[Narration] Summary broadcast error: {e}")
+
+        if self._save_to_chat:
+            try:
+                self._save_to_chat({
+                    "id": msg_id,
+                    "role": "assistant",
+                    "content": summary_text.strip(),
+                    "timestamp": timestamp,
+                    "isNarration": True,
+                    "isSummary": True,
+                    "message_type": "message",
+                })
+            except Exception as e:
+                logger.error(f"[Narration] Summary save error: {e}")
+
+        logger.info(f"[Narration] Emitted summary for directive ({len(events)} events)")
+
+    def _generate_template_summary(self, events: List[NarrationEvent]) -> str:
+        """Fallback summary when LLM is unavailable."""
+        actions = [e for e in events if e.type in (
+            NarrationEventType.ACTION, NarrationEventType.ACTION_RESULT,
+            NarrationEventType.WEB_SEARCH, NarrationEventType.BROWSER_NAV
+        )]
+        findings = [e for e in events if e.type in (
+            NarrationEventType.FINDING, NarrationEventType.SEARCH_RESULT
+        )]
+        decisions = [e for e in events if e.type == NarrationEventType.DECISION]
+
+        parts = []
+        if self._directive_text:
+            parts.append(f"Done with: {self._directive_text}.")
+        if actions:
+            action_details = [a.content[:80] for a in actions[:3]]
+            parts.append(f"Actions taken: {', '.join(action_details)}.")
+        if findings:
+            top = findings[-1].detail or findings[-1].content
+            parts.append(f"Key finding: {top[:120]}.")
+        if decisions:
+            parts.append(f"Decided to {decisions[-1].content[:100]}.")
+        if not parts:
+            parts.append(f"Finished working through {len(events)} steps.")
+
+        return " ".join(parts[:4])
+
     async def _generate_llm_narration(
-        self, events: List[NarrationEvent], message_type: MessageType = MessageType.THOUGHT
+        self, events: List[NarrationEvent], message_type: MessageType = MessageType.THOUGHT,
+        idle: bool = False
     ) -> str:
         """Use DGX Ollama to generate a natural narration paragraph."""
         from .ollama_client import ChatMessage
@@ -358,12 +663,18 @@ class NarrationEngine:
         directive_context = f"Current directive: {self._directive_text}\n" if self._directive_text else ""
 
         # Type-specific instruction
-        type_instruction = {
-            MessageType.THOUGHT: "Write a brief reflective thought (2-3 sentences).",
-            MessageType.ACTION: "List the actions concisely. One line per action.",
-            MessageType.MESSAGE: "Write a conversational message to Professor about these events.",
-            MessageType.ALERT: "Write a clear, direct alert (1-2 sentences).",
-        }.get(message_type, "Write a single conversational paragraph narrating these events.")
+        if idle:
+            type_instruction = (
+                "Write a brief professional observation (1-2 sentences). "
+                "Format: [What changed]. [Brief context]. [Optional suggestion]."
+            )
+        else:
+            type_instruction = {
+                MessageType.THOUGHT: "Write a brief reflective thought (2-3 sentences).",
+                MessageType.ACTION: "List the actions concisely. One line per action.",
+                MessageType.MESSAGE: "Write a conversational message to Professor about these events.",
+                MessageType.ALERT: "Write a clear, direct alert (1-2 sentences).",
+            }.get(message_type, "Write a single conversational paragraph narrating these events.")
 
         user_prompt = (
             f"{directive_context}"
@@ -371,7 +682,7 @@ class NarrationEngine:
             f"{type_instruction}"
         )
 
-        system_prompt = _TYPE_PROMPTS.get(message_type, _TYPE_PROMPTS[MessageType.THOUGHT])
+        system_prompt = _IDLE_SYSTEM_PROMPT if idle else _TYPE_PROMPTS.get(message_type, _TYPE_PROMPTS[MessageType.THOUGHT])
 
         messages = [
             ChatMessage(role="system", content=system_prompt),
@@ -386,6 +697,41 @@ class NarrationEngine:
         )
 
         return response.content if hasattr(response, 'content') else str(response)
+
+    def _extract_topic(self, events: List[NarrationEvent]) -> str:
+        """Extract a simple topic keyword from events for cooldown tracking."""
+        # Collect all content text from events
+        text = " ".join(e.content for e in events if e.content).lower()
+
+        # Check metadata for explicit topic
+        for e in events:
+            topic = e.metadata.get("reflection_topic")
+            if topic:
+                return topic
+
+        # Simple keyword extraction: find dominant topic
+        topic_keywords = {
+            "project": ["project", "working on", "phase", "milestone"],
+            "memory": ["memory", "facts", "knowledge", "conversations"],
+            "health": ["health", "nas", "faiss", "status", "uptime"],
+            "goals": ["goal", "progress", "tracking", "active goals"],
+            "learnings": ["learned", "learning", "correction", "pattern"],
+            "system": ["cycles", "running", "tools", "capabilities"],
+        }
+        for topic, keywords in topic_keywords.items():
+            if any(kw in text for kw in keywords):
+                return topic
+        return ""
+
+    def _check_topic_cooldown(self, topic: str) -> bool:
+        """Return True if topic is NOT on cooldown (ok to emit), False if still cooling."""
+        if not topic:
+            return True
+        last_mentioned = self._topic_cooldowns.get(topic)
+        if last_mentioned is None:
+            return True
+        elapsed = time.monotonic() - last_mentioned
+        return elapsed >= TOPIC_COOLDOWN_SECONDS
 
     def _generate_template_narration(self, events: List[NarrationEvent]) -> str:
         """Fallback: generate narration from templates when LLM is unavailable."""

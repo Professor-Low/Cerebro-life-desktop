@@ -37,6 +37,13 @@ class GoalStatus(str, Enum):
     ABANDONED = "abandoned"
 
 
+class GoalMode(str, Enum):
+    """Execution mode for goal processing during idle cycles."""
+    MONITOR = "monitor"   # Check progress, alert if at risk
+    THINK = "think"       # Spawn analyst agent to plan next steps
+    ACT = "act"           # Execute next ready subtask autonomously
+
+
 class MilestoneStatus(str, Enum):
     """Status of a milestone."""
     PENDING = "pending"
@@ -219,6 +226,7 @@ class Goal:
     # Status
     status: str = "active"
     priority: str = "medium"  # low, medium, high
+    mode: str = "monitor"  # monitor, think, act (GoalMode)
 
     # Metadata
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -415,6 +423,7 @@ class GoalPursuitEngine:
         deadline: Optional[str] = None,
         goal_type: str = "outcome",
         priority: str = "medium",
+        mode: str = "monitor",
         source_directive_id: Optional[str] = None
     ) -> Goal:
         """Create a new goal."""
@@ -439,6 +448,7 @@ class GoalPursuitEngine:
             target_unit=target_unit,
             deadline=deadline_str,
             priority=priority,
+            mode=mode,
             source_directive_id=source_directive_id,
             inferred_from="directive" if source_directive_id else "explicit"
         )

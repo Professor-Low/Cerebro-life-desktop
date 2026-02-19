@@ -20,19 +20,10 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
 
-# Standalone mode: skip NAS imports entirely
-_STANDALONE = os.environ.get("CEREBRO_STANDALONE", "0") == "1"
-# CEREBRO_MCP_SRC="" explicitly disables NAS imports (set in Docker compose)
-# When not set at all, fall back to default path (local dev)
-_MCP_SRC_EXPLICIT = "CEREBRO_MCP_SRC" in os.environ
-_MCP_SRC_ENV = os.environ.get("CEREBRO_MCP_SRC", "")
-
-if _STANDALONE or (_MCP_SRC_EXPLICIT and _MCP_SRC_ENV == ""):
-    MCP_PATH = None
-else:
-    MCP_PATH = Path(_MCP_SRC_ENV or os.path.expanduser("~/NAS-cerebral-interface/src"))
-    if str(MCP_PATH) not in sys.path:
-        sys.path.insert(0, str(MCP_PATH))
+# Add NAS-cerebral-interface to path for imports
+MCP_PATH = Path(os.environ.get("CEREBRO_MCP_SRC", os.path.expanduser("~/NAS-cerebral-interface/src")))
+if str(MCP_PATH) not in sys.path:
+    sys.path.insert(0, str(MCP_PATH))
 
 # Configuration
 AI_MEMORY_PATH = Path(os.environ.get("AI_MEMORY_PATH", os.path.expanduser("~/.cerebro/data")))
@@ -62,12 +53,6 @@ class MCPBridge:
         if self._initialized:
             return
 
-        # In standalone mode (Docker), skip NAS module imports entirely
-        if _STANDALONE or MCP_PATH is None:
-            self._initialized = True
-            print("[MCP Bridge] Standalone mode - NAS modules skipped")
-            return
-
         loop = asyncio.get_event_loop()
 
         # Initialize modules in thread pool to avoid blocking
@@ -79,18 +64,29 @@ class MCPBridge:
                 from learning_extractor import LearningExtractor
                 from ai_memory_ultimate import UltimateMemoryService
 
+                bp = str(self.base_path)
                 return {
-                    'goal_tracker': GoalTracker(str(self.base_path)),
-                    'causal_manager': CausalModelManager(str(self.base_path)),
-                    'predictor': Predictor(str(self.base_path)),
-                    'learning_extractor': LearningExtractor(str(self.base_path)),
-                    'memory_service': UltimateMemoryService(str(self.base_path))
+                    'goal_tracker': GoalTracker(bp),
+                    'causal_manager': CausalModelManager(bp),
+                    'predictor': Predictor(bp),
+                    'learning_extractor': LearningExtractor(bp),
+                    'memory_service': UltimateMemoryService(bp)
                 }
             except ImportError as e:
                 print(f"[MCP Bridge] Import error: {e}")
                 return None
+            except Exception as e:
+                print(f"[MCP Bridge] Init error: {e}")
+                return None
 
-        result = await loop.run_in_executor(_executor, init_modules)
+        try:
+            result = await asyncio.wait_for(
+                loop.run_in_executor(_executor, init_modules),
+                timeout=20
+            )
+        except asyncio.TimeoutError:
+            print("[MCP Bridge] TIMEOUT: Init took >20s, will retry lazily")
+            result = None
         if result:
             self._goal_tracker = result['goal_tracker']
             self._causal_manager = result['causal_manager']
@@ -100,7 +96,6 @@ class MCPBridge:
             self._initialized = True
             print("[MCP Bridge] Initialized successfully")
         else:
-            self._initialized = True  # Mark initialized to avoid retry loops
             print("[MCP Bridge] Failed to initialize - modules not available")
 
     # =========================================================================

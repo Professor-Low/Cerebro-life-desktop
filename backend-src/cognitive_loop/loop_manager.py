@@ -43,6 +43,8 @@ from .idle_thinker import (
     _save_stored_items as _hb_save_stored_items,
     load_heartbeat_md, parse_heartbeat_md, save_heartbeat_md,
 )
+from .goal_pursuit import get_goal_pursuit_engine, GoalMode
+from .progress_tracker import ProgressTracker
 
 # Browser Manager (persistent Chromium)
 try:
@@ -230,6 +232,10 @@ class CognitiveLoopManager:
         # Track which directives have had spawn_agent triggered
         self._agent_triggered: Dict[str, bool] = {}  # directive_id -> True if spawn_agent was called
 
+        # Agent dedup tracking — prevent duplicate spawns for same goal/task
+        self._goal_agent_map: Dict[str, str] = {}   # goal_id -> agent_id
+        self._task_agent_map: Dict[str, str] = {}   # task_text_hash -> agent_id
+
         # Queue for user answers to proactive questions (fed into OBSERVE phase)
         self._pending_user_answers: List[Dict[str, str]] = []
 
@@ -310,6 +316,9 @@ class CognitiveLoopManager:
         self._active_agent_ids.discard(agent_id)
         if not self._active_agent_ids:
             self._agent_phase_override = None
+        # Clean up dedup maps so goals/tasks can be re-spawned in future cycles
+        self._goal_agent_map = {k: v for k, v in self._goal_agent_map.items() if v != agent_id}
+        self._task_agent_map = {k: v for k, v in self._task_agent_map.items() if v != agent_id}
         print(f"[LoopManager] Agent completed: {agent_id}. Active: {len(self._active_agent_ids)}")
 
     def wake(self) -> None:
@@ -832,8 +841,60 @@ class CognitiveLoopManager:
 
                     result = await heartbeat.run_heartbeat(hb_config, parsed_md=parsed_md)
 
+                    # D2: Read active work context once — shared by screen agents + idle task agents
+                    active_work_context = ""
+                    try:
+                        _qf_path = Path(os.environ.get("AI_MEMORY_PATH", "")) / "quick_facts.json"
+                        if _qf_path.exists():
+                            _qf = json.loads(_qf_path.read_text(encoding="utf-8"))
+                            _aw = _qf.get("active_work", {})
+                            if _aw and _aw.get("project"):
+                                active_work_context = (
+                                    "\n\n## Current User Context\n"
+                                    f"Professor is currently working on: {_aw.get('project', 'unknown')}\n"
+                                    f"Phase: {_aw.get('phase_name', 'unknown')}\n"
+                                    f"Last completed: {_aw.get('last_completed', 'unknown')}\n"
+                                    f"Next action: {_aw.get('next_action', 'unknown')}\n"
+                                    "Be aware of this context — don't interfere with active work.\n"
+                                )
+                    except Exception:
+                        pass
+
                     if result.any_changes:
                         for finding in result.findings:
+                            # Screen monitor findings → spawn observation agent (skip Stored tab)
+                            if finding.monitor == "screen_monitor" and self._create_agent_fn and self.safety.full_autonomy_enabled and self.safety.autonomy_level >= 2:
+                                # D3: Skip if too many agents running
+                                if len(self._active_agent_ids) >= 3:
+                                    logger.info(f"[CogLoop] Skipping screen observation — {len(self._active_agent_ids)} agents running")
+                                    continue
+                                try:
+                                    details = finding.details if isinstance(finding.details, dict) else {}
+                                    screenshot_path = details.get("screenshot_path", "")
+                                    window_title = details.get("window_title", "Unknown")
+                                    if screenshot_path:
+                                        # D2: Build context with active work awareness + injected context
+                                        _screen_context = (
+                                            "You are Cerebro observing Professor's screen during idle time.\n"
+                                            "Use your brain (AI Memory MCP) to be context-aware:\n"
+                                            "- `search('active work current project')` to understand what Professor is working on\n"
+                                            "- Make your suggestion relevant to their current work, not generic\n"
+                                        ) + active_work_context
+                                        agent_id = await self._create_agent_fn(
+                                            task=f"Look at the screenshot of Professor's screen. The active window is: {window_title}. Describe what the user is doing in 1-2 sentences, then make one helpful suggestion. Keep it concise.",
+                                            agent_type="worker",
+                                            context=_screen_context,
+                                            resources=[screenshot_path],
+                                            source="screen_observation",
+                                            timeout=120,
+                                        )
+                                        print(f"[CogLoop] Screen monitor → spawned observation agent {agent_id}")
+                                    else:
+                                        print("[CogLoop] Screen monitor finding has no screenshot_path, skipping agent spawn")
+                                except Exception as exc:
+                                    print(f"[CogLoop] Screen monitor agent spawn failed: {exc}")
+                                continue  # Don't push screen findings to Stored tab
+
                             item = {
                                 "id": f"hb_{int(datetime.now().timestamp())}_{finding.monitor}",
                                 "type": "finding",
@@ -869,6 +930,8 @@ class CognitiveLoopManager:
                             "changed": True,
                             "findings_count": len(result.findings),
                             "monitors_run": result.monitors_run,
+                            "monitor_names": [f.monitor for f in result.findings],
+                            "summary": "; ".join(f.summary for f in result.findings[:3]),
                             "timestamp": datetime.now(timezone.utc).isoformat(),
                         })
                         print(f"[CogLoop] Heartbeat: {len(result.findings)} findings pushed to Stored")
@@ -880,38 +943,100 @@ class CognitiveLoopManager:
                         })
                         print(f"[CogLoop] Heartbeat: all clear ({result.monitors_run} monitors)")
 
+                    # Clean up stale directives whose agents have already finished
+                    try:
+                        self._cleanup_stale_directives()
+                    except Exception as _cleanup_err:
+                        logger.warning(f"[CogLoop] Stale directive cleanup error: {_cleanup_err}")
+
                     # Smart idle reflection (rate-limited, context-rich thought narration)
                     try:
                         await self._maybe_generate_idle_reflection()
                     except Exception as _ref_err:
                         logger.warning(f"[CogLoop] Idle reflection error: {_ref_err}")
 
-                    # Process idle tasks from heartbeat.md (only when agent callback available)
+                    # Process idle tasks (quick tasks) from heartbeat.md (only when agent callback available)
                     if self._create_agent_fn:
-                        pending_tasks = [t for t in parsed_md.get("idle_tasks", []) if not t["done"] and t["task"].strip()]
-                        if pending_tasks:
+                        # D3: Check agent load before spawning
+                        running_count = len(self._active_agent_ids)
+                        if running_count >= 3:
+                            logger.info(f"[CogLoop] Skipping idle tasks — {running_count} agents already running")
+                        else:
+                          pending_tasks = [t for t in parsed_md.get("idle_tasks", []) if not t["done"] and t["task"].strip()]
+                          if pending_tasks:
                             task_def = pending_tasks[0]  # One per cycle
-                            context_parts = []
-                            if parsed_md.get("focus_areas"):
-                                context_parts.append("Focus areas:\n" + "\n".join(f"- {fa}" for fa in parsed_md["focus_areas"]))
-                            if parsed_md.get("dormant_instructions"):
-                                context_parts.append("Dormant instructions:\n" + parsed_md["dormant_instructions"])
 
-                            try:
-                                agent_id = await self._create_agent_fn(
-                                    task=task_def["task"],
-                                    agent_type="worker",
-                                    context="\n\n".join(context_parts) or None,
-                                    source="idle",
-                                )
-                                print(f"[CogLoop] Idle task spawned agent {agent_id}: {task_def['task'][:60]}")
-                                # Mark task [x] in heartbeat.md
-                                hb_md_content = hb_md_content.replace(
-                                    f"- [ ] {task_def['task']}", f"- [x] {task_def['task']}", 1
-                                )
-                                save_heartbeat_md(hb_md_content)
-                            except Exception as exc:
-                                print(f"[CogLoop] Idle task agent spawn failed: {exc}")
+                            # Dedup: hash task text and check if agent already running
+                            task_hash = hashlib.md5(task_def["task"].encode()).hexdigest()[:12]
+                            existing_task_agent = self._task_agent_map.get(task_hash)
+                            if existing_task_agent and existing_task_agent in self._active_agent_ids:
+                                logger.info(f"[CogLoop] Skipping quick task - agent {existing_task_agent} still running: {task_def['task'][:40]}")
+                            else:
+                                context_parts = []
+                                if parsed_md.get("focus_areas"):
+                                    context_parts.append("Focus areas:\n" + "\n".join(f"- {fa}" for fa in parsed_md["focus_areas"]))
+                                if parsed_md.get("dormant_instructions"):
+                                    context_parts.append("Dormant instructions:\n" + parsed_md["dormant_instructions"])
+
+                                # D1: active_work_context already loaded above (shared with screen agents)
+
+                                try:
+                                    # Build context with brain-usage instructions
+                                    brain_instructions = (
+                                        "\n\n## Brain Usage (AI Memory MCP)\n"
+                                        "You are Cerebro executing a task during idle time.\n"
+                                        "**FIRST**, understand what Professor is working on:\n"
+                                        "1. `search('active work current project')` — Load current context\n"
+                                        "2. `get_corrections()` — Avoid known mistakes\n"
+                                        "3. `find_learning()` — Look for proven solutions to similar problems\n"
+                                        "4. After completing: `record_learning()` to save useful discoveries\n"
+                                        "**Do NOT interfere with any active work or running agents.**\n"
+                                    ) + active_work_context
+                                    full_context = "\n\n".join(context_parts) + brain_instructions if context_parts else brain_instructions
+                                    agent_id = await self._create_agent_fn(
+                                        task=task_def["task"],
+                                        agent_type="worker",
+                                        context=full_context,
+                                        source="idle",
+                                    )
+                                    self._task_agent_map[task_hash] = agent_id
+                                    print(f"[CogLoop] Quick task spawned agent {agent_id}: {task_def['task'][:60]}")
+                                    # Mark task [x] in heartbeat.md
+                                    hb_md_content = hb_md_content.replace(
+                                        f"- [ ] {task_def['task']}", f"- [x] {task_def['task']}", 1
+                                    )
+                                    save_heartbeat_md(hb_md_content)
+
+                                    # Create quick_task stored item (dedup: replace existing for same task)
+                                    ts = int(datetime.now(timezone.utc).timestamp())
+                                    qt_item = {
+                                        "id": f"quick_task_{ts}_{agent_id}",
+                                        "type": "quick_task",
+                                        "title": f"Quick Task: {task_def['task'][:80]}",
+                                        "content": f"Agent {agent_id} working on: {task_def['task']}",
+                                        "metadata": {"agent_id": agent_id, "source": "heartbeat_idle", "task_hash": task_hash},
+                                        "created_at": datetime.now(timezone.utc).isoformat(),
+                                        "status": "pending",
+                                        "source_id": "",
+                                    }
+                                    items = _hb_load_stored_items()
+                                    # Remove existing quick_task items for same task hash
+                                    items = [i for i in items if not (
+                                        i.get("type") == "quick_task" and
+                                        i.get("metadata", {}).get("task_hash") == task_hash
+                                    )]
+                                    items.insert(0, qt_item)
+                                    _hb_save_stored_items(items)
+                                    await self._emit("cerebro_stored_item_added", qt_item)
+
+                                except Exception as exc:
+                                    print(f"[CogLoop] Quick task agent spawn failed: {exc}")
+
+                    # Process goals from GoalPursuitEngine (one per idle cycle)
+                    try:
+                        await self._process_idle_goals()
+                    except Exception as _goal_err:
+                        logger.warning(f"[CogLoop] Goal processing error: {_goal_err}")
 
                     # Wait for idle interval (interruptible by wake())
                     self._wake_event.clear()
@@ -961,12 +1086,15 @@ class CognitiveLoopManager:
                     confidence=0.8,
                     cycle_number=self._current_cycle_number
                 )
-                await self._emit("thought_stream", self._last_thought.to_dict())
+                # Only emit thought_stream when there's an active directive
+                # Idle "I sense X mission" messages spam the chat — suppress them
+                if active_directive:
+                    await self._emit("thought_stream", self._last_thought.to_dict())
 
                 # === NARRATION: Only active when working on a directive ===
                 if active_directive:
                     directive_text = active_directive.get("text", "")
-                    self.narration.set_active(True, directive_text)
+                    self.narration.set_active(True, directive_text, directive_id=active_directive.get("id", ""))
                     self.narration.ingest(NarrationEvent(
                         type=NarrationEventType.THOUGHT,
                         content=observe_msg,
@@ -1032,12 +1160,19 @@ class CognitiveLoopManager:
 
                     if self._create_agent_fn:
                         try:
+                            # Support image_path on directives (e.g. screenshots attached via UI)
+                            directive_resources = []
+                            directive_image = directive.get("image_path")
+                            if directive_image:
+                                directive_resources = [directive_image]
+
                             agent_id = await self._create_agent_fn(
                                 task=directive_text,
                                 agent_type=agent_type,
                                 context=f"Cerebro v2.0 dispatcher. Category: {task_category}. Original directive: {directive_text}",
                                 directive_id=directive_id,
                                 source="cerebro",
+                                resources=directive_resources or None,
                             )
                             if directive_id:
                                 self._agent_triggered[directive_id] = True
@@ -1342,53 +1477,223 @@ Respond with ONLY JSON:
         "self_state",        # Cerebro's own status, memory health, uptime
     ]
 
+    async def _process_idle_goals(self):
+        """Process one active goal per idle cycle based on its mode."""
+        engine = get_goal_pursuit_engine()
+        tracker = ProgressTracker()
+        active_goals = engine.get_active_goals()
+        if not active_goals:
+            return
+
+        # Process one goal per cycle (round-robin by cycling through)
+        cycle = getattr(self, '_goal_cycle_idx', 0)
+        goal = active_goals[cycle % len(active_goals)]
+        self._goal_cycle_idx = cycle + 1
+
+        mode = getattr(goal, 'mode', 'monitor') or 'monitor'
+        progress = tracker.calculate_pacing(goal)
+        ts = int(datetime.now(timezone.utc).timestamp())
+
+        # Dedup: remove existing goal_progress items for this goal
+        items = _hb_load_stored_items()
+        items = [i for i in items if not (
+            i.get("type") == "goal_progress" and
+            i.get("metadata", {}).get("goal_id") == goal.goal_id
+        )]
+
+        if mode == GoalMode.MONITOR.value:
+            # Only create stored item if at risk
+            if progress.risk_level in ("high", "critical"):
+                item = {
+                    "id": f"goal_progress_{ts}_{goal.goal_id[:8]}",
+                    "type": "goal_progress",
+                    "title": f"Goal At Risk: {goal.description[:60]}",
+                    "content": (
+                        f"Risk: {progress.risk_level} | "
+                        f"Progress: {progress.progress_percentage:.0%} | "
+                        f"Pacing: {progress.pacing_score:.2f} | "
+                        f"Days remaining: {progress.days_remaining}"
+                    ),
+                    "metadata": {"goal_id": goal.goal_id, "mode": mode, "risk": progress.risk_level},
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "status": "pending",
+                    "source_id": goal.goal_id,
+                }
+                items.insert(0, item)
+                _hb_save_stored_items(items)
+                await self._emit("cerebro_stored_item_added", item)
+                print(f"[CogLoop] Goal monitor alert: {goal.description[:40]} risk={progress.risk_level}")
+            else:
+                _hb_save_stored_items(items)  # Save deduped list
+
+        elif mode == GoalMode.THINK.value:
+            # Spawn analyst agent with goal context
+            item = {
+                "id": f"goal_progress_{ts}_{goal.goal_id[:8]}",
+                "type": "goal_progress",
+                "title": f"Goal Analysis: {goal.description[:60]}",
+                "content": (
+                    f"Progress: {progress.progress_percentage:.0%} | "
+                    f"Pacing: {progress.pacing_score:.2f} | "
+                    f"Spawning analyst to plan next steps..."
+                ),
+                "metadata": {"goal_id": goal.goal_id, "mode": mode, "risk": progress.risk_level},
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "status": "pending",
+                "source_id": goal.goal_id,
+            }
+            items.insert(0, item)
+            _hb_save_stored_items(items)
+            await self._emit("cerebro_stored_item_added", item)
+
+            if self._create_agent_fn:
+                # Dedup: skip if an agent is already running for this goal
+                existing_agent = self._goal_agent_map.get(goal.goal_id)
+                if existing_agent and existing_agent in self._active_agent_ids:
+                    logger.info(f"[CogLoop] Skipping goal {goal.goal_id} - agent {existing_agent} still running")
+                else:
+                    try:
+                        # Build rich context with brain-usage instructions
+                        subtasks_info = ""
+                        try:
+                            subtasks = engine.get_subtasks(goal.goal_id)
+                            if subtasks:
+                                subtask_lines = []
+                                for st in subtasks[:10]:
+                                    status_icon = {"pending": "⬜", "in_progress": "🔄", "completed": "✅", "failed": "❌"}.get(st.status, "⬜")
+                                    subtask_lines.append(f"  {status_icon} {st.description}")
+                                subtasks_info = "\nCurrent subtasks:\n" + "\n".join(subtask_lines)
+                        except Exception:
+                            pass
+
+                        milestones_info = ""
+                        try:
+                            if hasattr(goal, 'milestones') and goal.milestones:
+                                ml = []
+                                for m in goal.milestones[:5]:
+                                    done = "✅" if m.get("completed") else "⬜"
+                                    ml.append(f"  {done} {m.get('description', '')}")
+                                milestones_info = "\nMilestones:\n" + "\n".join(ml)
+                        except Exception:
+                            pass
+
+                        context = (
+                            f"## Goal Analysis Task\n\n"
+                            f"**Goal:** {goal.description}\n"
+                            f"**Priority:** {getattr(goal, 'priority', 'medium')}\n"
+                            f"**Progress:** {progress.progress_percentage:.0%}\n"
+                            f"**Pacing score:** {progress.pacing_score:.2f}\n"
+                            f"**Risk level:** {progress.risk_level}\n"
+                            f"**Days remaining:** {progress.days_remaining}\n"
+                            f"**Deadline:** {getattr(goal, 'deadline', 'None')}\n"
+                            f"{subtasks_info}{milestones_info}\n\n"
+                            f"## Instructions\n\n"
+                            f"You are Cerebro analyzing a long-term goal during an idle cycle.\n\n"
+                            f"**USE YOUR BRAIN (AI Memory MCP tools):**\n"
+                            f"1. `search()` — Search memory for anything related to this goal, past work, or relevant context\n"
+                            f"2. `find_learning(type='solution', problem='...')` — Find proven solutions to obstacles\n"
+                            f"3. `get_corrections()` — Check for known mistakes to avoid\n"
+                            f"4. `search_knowledge_base(query='...')` — Search facts related to this goal\n\n"
+                            f"**Your task:**\n"
+                            f"1. Search your brain for any prior work, learnings, or context related to this goal\n"
+                            f"2. Analyze current progress and identify blockers or risks\n"
+                            f"3. Suggest concrete next steps with specific actions\n"
+                            f"4. If you discover useful insights, save them: `record_learning(type='solution', problem='...', solution='...')`\n\n"
+                            f"**Output:** Write your analysis as a concise report. Focus on actionable recommendations."
+                        )
+                        agent_id = await self._create_agent_fn(
+                            task=f"Analyze goal and plan next steps using brain/memory: {goal.description[:80]}",
+                            agent_type="analyst",
+                            context=context,
+                            source="goal_think",
+                        )
+                        self._goal_agent_map[goal.goal_id] = agent_id
+                        print(f"[CogLoop] Goal think agent {agent_id}: {goal.description[:40]}")
+                    except Exception as exc:
+                        print(f"[CogLoop] Goal think agent spawn failed: {exc}")
+
+        elif mode == GoalMode.ACT.value:
+            # Get next ready subtask and execute
+            next_subtask = engine.get_next_subtask(goal.goal_id)
+            # Dedup: skip if an agent is already running for this goal
+            existing_agent = self._goal_agent_map.get(goal.goal_id)
+            if existing_agent and existing_agent in self._active_agent_ids:
+                logger.info(f"[CogLoop] Skipping goal ACT {goal.goal_id} - agent {existing_agent} still running")
+            elif next_subtask and self._create_agent_fn:
+                try:
+                    engine.start_subtask(next_subtask.subtask_id)
+                    context = (
+                        f"## Goal Execution Task\n\n"
+                        f"**Parent goal:** {goal.description}\n"
+                        f"**Subtask:** {next_subtask.description}\n"
+                        f"**Priority:** {getattr(goal, 'priority', 'medium')}\n"
+                        f"**Goal progress:** {progress.progress_percentage:.0%}\n"
+                        f"**Risk level:** {progress.risk_level}\n\n"
+                        f"## Instructions\n\n"
+                        f"You are Cerebro executing a subtask for a long-term goal.\n\n"
+                        f"**USE YOUR BRAIN (AI Memory MCP tools) before and after work:**\n"
+                        f"1. BEFORE: `search()` for any prior work or learnings related to this subtask\n"
+                        f"2. BEFORE: `get_corrections()` to avoid known mistakes\n"
+                        f"3. BEFORE: `find_learning(type='solution', problem='...')` for proven approaches\n"
+                        f"4. EXECUTE the subtask thoroughly\n"
+                        f"5. AFTER: `record_learning()` to save what you learned or discovered\n"
+                        f"6. AFTER: `update_active_work()` to track progress for session continuity\n\n"
+                        f"**Execute this subtask completely.** Report results concisely when done."
+                    )
+                    agent_id = await self._create_agent_fn(
+                        task=f"{next_subtask.description}",
+                        agent_type=next_subtask.agent_type or "worker",
+                        context=context,
+                        source="goal_act",
+                    )
+                    self._goal_agent_map[goal.goal_id] = agent_id
+                    item = {
+                        "id": f"goal_progress_{ts}_{goal.goal_id[:8]}",
+                        "type": "goal_progress",
+                        "title": f"Goal Executing: {goal.description[:50]}",
+                        "content": (
+                            f"Subtask: {next_subtask.description[:100]}\n"
+                            f"Agent {agent_id} executing..."
+                        ),
+                        "metadata": {
+                            "goal_id": goal.goal_id, "mode": mode,
+                            "subtask_id": next_subtask.subtask_id, "agent_id": agent_id,
+                        },
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                        "status": "pending",
+                        "source_id": goal.goal_id,
+                    }
+                    items.insert(0, item)
+                    _hb_save_stored_items(items)
+                    await self._emit("cerebro_stored_item_added", item)
+                    print(f"[CogLoop] Goal act agent {agent_id}: {next_subtask.description[:40]}")
+                except Exception as exc:
+                    print(f"[CogLoop] Goal act agent spawn failed: {exc}")
+            else:
+                # No ready subtasks — just store progress
+                item = {
+                    "id": f"goal_progress_{ts}_{goal.goal_id[:8]}",
+                    "type": "goal_progress",
+                    "title": f"Goal Progress: {goal.description[:60]}",
+                    "content": (
+                        f"Progress: {progress.progress_percentage:.0%} | "
+                        f"No ready subtasks available."
+                    ),
+                    "metadata": {"goal_id": goal.goal_id, "mode": mode},
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "status": "pending",
+                    "source_id": goal.goal_id,
+                }
+                items.insert(0, item)
+                _hb_save_stored_items(items)
+                await self._emit("cerebro_stored_item_added", item)
+
     async def _maybe_generate_idle_reflection(self):
         """
-        Generate a smart idle reflection if enough time has passed.
-        Pulls real context from quick_facts.json and memory to make
-        reflections personal and meaningful instead of generic.
+        Idle reflections are suppressed — zero idle messages policy.
+        Only post to chat when something actually happens (agent spawn, result, etc.)
         """
-        import time as _time
-
-        now = _time.monotonic()
-        elapsed = now - self._last_idle_reflection_time
-        if elapsed < self._idle_reflection_interval:
-            return  # Too soon
-
-        self._last_idle_reflection_time = now
-
-        # Pick topic (rotate)
-        topic = self._IDLE_REFLECTION_TOPICS[
-            self._idle_reflection_topic_idx % len(self._IDLE_REFLECTION_TOPICS)
-        ]
-        self._idle_reflection_topic_idx += 1
-
-        # Build rich context from real data
-        context_parts = []
-        try:
-            context_parts = await self._build_idle_context(topic)
-        except Exception as e:
-            logger.warning(f"[IdleReflection] Failed to build context: {e}")
-            return  # Don't generate a reflection without real context
-
-        if not context_parts:
-            return  # Nothing meaningful to reflect on
-
-        context_text = "\n".join(context_parts)
-
-        # Emit as IDLE_THOUGHT event to narration engine
-        self.narration.set_active(True, directive_text="")
-        self.narration.ingest(NarrationEvent(
-            type=NarrationEventType.IDLE_THOUGHT,
-            content=context_text,
-            detail=f"Topic: {topic}",
-            confidence=0.5,
-            phase="idle",
-            metadata={"is_idle": True, "reflection_topic": topic},
-        ))
-        # Force flush since narration engine only ingests when active with directive
-        await self.narration._flush()
-        self.narration.set_active(False)
+        return  # Suppressed: idle reflections clutter the Answers tab
 
         print(f"[CogLoop] Idle reflection generated (topic: {topic})")
 
@@ -2212,6 +2517,48 @@ Keep the response focused and actionable."""
     def get_all_active_directives(self, directives: List[Dict]) -> List[Dict]:
         """Get ALL active (non-paused) directives for concurrent dispatch."""
         return [d for d in directives if d.get("status") in ["active", "pending"] and not d.get("paused", False)]
+
+    def _cleanup_stale_directives(self):
+        """Check all active directives against actual agent completion records.
+        Marks any directive as complete if its agent has finished but the directive
+        was not auto-completed (e.g., due to race condition or error)."""
+        directives_path = Path(os.environ.get(
+            "AI_MEMORY_PATH", os.path.expanduser("~/.cerebro/data")
+        )) / "cerebro" / "directives.json"
+
+        if not directives_path.exists():
+            return
+
+        try:
+            directives = json.loads(directives_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return
+
+        modified = False
+        for d in directives:
+            if d.get("status") not in ("active", "pending"):
+                continue
+            directive_id = d.get("id")
+            if not directive_id:
+                continue
+            # If we triggered an agent for this directive but no active agents remain,
+            # the directive's agent has finished — mark it complete
+            if self._agent_triggered.get(directive_id) and not self._active_agent_ids:
+                d["status"] = "completed"
+                d["completed_at"] = datetime.now(timezone.utc).isoformat()
+                d["auto_cleanup"] = True
+                modified = True
+                # Clean up tracking state
+                self._agent_triggered.pop(directive_id, None)
+                self._task_complexity.pop(directive_id, None)
+                self._directive_start_times.pop(directive_id, None)
+                print(f"[CogLoop] Stale directive cleanup: {directive_id} marked complete (agent finished)")
+
+        if modified:
+            try:
+                directives_path.write_text(json.dumps(directives, indent=2))
+            except OSError as e:
+                print(f"[CogLoop] Failed to write cleaned directives: {e}")
 
     async def maybe_ask_question(self, observation_context: Dict[str, Any]):
         """
