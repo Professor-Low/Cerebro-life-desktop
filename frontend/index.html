@@ -29,6 +29,33 @@
     <!-- Lenis for smooth scrolling -->
     <script src="https://unpkg.com/lenis@1.1.18/dist/lenis.min.js"></script>
 
+    <!-- Standalone performance mode: kill non-essential CSS animations to save CPU -->
+    <style id="standalone-perf">
+        body.standalone-mode *,
+        body.standalone-mode *::before,
+        body.standalone-mode *::after {
+            animation-duration: 0s !important;
+            transition-duration: 0.1s !important;
+        }
+        /* Keep essential UI feedback animations */
+        body.standalone-mode .spin-loader,
+        body.standalone-mode .loading-spinner,
+        body.standalone-mode [class*="typing-dot"],
+        body.standalone-mode .cursor-blink {
+            animation-duration: 1s !important;
+        }
+    </style>
+    <script>
+        // Detect standalone early: Electron preload or Docker localhost:59000
+        window.__STANDALONE = !!(window.cerebroDesktop) || (location.port === '59000' && location.hostname === 'localhost');
+        if (window.__STANDALONE) {
+            document.addEventListener('DOMContentLoaded', function() {
+                document.body.classList.add('standalone-mode');
+                console.log('[Perf] Standalone mode: CSS animations disabled');
+            });
+        }
+    </script>
+
     <style>
         :root {
             /* === BACKGROUNDS (Deep space) === */
@@ -1503,6 +1530,88 @@
         .ping-result-dot { width: 6px; height: 6px; border-radius: 50%; }
         .ping-result-dot.pass { background: var(--green); }
         .ping-result-dot.fail { background: var(--red); }
+
+        /* Remote Terminal Styles */
+        .terminal-section { margin-top: 4px; }
+        .terminal-output {
+            background: #0a0a0f; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;
+            padding: 10px 12px; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.75rem;
+            line-height: 1.5; max-height: 260px; overflow-y: auto; min-height: 80px;
+            color: #c0c0c0; white-space: pre-wrap; word-break: break-all;
+        }
+        .terminal-output .term-cmd { color: #4ade80; }
+        .terminal-output .term-err { color: #f87171; }
+        .terminal-output .term-info { color: #64748b; font-style: italic; }
+        .terminal-output .term-stdout { color: #e2e8f0; }
+        .terminal-input-row {
+            display: flex; gap: 6px; margin-top: 6px; align-items: center;
+        }
+        .terminal-input-row input {
+            flex: 1; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border);
+            background: #0a0a0f; color: #4ade80; font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem; outline: none;
+        }
+        .terminal-input-row input:focus { border-color: var(--accent); }
+        .terminal-input-row input::placeholder { color: #475569; }
+        .terminal-run-btn {
+            padding: 7px 14px; border-radius: 8px; border: 1px solid var(--accent);
+            background: rgba(99,102,241,0.15); color: var(--accent); font-size: 0.75rem;
+            font-weight: 600; cursor: pointer; transition: all 0.15s; white-space: nowrap;
+        }
+        .terminal-run-btn:hover { background: var(--accent); color: #fff; }
+        .terminal-run-btn:disabled { opacity: 0.4; pointer-events: none; }
+        .terminal-status-bar {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-top: 4px; font-size: 0.68rem; color: var(--text-muted); padding: 0 2px;
+        }
+        .terminal-status-dot {
+            display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+            margin-right: 5px; vertical-align: middle;
+        }
+        .terminal-status-dot.ready { background: var(--green); }
+        .terminal-status-dot.running { background: var(--yellow); animation: pulse 1s infinite; }
+        .terminal-status-dot.error { background: var(--red); }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .terminal-ssh-warning {
+            background: rgba(234,179,8,0.1); border: 1px solid rgba(234,179,8,0.25);
+            border-radius: 8px; padding: 10px 14px; font-size: 0.75rem; color: var(--yellow);
+            display: none;
+        }
+        .terminal-clear-btn {
+            padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border);
+            background: transparent; color: var(--text-muted); font-size: 0.65rem;
+            cursor: pointer; transition: all 0.15s;
+        }
+        .terminal-clear-btn:hover { border-color: var(--text-secondary); color: var(--text-secondary); }
+
+        /* Command Approval Card (in chat) */
+        .cmd-approval-card {
+            background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.25);
+            border-radius: 10px; padding: 12px 14px; margin: 8px 0; max-width: 420px;
+        }
+        .cmd-approval-card .cmd-label {
+            font-size: 0.7rem; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .cmd-approval-card .cmd-text {
+            font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: #4ade80;
+            background: #0a0a0f; padding: 6px 10px; border-radius: 6px; margin: 6px 0;
+        }
+        .cmd-approval-card .cmd-device {
+            font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 8px;
+        }
+        .cmd-approval-card .cmd-actions { display: flex; gap: 8px; }
+        .cmd-approval-card .cmd-actions button {
+            padding: 5px 14px; border-radius: 6px; font-size: 0.72rem; font-weight: 600;
+            cursor: pointer; border: none; transition: all 0.15s;
+        }
+        .cmd-approve-btn { background: rgba(34,197,94,0.2); color: var(--green); }
+        .cmd-approve-btn:hover { background: rgba(34,197,94,0.35); }
+        .cmd-reject-btn { background: rgba(239,68,68,0.15); color: var(--red); }
+        .cmd-reject-btn:hover { background: rgba(239,68,68,0.3); }
+        .cmd-approval-card.resolved { opacity: 0.6; }
+        .cmd-approval-card.resolved .cmd-actions { display: none; }
+        .cmd-approval-card .cmd-status { font-size: 0.7rem; margin-top: 6px; }
+
         .device-activity-item {
             padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
             font-size: 0.78rem; color: var(--text-secondary);
@@ -23348,6 +23457,26 @@
                         <div class="device-modal-section-title">Recent Activity</div>
                         <div id="device-activity-list"><div class="live-empty">Loading...</div></div>
                     </div>
+                    <div class="device-modal-section terminal-section" id="terminal-section">
+                        <div class="device-modal-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+                            <span>Remote Terminal</span>
+                            <button class="terminal-clear-btn" onclick="clearTerminalOutput()">Clear</button>
+                        </div>
+                        <div class="terminal-ssh-warning" id="terminal-ssh-warning">
+                            SSH not configured for this device. Set Host/IP and Username above to enable remote commands.
+                        </div>
+                        <div id="terminal-active-area">
+                            <div class="terminal-output" id="terminal-output"></div>
+                            <div class="terminal-input-row">
+                                <input type="text" id="terminal-input" placeholder="Type a command..." onkeydown="handleTerminalKeydown(event)" autocomplete="off" spellcheck="false">
+                                <button class="terminal-run-btn" id="terminal-run-btn" onclick="executeTerminalCommand()">Run</button>
+                            </div>
+                            <div class="terminal-status-bar">
+                                <span id="terminal-status"><span class="terminal-status-dot ready"></span>Ready</span>
+                                <span id="terminal-cmd-count"></span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="detail-footer" style="padding: 12px 16px; display:flex; gap:10px; justify-content:flex-end; border-top:1px solid var(--border);">
                     <button class="detail-action-btn" onclick="closeDeviceModal()">Cancel</button>
@@ -24069,8 +24198,8 @@
             // Refresh live activity every 15 seconds
             setInterval(loadLiveActivity, 15000);
 
-            // Request notification permission for agent alerts
-            if ('Notification' in window && Notification.permission === 'default') {
+            // Request notification permission for agent alerts (skip in standalone — libnotify crashes on Hyprland)
+            if (!window.__STANDALONE && 'Notification' in window && Notification.permission === 'default') {
                 Notification.requestPermission();
             }
         }
@@ -24853,6 +24982,7 @@
 
             modal.classList.add('active');
             loadDeviceActivity(deviceId);
+            initTerminalSection(deviceData);
         }
 
         function closeDeviceModal() {
@@ -24992,6 +25122,136 @@
                 err.textContent = 'Failed to load activity';
                 container.appendChild(err);
             }
+        }
+
+        // ============================================================
+        // Remote Terminal Functions
+        // ============================================================
+        var _terminalHistory = [];
+        var _terminalHistoryIdx = -1;
+
+        function initTerminalSection(deviceData) {
+            var ssh = deviceData.ssh_config || {};
+            var hasSSH = !!(ssh.host && ssh.username);
+            var warning = document.getElementById('terminal-ssh-warning');
+            var active = document.getElementById('terminal-active-area');
+            var output = document.getElementById('terminal-output');
+            var input = document.getElementById('terminal-input');
+
+            if (hasSSH) {
+                warning.style.display = 'none';
+                active.style.display = 'block';
+                output.textContent = '';
+                input.value = '';
+                appendTerminalOutput('info', 'Connected to ' + (ssh.username || '') + '@' + (ssh.host || '') + ':' + (ssh.port || 22));
+                updateTerminalStatus('ready', 'Ready');
+                loadCommandHistory(_currentDeviceId);
+            } else {
+                warning.style.display = 'block';
+                active.style.display = 'none';
+            }
+            _terminalHistory = [];
+            _terminalHistoryIdx = -1;
+        }
+
+        async function loadCommandHistory(deviceId) {
+            try {
+                var resp = await fetch(API_URL + '/api/devices/' + deviceId + '/commands?limit=10', {
+                    headers: { 'Authorization': 'Bearer ' + getToken() }
+                });
+                if (!resp.ok) return;
+                var data = await resp.json();
+                var countEl = document.getElementById('terminal-cmd-count');
+                countEl.textContent = data.count + ' commands in history';
+            } catch (e) { /* silent */ }
+        }
+
+        async function executeTerminalCommand() {
+            var input = document.getElementById('terminal-input');
+            var cmd = input.value.trim();
+            if (!cmd || !_currentDeviceId) return;
+
+            _terminalHistory.unshift(cmd);
+            if (_terminalHistory.length > 100) _terminalHistory.pop();
+            _terminalHistoryIdx = -1;
+
+            input.value = '';
+            appendTerminalOutput('cmd', '$ ' + cmd);
+            updateTerminalStatus('running', 'Running...');
+            document.getElementById('terminal-run-btn').disabled = true;
+
+            try {
+                var resp = await fetch(API_URL + '/api/devices/' + _currentDeviceId + '/exec', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
+                    body: JSON.stringify({ command: cmd, timeout: 30 })
+                });
+                var data = await resp.json();
+
+                if (!resp.ok) {
+                    appendTerminalOutput('err', 'Error: ' + (data.detail || resp.statusText));
+                    updateTerminalStatus('error', 'Failed');
+                } else {
+                    if (data.stdout) appendTerminalOutput('stdout', data.stdout);
+                    if (data.stderr) appendTerminalOutput('err', data.stderr);
+                    if (data.exit_code === 0) {
+                        updateTerminalStatus('ready', 'Exit 0 (' + data.execution_time_ms + 'ms)');
+                    } else {
+                        updateTerminalStatus('error', 'Exit ' + data.exit_code + ' (' + data.execution_time_ms + 'ms)');
+                    }
+                    if (data.truncated) appendTerminalOutput('info', '(output truncated at 64KB)');
+                    loadCommandHistory(_currentDeviceId);
+                }
+            } catch (e) {
+                appendTerminalOutput('err', 'Network error: ' + e.message);
+                updateTerminalStatus('error', 'Error');
+            }
+            document.getElementById('terminal-run-btn').disabled = false;
+            input.focus();
+        }
+
+        function handleTerminalKeydown(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                executeTerminalCommand();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (_terminalHistory.length > 0 && _terminalHistoryIdx < _terminalHistory.length - 1) {
+                    _terminalHistoryIdx++;
+                    e.target.value = _terminalHistory[_terminalHistoryIdx];
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (_terminalHistoryIdx > 0) {
+                    _terminalHistoryIdx--;
+                    e.target.value = _terminalHistory[_terminalHistoryIdx];
+                } else {
+                    _terminalHistoryIdx = -1;
+                    e.target.value = '';
+                }
+            }
+        }
+
+        function clearTerminalOutput() {
+            document.getElementById('terminal-output').textContent = '';
+        }
+
+        function updateTerminalStatus(state, text) {
+            var el = document.getElementById('terminal-status');
+            el.textContent = '';
+            var dot = document.createElement('span');
+            dot.className = 'terminal-status-dot ' + (state === 'running' ? 'running' : (state === 'error' ? 'error' : 'ready'));
+            el.appendChild(dot);
+            el.appendChild(document.createTextNode(text));
+        }
+
+        function appendTerminalOutput(type, text) {
+            var output = document.getElementById('terminal-output');
+            var line = document.createElement('div');
+            line.className = 'term-' + type;
+            line.textContent = text;
+            output.appendChild(line);
+            output.scrollTop = output.scrollHeight;
         }
 
         function openAddDeviceModal() {
@@ -26691,13 +26951,15 @@
             // Play alert sound
             playSecurityAlertSound();
 
-            // Browser notification if permitted
-            if (Notification.permission === 'granted') {
-                new Notification('UNKNOWN DEVICE ON NETWORK', {
-                    body: devices.map(d => d.ip + ' (' + d.mac + ')').join(', '),
-                    tag: 'network-security',
-                    requireInteraction: true
-                });
+            // Browser notification if permitted (skip in standalone — libnotify can freeze renderer)
+            if (!window.__STANDALONE && Notification.permission === 'granted') {
+                try {
+                    new Notification('UNKNOWN DEVICE ON NETWORK', {
+                        body: devices.map(d => d.ip + ' (' + d.mac + ')').join(', '),
+                        tag: 'network-security',
+                        requireInteraction: true
+                    });
+                } catch (e) { /* notification daemon not available */ }
             }
         }
 
@@ -26863,6 +27125,116 @@
             } catch(e) {
                 console.log('Could not play alert sound:', e);
             }
+        }
+
+        // ============================================================
+        // Remote Command Approval (Chat Cards)
+        // ============================================================
+        function showCommandApprovalInChat(data) {
+            var chatArea = document.getElementById('chat-messages') || document.getElementById('chatMessages');
+            if (!chatArea) { console.warn('No chat area found for approval card'); return; }
+
+            var card = document.createElement('div');
+            card.className = 'cmd-approval-card';
+            card.id = 'cmd-approval-' + data.action_id;
+
+            var label = document.createElement('div');
+            label.className = 'cmd-label';
+            label.textContent = 'AI Command Proposal';
+            card.appendChild(label);
+
+            var device = document.createElement('div');
+            device.className = 'cmd-device';
+            device.textContent = 'Device: ' + (data.device_name || data.device_id);
+            card.appendChild(device);
+
+            var cmdText = document.createElement('div');
+            cmdText.className = 'cmd-text';
+            cmdText.textContent = data.command;
+            card.appendChild(cmdText);
+
+            var actions = document.createElement('div');
+            actions.className = 'cmd-actions';
+
+            var approveBtn = document.createElement('button');
+            approveBtn.className = 'cmd-approve-btn';
+            approveBtn.textContent = 'Approve & Run';
+            approveBtn.onclick = function() { approveRemoteCommand(data.action_id); };
+            actions.appendChild(approveBtn);
+
+            var rejectBtn = document.createElement('button');
+            rejectBtn.className = 'cmd-reject-btn';
+            rejectBtn.textContent = 'Reject';
+            rejectBtn.onclick = function() { rejectRemoteCommand(data.action_id); };
+            actions.appendChild(rejectBtn);
+
+            card.appendChild(actions);
+            chatArea.appendChild(card);
+            chatArea.scrollTop = chatArea.scrollHeight;
+
+            showToast('AI proposed a command - review in chat', 'info');
+        }
+
+        async function approveRemoteCommand(actionId) {
+            try {
+                var resp = await fetch(API_URL + '/api/devices/exec/approve/' + actionId, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + getToken() }
+                });
+                var data = await resp.json();
+                if (!resp.ok) {
+                    showToast('Approve failed: ' + (data.detail || resp.statusText), 'error');
+                } else {
+                    updateCommandApprovalCard(actionId, 'approved', data);
+                }
+            } catch (e) {
+                showToast('Network error: ' + e.message, 'error');
+            }
+        }
+
+        async function rejectRemoteCommand(actionId) {
+            try {
+                var resp = await fetch(API_URL + '/api/devices/exec/reject/' + actionId, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + getToken() }
+                });
+                var data = await resp.json();
+                if (!resp.ok) {
+                    showToast('Reject failed: ' + (data.detail || resp.statusText), 'error');
+                } else {
+                    updateCommandApprovalCard(actionId, 'rejected', data);
+                }
+            } catch (e) {
+                showToast('Network error: ' + e.message, 'error');
+            }
+        }
+
+        function updateCommandApprovalCard(actionId, status, data) {
+            var card = document.getElementById('cmd-approval-' + actionId);
+            if (!card) return;
+            card.classList.add('resolved');
+
+            var statusDiv = document.createElement('div');
+            statusDiv.className = 'cmd-status';
+            if (status === 'approved') {
+                statusDiv.style.color = 'var(--green)';
+                var exitCode = data && data.exit_code !== undefined ? data.exit_code : '?';
+                var timeMs = data && data.execution_time_ms ? data.execution_time_ms + 'ms' : '';
+                statusDiv.textContent = 'Approved & executed (exit ' + exitCode + (timeMs ? ', ' + timeMs : '') + ')';
+                if (data && data.stdout) {
+                    var outDiv = document.createElement('div');
+                    outDiv.className = 'cmd-text';
+                    outDiv.style.fontSize = '0.7rem';
+                    outDiv.style.maxHeight = '100px';
+                    outDiv.style.overflow = 'auto';
+                    outDiv.textContent = data.stdout.substring(0, 1000);
+                    card.appendChild(outDiv);
+                }
+            } else {
+                statusDiv.style.color = 'var(--red)';
+                statusDiv.textContent = 'Rejected';
+            }
+            card.appendChild(statusDiv);
         }
 
         function showToast(message, type = 'info') {
@@ -27264,6 +27636,22 @@
                     if (!starredAgentIds.has(k)) delete agents[k];
                 });
                 renderAgents();
+            });
+
+            // Remote command approval flow
+            socket.on('command_approval_needed', (data) => {
+                console.log('Command approval needed:', data);
+                showCommandApprovalInChat(data);
+            });
+
+            socket.on('command_approved_result', (data) => {
+                console.log('Command approved result:', data);
+                updateCommandApprovalCard(data.action_id, 'approved', data);
+            });
+
+            socket.on('command_rejected', (data) => {
+                console.log('Command rejected:', data);
+                updateCommandApprovalCard(data.action_id, 'rejected', data);
             });
 
             // Listen for directive updates (auto-refresh)
@@ -31410,6 +31798,20 @@
         }
 
         // Handle agent updates from WebSocket
+        // Debounced render for agent updates — prevents multiple full re-renders per second
+        let _agentRenderPending = false;
+        function _debouncedAgentRender() {
+            if (_agentRenderPending) return;
+            _agentRenderPending = true;
+            requestAnimationFrame(() => {
+                _agentRenderPending = false;
+                renderAgents();
+                updateCerebroStatus();
+                if (_currentMindTab === 'agents') renderMindAgents();
+                updateAgentsTabBadge();
+            });
+        }
+
         function handleAgentUpdate(agent) {
             agents[agent.id] = agent;
 
@@ -31439,10 +31841,8 @@
                 }
             }
 
-            renderAgents();
-            updateCerebroStatus();  // Update presence card
-            if (_currentMindTab === 'agents') renderMindAgents();
-            updateAgentsTabBadge();
+            // Debounced render — coalesce rapid updates into one frame
+            _debouncedAgentRender();
 
             // Live-stream to detail view if open for this agent
             if (currentDetailAgentId === agent.id) {
@@ -31544,11 +31944,13 @@
                 showAgentDetail(agent.id);
             }
 
-            // Show notification
-            if (Notification.permission === 'granted') {
-                new Notification('Agent Completed', {
-                    body: agent.task.slice(0, 50) + '...'
-                });
+            // Show notification (skip in standalone — libnotify freezes renderer on Hyprland/Wayland)
+            if (!window.__STANDALONE && Notification.permission === 'granted') {
+                try {
+                    new Notification('Agent Completed', {
+                        body: agent.task.slice(0, 50) + '...'
+                    });
+                } catch (e) { /* notification daemon not available */ }
             }
         }
 
@@ -38131,41 +38533,46 @@ Please proceed with implementing this recommendation. You have full permissions.
                 }
             }
 
-            socket.on('cerebro_progress', (data) => {
-                console.log('[Progress] Received:', data);
-                showProgressBar();
+            // Throttle progress DOM updates — max once per 250ms in standalone mode
+            let _lastProgressUpdate = 0;
+            let _progressQueue = null;
 
-                // Update status text
+            socket.on('cerebro_progress', (data) => {
+                const now = Date.now();
+                const throttleMs = _IS_STANDALONE ? 250 : 50;
+
+                // Always update status text and progress bar (cheap)
+                showProgressBar();
                 const statusEl = document.getElementById('progress-status');
                 if (statusEl && data.status) {
                     statusEl.textContent = stripMarkdown(data.status).substring(0, 120);
                 }
+                if (data.event_count) {
+                    const pct = Math.min(90, 20 + Math.log2(data.event_count + 1) * 12);
+                    const inner = document.getElementById('progress-bar-inner');
+                    if (inner) inner.style.width = pct + '%';
+                }
 
-                // Append content to live output panel if present
+                // Throttle DOM-heavy content appends
                 if (data.content) {
+                    if (now - _lastProgressUpdate < throttleMs) {
+                        _progressQueue = data; // Keep latest, drop intermediates
+                        return;
+                    }
+                    _lastProgressUpdate = now;
+                    _progressQueue = null;
+
                     const liveInner = document.getElementById('progress-live-output-inner');
                     if (liveInner) {
                         const p = document.createElement('p');
-                        if (data.is_tool) {
-                            p.className = 'tool-line';
-                        }
-                        // safeMarkdown uses DOMPurify for XSS safety
-                        const sanitized = safeMarkdown(data.content.substring(0, 500));
+                        if (data.is_tool) p.className = 'tool-line';
                         p.textContent = stripMarkdown(data.content.substring(0, 500));
                         liveInner.appendChild(p);
-                        // Auto-scroll if panel is visible
                         const panel = document.getElementById('progress-live-output');
                         if (panel && panel.classList.contains('visible')) {
                             panel.scrollTop = panel.scrollHeight;
                         }
                     }
-                }
-
-                // Animate fill based on event count (log scale, caps at ~90%)
-                if (data.event_count) {
-                    const pct = Math.min(90, 20 + Math.log2(data.event_count + 1) * 12);
-                    const inner = document.getElementById('progress-bar-inner');
-                    if (inner) inner.style.width = pct + '%';
                 }
 
                 // If this is a final progress event, keep bar visible briefly
@@ -42724,8 +43131,17 @@ Please proceed with implementing this recommendation. You have full permissions.
             }
         }
 
+        // ==================== STANDALONE / ELECTRON DETECTION ====================
+        // Standalone mode: running inside Electron or Docker (not the ASUS server)
+        const _IS_STANDALONE = !!(window.cerebroDesktop) || (window.location.port === '59000' && window.location.hostname === 'localhost');
+
         // ==================== PARTICLE BACKGROUND ====================
         function initParticleBackground() {
+            // Skip particles entirely in standalone/Electron mode — devastating on software rendering
+            if (_IS_STANDALONE) {
+                console.log('[Perf] Particles disabled in standalone mode');
+                return;
+            }
             if (typeof tsParticles === 'undefined') return;
 
             tsParticles.load("particles-bg", {
@@ -42773,7 +43189,8 @@ Please proceed with implementing this recommendation. You have full permissions.
 
         // ==================== GSAP ANIMATION UTILITIES ====================
         function animateMessageIn(element, isUser = false) {
-            if (typeof gsap === 'undefined') {
+            // In standalone mode, use simple CSS animation (no blur filter — very expensive on software rendering)
+            if (_IS_STANDALONE || typeof gsap === 'undefined') {
                 element.style.animation = 'messageIn 0.3s ease forwards';
                 return;
             }

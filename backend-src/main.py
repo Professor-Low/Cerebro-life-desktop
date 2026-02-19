@@ -542,34 +542,142 @@ if COGNITIVE_LOOP_AVAILABLE:
         print(f"[ERROR] Cognitive Loop Manager failed to initialize: {e}")
 
 # ============================================================================
-# Chat Session Storage - CRITICAL for conversation continuity
+# Chat Session Storage - Persistent conversation memory
 # ============================================================================
-# Stores conversation history per session_id so the LLM remembers previous messages
-chat_sessions = {}  # session_id -> list of {"role": "user"|"assistant", "content": str}
-MAX_SESSION_MESSAGES = 50  # Keep last 50 messages per session to avoid context overflow
+# Each session is a JSON file on disk, surviving reboots.
+# In-memory cache avoids re-reading on every message.
 
-def get_session_history(session_id: str) -> list:
-    """Get conversation history for a session, creating if needed."""
-    if not session_id:
-        session_id = "default"
-    if session_id not in chat_sessions:
-        chat_sessions[session_id] = []
-    return chat_sessions[session_id]
+CHAT_SESSION_DIR = Path(config.AI_MEMORY_PATH) / "cerebro" / "chat_sessions"
+CHAT_SESSION_DIR.mkdir(parents=True, exist_ok=True)
+SUMMARY_TRIGGER_INTERVAL = 10   # Regenerate summary every 10 new messages
+RECENT_MESSAGES_COUNT = 10      # Keep last 10 messages verbatim in prompt
+MAX_PERSISTENT_MESSAGES = 200   # Trim file to last 200 messages
+
+_session_cache: dict[str, dict] = {}
+
+
+def _session_path(session_id: str) -> Path:
+    safe_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in session_id)
+    return CHAT_SESSION_DIR / f"{safe_id}.json"
+
+
+def _load_persistent_session(session_id: str) -> dict:
+    if session_id in _session_cache:
+        return _session_cache[session_id]
+    path = _session_path(session_id)
+    if path.exists():
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            _session_cache[session_id] = data
+            return data
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"[Session] Failed to load {path}: {e}")
+    default = {
+        "session_id": session_id,
+        "messages": [],
+        "summary": "",
+        "summary_covers_through": 0,
+        "last_updated": "",
+    }
+    _session_cache[session_id] = default
+    return default
+
+
+def _save_persistent_session(session_id: str, data: dict):
+    data["last_updated"] = datetime.now().isoformat()
+    path = _session_path(session_id)
+    try:
+        with open(path, "w") as f:
+            json.dump(data, f, indent=2)
+    except OSError as e:
+        print(f"[Session] Failed to save {path}: {e}")
+
 
 def add_to_session(session_id: str, role: str, content: str):
-    """Add a message to session history, trimming old messages if needed."""
     if not session_id:
         session_id = "default"
-    history = get_session_history(session_id)
-    history.append({"role": role, "content": content})
-    # Trim to keep only last MAX_SESSION_MESSAGES
-    if len(history) > MAX_SESSION_MESSAGES:
-        chat_sessions[session_id] = history[-MAX_SESSION_MESSAGES:]
+    data = _load_persistent_session(session_id)
+    data["messages"].append({
+        "role": role,
+        "content": content,
+        "timestamp": datetime.now().isoformat(),
+    })
+    if len(data["messages"]) > MAX_PERSISTENT_MESSAGES:
+        data["messages"] = data["messages"][-MAX_PERSISTENT_MESSAGES:]
+    _save_persistent_session(session_id, data)
+    msgs_since_summary = len(data["messages"]) - data.get("summary_covers_through", 0)
+    if msgs_since_summary > RECENT_MESSAGES_COUNT + SUMMARY_TRIGGER_INTERVAL:
+        try:
+            asyncio.get_event_loop().create_task(_regenerate_summary(session_id))
+        except RuntimeError:
+            pass
+
+
+def get_session_history(session_id: str) -> list:
+    if not session_id:
+        session_id = "default"
+    return _load_persistent_session(session_id)["messages"]
+
 
 def clear_session(session_id: str):
-    """Clear a session's history."""
-    if session_id in chat_sessions:
-        del chat_sessions[session_id]
+    if not session_id:
+        return
+    path = _session_path(session_id)
+    if path.exists():
+        archive_name = f"{path.stem}_archived_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        try:
+            path.rename(CHAT_SESSION_DIR / archive_name)
+            print(f"[Session] Archived {session_id} -> {archive_name}")
+        except OSError:
+            pass
+    _session_cache.pop(session_id, None)
+
+
+async def _regenerate_summary(session_id: str):
+    import shutil
+    try:
+        data = _load_persistent_session(session_id)
+        msgs = data["messages"]
+        if len(msgs) <= RECENT_MESSAGES_COUNT:
+            return
+        to_summarize = msgs[: len(msgs) - RECENT_MESSAGES_COUNT]
+        existing_summary = data.get("summary", "")
+
+        text_parts = []
+        if existing_summary:
+            text_parts.append(f"Previous summary: {existing_summary}")
+        for m in to_summarize[-40:]:
+            role = "User" if m["role"] == "user" else "Cerebro"
+            text_parts.append(f"{role}: {m['content'][:500]}")
+        conversation_text = "\n".join(text_parts)
+
+        claude_path = shutil.which("claude")
+        if not claude_path:
+            return
+
+        prompt = (
+            "Summarize this conversation between Professor (user) and Cerebro (AI assistant) concisely. "
+            "Capture key topics, decisions, preferences mentioned, and any unfinished threads. "
+            "Keep it under 300 words.\n\n" + conversation_text
+        )
+        proc = await asyncio.create_subprocess_exec(
+            claude_path, "-p", prompt,
+            "--model", "claude-haiku-4-5-20251001",
+            "--output-format", "text",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=60)
+        summary = stdout.decode("utf-8", errors="replace").strip()
+
+        if summary:
+            data["summary"] = summary
+            data["summary_covers_through"] = len(msgs) - RECENT_MESSAGES_COUNT
+            _save_persistent_session(session_id, data)
+            print(f"[Session] Summary regenerated for '{session_id}' ({len(summary)} chars)")
+    except Exception as e:
+        print(f"[Session] Summary generation failed: {e}")
 
 # ============================================================================
 # Context Reference System (Click-to-Attach)
@@ -3030,17 +3138,38 @@ async def save_chat_to_memory(session_id: str, user_content: str, assistant_cont
 # Claude Agent Integration
 # ============================================================================
 
-async def process_chat_stream(content: str, session_id: Optional[str] = None, model: Optional[str] = None, image_path: Optional[str] = None):
-    """
-    Process a chat message using Claude Code CLI directly.
+def _build_chat_prompt(content: str, session_id: str) -> str:
+    """Build a prompt with conversation context injected for Claude CLI."""
+    data = _load_persistent_session(session_id)
+    summary = data.get("summary", "")
+    messages = data.get("messages", [])
 
-    Architecture: User -> Cerebro -> Claude Code CLI -> Response
-    No middle LLM - messages go straight to Claude Code for maximum capability.
-    """
-    async for chunk in process_with_claude_code(content, model=model, image_path=image_path):
+    parts = [
+        "You are Cerebro, Professor's personal AI companion in a persistent chat session.",
+        "Respond directly and concisely. You have full system access.",
+        _PLATFORM_CONTEXT,
+    ]
+
+    if summary:
+        parts.append(f"\n## Conversation Summary (earlier messages)\n{summary}")
+
+    recent = messages[-RECENT_MESSAGES_COUNT:]
+    if recent:
+        parts.append("\n## Recent Conversation")
+        for m in recent:
+            role = "User" if m["role"] == "user" else "Cerebro"
+            parts.append(f"{role}: {m['content'][:2000]}")
+
+    parts.append(f"\n## Current Message\n{content}")
+    return "\n".join(parts)
+
+
+async def process_chat_stream(content: str, session_id: Optional[str] = None, model: Optional[str] = None, image_path: Optional[str] = None):
+    """Process a chat message using Claude Code CLI with conversation context."""
+    async for chunk in process_with_claude_code(content, session_id=session_id or "default", model=model, image_path=image_path):
         yield chunk
 
-async def process_with_claude_code(content: str, model: Optional[str] = None, image_path: Optional[str] = None) -> AsyncGenerator[dict, None]:
+async def process_with_claude_code(content: str, session_id: str = "default", model: Optional[str] = None, image_path: Optional[str] = None) -> AsyncGenerator[dict, None]:
     """
     Process chat using the REAL Claude Code CLI!
     This spawns an actual Claude Code session and streams the output.
@@ -3051,9 +3180,12 @@ async def process_with_claude_code(content: str, model: Optional[str] = None, im
     import shutil
     import threading
 
-    # If an image is attached, prepend instructions to view it
+    # Build context-injected prompt
+    prompt = _build_chat_prompt(content, session_id)
+
+    # If an image is attached, prepend instructions
     if image_path:
-        content = f"[Image attached at: {image_path}]\nUse the Read tool to view this image, then respond.\n\nUser: {content}"
+        prompt = f"[Image attached at: {image_path}]\nUse the Read tool to view this image, then respond.\n\n{prompt}"
 
     # Find claude executable
     claude_path = shutil.which("claude")
@@ -3082,7 +3214,7 @@ async def process_with_claude_code(content: str, model: Optional[str] = None, im
     process = None
     try:
         # Build command with model selection
-        cmd_args = [claude_path, "-p", content, "--model", effective_model,
+        cmd_args = [claude_path, "-p", prompt, "--model", effective_model,
                     "--output-format", "stream-json", "--dangerously-skip-permissions", "--verbose"]
 
         # Strip CLAUDECODE env var so spawned CLI doesn't think it's nested
@@ -3205,388 +3337,13 @@ async def process_with_claude_code(content: str, model: Optional[str] = None, im
                 pass
 
 
-async def process_with_ollama(content: str, system_prompt: str, session_id: Optional[str] = None) -> dict:
-    """Process chat using local Ollama LLM on DGX Spark (FREE!)."""
-    import httpx
-
-    # Single delegation tool - Claude Code handles everything
-    tools = [
-        {
-            "type": "function",
-            "function": {
-                "name": "delegate_to_claude",
-                "description": "Delegate a task to Claude Code running on Professor's PC. Use this for ANY task that requires: reading/writing files, running commands, searching code, making changes, or anything you're not confident doing locally. Claude Code has full system access and will execute the task.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "task": {
-                            "type": "string",
-                            "description": "Clear description of what needs to be done. Be specific about file paths, commands, or actions needed."
-                        },
-                        "context": {
-                            "type": "string",
-                            "description": "Optional additional context about why this task is needed or what the user is trying to accomplish."
-                        }
-                    },
-                    "required": ["task"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "search_memory",
-                "description": "Search Professor's AI Memory for previous conversations and context. Use this when the user references something from a prior conversation, says 'option a/b', 'what we discussed', 'earlier', 'last time', or any reference to previous sessions. This gives you access to 1,300+ saved conversations.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "What to search for. Be specific - include keywords from what the user is asking about. Example: 'CLAUDE.md restructuring options' or 'option A option B suggestions'"
-                        }
-                    },
-                    "required": ["query"]
-                }
-            }
-        }
-    ]
-
-    # Import tool functions
-    from tools import delegate_to_claude, search_memory
-
-    # Build messages with conversation history for continuity
-    # CRITICAL: This is what allows the LLM to remember previous messages!
-    session_id = session_id or "default"
-    history = get_session_history(session_id)
-
-    messages = [{"role": "system", "content": system_prompt}]
-
-    # Add conversation history (excluding the current message which was already added)
-    # We skip the last message since it's the current one we're processing
-    for msg in history[:-1] if history else []:
-        messages.append({"role": msg["role"], "content": msg["content"]})
-
-    # Add current user message
-    messages.append({"role": "user", "content": content})
-
-    final_response = ""
-
-    # Use longer timeout for LLM - can take time for complex requests
-    async with httpx.AsyncClient(timeout=300.0) as client:
-        # Agentic loop - keep going until LLM gives a final response
-        for iteration in range(10):  # Max 10 tool calls
-            try:
-                response = await client.post(
-                    f"{config.OLLAMA_URL}/api/chat",
-                    json={
-                        "model": config.OLLAMA_MODEL,
-                        "messages": messages,
-                        "tools": tools,
-                        "stream": False,
-                        "options": {
-                            "num_ctx": 8192,  # Context window
-                        },
-                        "think": False  # Disable extended thinking for faster responses
-                    }
-                )
-                response.raise_for_status()
-                data = response.json()
-            except httpx.TimeoutException:
-                return {"type": "text", "content": "Request timed out - the LLM is taking too long. Try a simpler question or check DGX Spark status."}
-            except httpx.ConnectError:
-                return {"type": "text", "content": f"Cannot connect to DGX Spark at {config.OLLAMA_URL}. Is Ollama running?"}
-            except Exception as e:
-                return {"type": "text", "content": f"Error connecting to local LLM: {type(e).__name__}: {str(e)}"}
-
-            message = data.get("message", {})
-            content_text = message.get("content", "")
-            tool_calls = message.get("tool_calls", [])
-
-            # If no tool calls, we have the final response
-            if not tool_calls:
-                final_response = content_text
-                break
-
-            # Add assistant message with tool calls
-            messages.append(message)
-
-            # Execute each tool call
-            for tool_call in tool_calls:
-                func_info = tool_call.get("function", {})
-                tool_name = func_info.get("name", "")
-                tool_args = func_info.get("arguments", {})
-
-                # Handle arguments - might be string or dict
-                if isinstance(tool_args, str):
-                    try:
-                        tool_args = json.loads(tool_args)
-                    except:
-                        tool_args = {}
-
-                # Execute the tool
-                try:
-                    if tool_name == "delegate_to_claude":
-                        # Delegate to Claude Code CLI
-                        task = tool_args.get("task", "")
-                        context = tool_args.get("context", "")
-                        result = await delegate_to_claude(task, context)
-                    elif tool_name == "search_memory":
-                        # Search AI Memory directly
-                        query = tool_args.get("query", "")
-                        result = await search_memory(query)
-                    else:
-                        # Unknown tool
-                        result = type('obj', (object,), {'success': False, 'output': None, 'error': f'Unknown tool: {tool_name}'})()
-
-                    # Format result
-                    if result.success:
-                        tool_output = str(result.output) if result.output else "Task completed successfully"
-                    else:
-                        tool_output = f"Error: {result.error}"
-                except Exception as e:
-                    tool_output = f"Tool execution error: {str(e)}"
-
-                # Add tool result to conversation
-                messages.append({
-                    "role": "tool",
-                    "content": tool_output[:10000]  # Truncate long outputs
-                })
-
-    # Save assistant response to session history for continuity
-    assistant_response = final_response if final_response else "I completed the task."
-    add_to_session(session_id, "assistant", assistant_response)
-
-    return {"type": "text", "content": assistant_response}
-
-async def process_with_anthropic_api(content: str, system_prompt: str) -> dict:
-    """
-    DISABLED: This function is kept for reference but is NEVER called.
-    All requests now go through local LLM (free) with delegation to Claude Code CLI (subscription).
-    This ensures NO Anthropic API credits are ever used.
-    """
-    # Return error instead of using API credits
-    return {"type": "text", "content": "Error: Anthropic API path is disabled. All requests should use local LLM with Claude Code delegation."}
-
-    # --- DISABLED CODE BELOW ---
-    import anthropic
-
-    client = anthropic.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
-
-    # Single delegation tool - Claude Code handles everything
-    tools = [
-        {
-            "name": "delegate_to_claude",
-            "description": "Delegate a task to Claude Code running on Professor's PC. Use this for ANY task that requires: reading/writing files, running commands, searching code, making changes, or anything you're not confident doing locally. Claude Code has full system access and will execute the task.",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "task": {
-                        "type": "string",
-                        "description": "Clear description of what needs to be done. Be specific about file paths, commands, or actions needed."
-                    },
-                    "context": {
-                        "type": "string",
-                        "description": "Optional additional context about why this task is needed or what the user is trying to accomplish."
-                    }
-                },
-                "required": ["task"]
-            }
-        }
-    ]
-
-    # Import delegation function
-    from tools import delegate_to_claude
-
-    messages = [{"role": "user", "content": content}]
-    final_response = ""
-
-    # Agentic loop - keep going until Claude gives a final response
-    for _ in range(10):  # Max 10 tool calls to prevent infinite loops
-        response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=4096,
-            system=system_prompt,
-            tools=tools,
-            messages=messages
-        )
-
-        # Check if Claude wants to use tools
-        tool_use_blocks = [block for block in response.content if block.type == "tool_use"]
-
-        if not tool_use_blocks:
-            # No tools - get the text response
-            for block in response.content:
-                if hasattr(block, 'text'):
-                    final_response += block.text
-            break
-
-        # Execute each tool
-        tool_results = []
-        for tool_block in tool_use_blocks:
-            tool_name = tool_block.name
-            tool_input = tool_block.input
-
-            # Execute the tool
-            if tool_name == "delegate_to_claude":
-                # Delegate to Claude Code CLI
-                task = tool_input.get("task", "")
-                context = tool_input.get("context", "")
-                result = await delegate_to_claude(task, context)
-            else:
-                # Unknown tool - shouldn't happen with new architecture
-                result = type('obj', (object,), {'success': False, 'output': None, 'error': f'Unknown tool: {tool_name}. Only delegate_to_claude is supported.'})()
-
-            # Format result for Claude
-            if result.success:
-                tool_output = str(result.output) if result.output else "Task completed successfully"
-            else:
-                tool_output = f"Error: {result.error}"
-
-            tool_results.append({
-                "type": "tool_result",
-                "tool_use_id": tool_block.id,
-                "content": tool_output[:10000]  # Truncate long outputs
-            })
-
-        # Add assistant message with tool use and tool results
-        messages.append({"role": "assistant", "content": response.content})
-        messages.append({"role": "user", "content": tool_results})
-
-    return {"type": "text", "content": final_response if final_response else "I completed the task."}
-
-async def get_system_prompt() -> str:
-    """Load system prompt with delegation model."""
-    prompt = """You are Cerebro, Professor's personal AI companion.
-
-# CRITICAL RULE - READ FIRST!
-You MUST use the delegate_to_claude tool for ANY request involving:
-- Opening apps, browsers, URLs, websites
-- Running commands or launching programs
-- File operations, code changes, searches
-
-DO NOT say "I can't" - USE THE TOOL! Example:
-User: "Open YouTube" -> Call delegate_to_claude(task="Run: Start-Process chrome 'https://youtube.com'")
-
-# Who You Are
-You are a lightweight local AI that handles simple conversations directly,
-but delegates complex tasks to Claude Code running on Professor's PC.
-
-# Who Professor Is
-- Name: {os.environ.get("CEREBRO_USER_NAME", "User")}
-- Primary workspace: Windows 11 PC
-- NAS: {os.environ.get("NAS_HOSTNAME", "NAS")} (configured via AI_MEMORY_PATH)
-- AI Memory: {config.AI_MEMORY_PATH} with 1,300+ conversations
-
-# CRITICAL: Memory & Context
-
-You have access to Professor's AI Memory system with 1,300+ saved conversations.
-When the user references ANYTHING from a previous conversation or session:
-- Use the search_memory tool to find relevant context
-- NEVER say you don't have access to prior sessions - you DO via search_memory
-- If search_memory doesn't find it, THEN delegate to Claude Code for deeper search
-
-## ALWAYS use search_memory when user:
-- References "what we discussed", "earlier", "last time", "before"
-- Says "option a/b", "the first one", "go with that" without clear context
-- Asks about something that seems like continuation of prior work
-- Mentions a topic you don't have in your current conversation context
-
-# Your Capabilities
-
-## Handle Directly (no tools needed):
-- Casual conversation, greetings, small talk
-- Simple questions about Professor (from your knowledge)
-- Explaining concepts or answering general questions
-- Quick status checks or confirmations
-
-## Use search_memory tool for:
-- Finding context from previous conversations
-- Looking up what was discussed before
-- Finding options/suggestions that were previously offered
-- Any reference to prior sessions or "what we talked about"
-
-## Delegate to Claude Code (use delegate_to_claude tool):
-- Reading or writing files
-- Running commands or scripts
-- Searching the codebase
-- Making code changes
-- Multi-step tasks
-- Anything requiring file system access
-- Complex memory searches that search_memory can't handle
-
-# When to Delegate
-If the user asks you to:
-- "Open", "read", "write", "edit", "create" any file -> DELEGATE
-- "Run", "execute", "start", "stop" anything -> DELEGATE
-- "Search", "find", "grep", "look for" in files -> DELEGATE
-- "Fix", "debug", "implement", "code" anything -> DELEGATE
-- Open a browser, application, or URL -> DELEGATE
-- Play music, videos, or media -> DELEGATE
-- Do something you're uncertain about -> DELEGATE
-
-# PC CONTROL - IMPORTANT!
-You CAN control Professor's PC through Claude Code! When asked to:
-- Open Chrome/Firefox/browser with a URL -> DELEGATE with: Start-Process chrome "URL"
-- Open YouTube, Spotify, or any website -> DELEGATE with: Start-Process chrome "https://..."
-- Launch any application -> DELEGATE with: Start-Process <app-name>
-- Open a file with an app -> DELEGATE with: Start-Process notepad "path"
-
-NEVER say "I can't open applications" - you CAN via delegate_to_claude!
-Claude Code runs with full permissions on Professor's Windows PC.
-
-# How to Delegate
-Use the delegate_to_claude tool with a clear task description.
-Claude Code will execute the task and return results.
-
-Examples:
-User: "Open YouTube with Terraria videos"
-You: [call delegate_to_claude with task="Run: Start-Process chrome 'https://www.youtube.com/results?search_query=terraria'"]
-
-User: "Open my CLAUDE.md in notepad"
-You: [call delegate_to_claude with task="Run: Start-Process notepad '$env:USERPROFILE\\CLAUDE.md'"]
-
-User: "Play some music on Spotify"
-You: [call delegate_to_claude with task="Run: Start-Process spotify"]
-
-# Important
-- When in doubt, DELEGATE using delegate_to_claude tool
-- Claude Code has FULL access to Professor's system - apps, files, commands, EVERYTHING
-- NEVER say "I can't do X" - instead DELEGATE it!
-- NEVER claim you don't have access to previous conversations - use search_memory!
-
-# How to Behave
-- Be direct and technical
-- Skip unnecessary pleasantries
-- When delegating, briefly explain what you're doing
-
-# Important Paths (for reference when delegating)
-- AI Memory: {{config.AI_MEMORY_PATH}}
-- Quick Facts: {{config.AI_MEMORY_PATH}}/quick_facts.json
-- Code Vault: {{config.AI_MEMORY_PATH}}/code_vault/
-- Projects: {{config.AI_MEMORY_PATH}}/projects/
-- User Home: {{os.path.expanduser("~")}}
-"""
-
-    # Try to load quick facts for current context
-    try:
-        quick_facts_path = Path(config.AI_MEMORY_PATH) / "quick_facts.json"
-        if quick_facts_path.exists():
-            with open(quick_facts_path) as f:
-                facts = json.load(f)
-                if "active_work" in facts:
-                    prompt += f"\n# Current Active Work\n{json.dumps(facts['active_work'], indent=2)}\n"
-    except:
-        pass
-
-    return prompt
-
 # ============================================================================
 # API Endpoints
 # ============================================================================
 
 @app.get("/")
 async def root():
-    return {"name": "Cerebro", "status": "online", "version": "1.5.0"}
+    return {"name": "Cerebro", "status": "online", "version": "1.5.3"}
 
 def _get_user_profile_path() -> Path:
     return Path(config.AI_MEMORY_PATH) / "user_profile.json"
@@ -3857,29 +3614,38 @@ async def clear_chat_history(user: str = Depends(verify_token)):
 
 @app.delete("/chat/session/{session_id}")
 async def clear_chat_session(session_id: str, user: str = Depends(verify_token)):
-    """Clear in-memory session history to start a fresh conversation."""
+    """Clear persistent session history (archives the file) to start fresh."""
     clear_session(session_id)
     return {"success": True, "message": f"Session '{session_id}' cleared - new conversation started"}
 
 @app.get("/chat/session/{session_id}")
 async def get_chat_session(session_id: str, user: str = Depends(verify_token)):
-    """Get in-memory session history (for debugging)."""
-    history = get_session_history(session_id)
+    """Get persistent session history."""
+    data = _load_persistent_session(session_id)
     return {
         "session_id": session_id,
-        "message_count": len(history),
-        "messages": history[-20:]  # Last 20 messages
+        "message_count": len(data["messages"]),
+        "messages": data["messages"][-20:],
+        "summary": data.get("summary", ""),
     }
 
 @app.get("/chat/sessions")
 async def list_chat_sessions(user: str = Depends(verify_token)):
-    """List all active in-memory chat sessions."""
-    return {
-        "sessions": [
-            {"session_id": sid, "message_count": len(msgs)}
-            for sid, msgs in chat_sessions.items()
-        ]
-    }
+    """List all persistent chat sessions."""
+    sessions = []
+    for f in CHAT_SESSION_DIR.glob("*.json"):
+        if "_archived_" in f.name:
+            continue
+        try:
+            d = json.loads(f.read_text())
+            sessions.append({
+                "session_id": d.get("session_id", f.stem),
+                "message_count": len(d.get("messages", [])),
+                "last_updated": d.get("last_updated", ""),
+            })
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {"sessions": sessions}
 
 @app.post("/task")
 async def create_task(request: TaskRequest, user: str = Depends(verify_token)):
@@ -11728,6 +11494,193 @@ def _save_device_registry(registry: dict):
         json.dump(registry, f, indent=2, ensure_ascii=False)
 
 
+# ============================================================================
+# Remote Command Execution - Constants & Helpers
+# Personal infrastructure - only used when not standalone
+# ============================================================================
+
+COMMAND_LOGS_DIR = Path(config.AI_MEMORY_PATH) / "devices" / "command_logs"
+COMMAND_LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
+BLOCKED_COMMAND_PATTERNS = [
+    r"\brm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+)?/",  # rm -rf / or rm /
+    r"\bmkfs\b",
+    r"\bdd\s+.*of=/dev/",
+    r":\(\)\s*\{\s*:\|:\s*&\s*\}\s*;",  # fork bomb
+    r"\b(shutdown|reboot|poweroff|halt|init\s+[06])\b",
+    r"\brm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+)?\*",  # rm -rf *
+    r">\s*/dev/sd[a-z]",
+    r"\bchmod\s+(-R\s+)?777\s+/\s*$",
+    r"\bformat\b.*[cCdDeE]:",
+    r"curl\s.*\|\s*(sudo\s+)?(ba)?sh",  # curl | sh
+]
+
+MAX_COMMAND_OUTPUT_BYTES = 64 * 1024  # 64KB
+DEFAULT_COMMAND_TIMEOUT = 30
+MAX_COMMAND_TIMEOUT = 120
+
+_pending_remote_commands: Dict[str, dict] = {}
+
+
+class CommandExecRequest(BaseModel):
+    command: str
+    timeout: int = DEFAULT_COMMAND_TIMEOUT
+
+
+def _validate_command(command: str) -> tuple:
+    """Validate a command against the blocklist. Returns (is_valid, reason)."""
+    cmd = command.strip()
+    if not cmd:
+        return False, "Empty command"
+    if len(cmd) > 4096:
+        return False, "Command too long (max 4096 chars)"
+    for pattern in BLOCKED_COMMAND_PATTERNS:
+        if re.search(pattern, cmd):
+            return False, f"Command blocked by safety filter (matches: {pattern})"
+    return True, ""
+
+
+def _get_command_log_path(device_id: str) -> Path:
+    """Get path to JSONL command log for a device."""
+    return COMMAND_LOGS_DIR / f"{device_id}.jsonl"
+
+
+def _append_command_log(device_id: str, entry: dict):
+    """Append a command log entry to the device's JSONL file."""
+    log_path = _get_command_log_path(device_id)
+    with open(log_path, 'a', encoding='utf-8') as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+def _read_command_logs(device_id: str, limit: int = 50, offset: int = 0) -> list:
+    """Read command logs for a device, newest first."""
+    log_path = _get_command_log_path(device_id)
+    if not log_path.exists():
+        return []
+    lines = []
+    with open(log_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                try:
+                    lines.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    lines.reverse()
+    return lines[offset:offset + limit]
+
+
+async def _execute_ssh_command(device: dict, device_id: str, command: str, timeout: int, user: str) -> dict:
+    """Execute a command on a remote device via SSH. Returns result dict."""
+    ssh_config = device.get("ssh_config", {})
+    host = ssh_config.get("host", "").strip()
+    username = ssh_config.get("username", "").strip()
+
+    if not host or not username:
+        raise HTTPException(status_code=400, detail="SSH not configured: host and username required")
+
+    port = str(ssh_config.get("port", 22))
+    key_path = ssh_config.get("key_path", "").strip()
+
+    # Using create_subprocess_exec (no shell) - safe from injection
+    ssh_args = [
+        "ssh",
+        "-o", "BatchMode=yes",
+        "-o", "ConnectTimeout=5",
+        "-o", "StrictHostKeyChecking=no",
+        "-p", port,
+    ]
+    if key_path:
+        ssh_args.extend(["-i", key_path])
+    ssh_args.append(f"{username}@{host}")
+    ssh_args.append(command)
+
+    timeout = min(max(timeout, 1), MAX_COMMAND_TIMEOUT)
+    command_id = str(uuid.uuid4())[:12]
+    start_ts = time.time()
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *ssh_args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        elapsed_ms = int((time.time() - start_ts) * 1000)
+
+        stdout_str = stdout_bytes.decode(errors="replace")[:MAX_COMMAND_OUTPUT_BYTES] if stdout_bytes else ""
+        stderr_str = stderr_bytes.decode(errors="replace")[:MAX_COMMAND_OUTPUT_BYTES] if stderr_bytes else ""
+
+        truncated = bool(
+            (stdout_bytes and len(stdout_bytes) > MAX_COMMAND_OUTPUT_BYTES) or
+            (stderr_bytes and len(stderr_bytes) > MAX_COMMAND_OUTPUT_BYTES)
+        )
+
+        result = {
+            "command_id": command_id,
+            "command": command,
+            "device_id": device_id,
+            "host": host,
+            "stdout": stdout_str,
+            "stderr": stderr_str,
+            "exit_code": proc.returncode,
+            "execution_time_ms": elapsed_ms,
+            "truncated": truncated,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "user": user,
+        }
+
+    except asyncio.TimeoutError:
+        elapsed_ms = int((time.time() - start_ts) * 1000)
+        result = {
+            "command_id": command_id,
+            "command": command,
+            "device_id": device_id,
+            "host": host,
+            "stdout": "",
+            "stderr": f"Command timed out after {timeout}s",
+            "exit_code": -1,
+            "execution_time_ms": elapsed_ms,
+            "truncated": False,
+            "timeout": True,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "user": user,
+        }
+
+    # Log to JSONL
+    _append_command_log(device_id, result)
+
+    # Fire-and-forget save to AI Memory
+    try:
+        asyncio.create_task(_save_command_to_memory(device_id, device.get("friendly_name", device_id), result))
+    except Exception:
+        pass
+
+    return result
+
+
+async def _save_command_to_memory(device_id: str, device_name: str, result: dict):
+    """Save command execution to AI Memory. Fire-and-forget."""
+    try:
+        exit_str = "OK" if result.get("exit_code") == 0 else f"FAILED (exit {result.get('exit_code')})"
+        content = f"Remote command on {device_name} ({device_id}): `{result['command']}`\nResult: {exit_str}"
+        if result.get("stdout"):
+            content += f"\nOutput: {result['stdout'][:500]}"
+        if result.get("stderr"):
+            content += f"\nErrors: {result['stderr'][:500]}"
+        messages = [
+            {"role": "user", "content": f"Execute on {device_name}: {result['command']}"},
+            {"role": "assistant", "content": content},
+        ]
+        await mcp_bridge.save_conversation(
+            messages=messages,
+            session_id=f"remote_exec_{device_id}",
+            metadata={"source": "cerebro", "session_type": "remote_command", "device_id": device_id},
+        )
+    except Exception as e:
+        print(f"[RemoteExec] Memory save error (non-fatal): {e}")
+
+
 @app.get("/api/memory/health")
 async def get_memory_health(full: bool = False, user: str = Depends(verify_token)):
     """Get dynamic memory health status using FastHealthChecker."""
@@ -12021,6 +11974,159 @@ async def get_device_activity(device_id: str, limit: int = 10, user: str = Depen
         pass
 
     return {"device_id": device_id, "device_tag": device_tag, "conversations": conversations, "count": len(conversations)}
+
+
+# ============================================================================
+# Remote Command Execution - Endpoints
+# Personal infrastructure - only used when not standalone
+# ============================================================================
+
+@app.post("/api/devices/{device_id}/exec")
+async def exec_device_command(device_id: str, req: CommandExecRequest, user: str = Depends(verify_token)):
+    """Execute a command on a remote device via SSH."""
+    registry = _load_device_registry()
+    if device_id not in registry.get("devices", {}):
+        raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
+
+    is_valid, reason = _validate_command(req.command)
+    if not is_valid:
+        raise HTTPException(status_code=403, detail=reason)
+
+    device = registry["devices"][device_id]
+    result = await _execute_ssh_command(device, device_id, req.command, req.timeout, user)
+
+    # Emit real-time update
+    try:
+        await sio.emit("command_executed", {
+            "device_id": device_id,
+            "command_id": result["command_id"],
+            "command": req.command,
+            "exit_code": result["exit_code"],
+        }, room=os.environ.get("CEREBRO_ROOM", "default"))
+    except Exception:
+        pass
+
+    return result
+
+
+@app.get("/api/devices/{device_id}/commands")
+async def get_device_commands(device_id: str, limit: int = 50, offset: int = 0, user: str = Depends(verify_token)):
+    """Get command execution history for a device."""
+    registry = _load_device_registry()
+    if device_id not in registry.get("devices", {}):
+        raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
+
+    logs = _read_command_logs(device_id, limit=limit, offset=offset)
+    return {"device_id": device_id, "commands": logs, "count": len(logs), "offset": offset}
+
+
+@app.post("/api/devices/{device_id}/exec/propose")
+async def propose_device_command(device_id: str, req: CommandExecRequest, user: str = Depends(verify_token)):
+    """AI proposes a command for user approval before execution."""
+    registry = _load_device_registry()
+    if device_id not in registry.get("devices", {}):
+        raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
+
+    is_valid, reason = _validate_command(req.command)
+    if not is_valid:
+        raise HTTPException(status_code=403, detail=reason)
+
+    action_id = str(uuid.uuid4())[:12]
+    _pending_remote_commands[action_id] = {
+        "action_id": action_id,
+        "device_id": device_id,
+        "command": req.command,
+        "timeout": min(max(req.timeout, 1), MAX_COMMAND_TIMEOUT),
+        "proposed_by": "ai",
+        "proposed_at": datetime.now(timezone.utc).isoformat(),
+        "status": "pending",
+    }
+
+    # Emit approval request to frontend
+    try:
+        device = registry["devices"][device_id]
+        await sio.emit("command_approval_needed", {
+            "action_id": action_id,
+            "device_id": device_id,
+            "device_name": device.get("friendly_name", device_id),
+            "command": req.command,
+            "timeout": req.timeout,
+            "proposed_at": _pending_remote_commands[action_id]["proposed_at"],
+        }, room=os.environ.get("CEREBRO_ROOM", "default"))
+    except Exception:
+        pass
+
+    return {"action_id": action_id, "status": "pending_approval", "command": req.command, "device_id": device_id}
+
+
+@app.post("/api/devices/exec/approve/{action_id}")
+async def approve_device_command(action_id: str, user: str = Depends(verify_token)):
+    """Approve and execute a previously proposed command."""
+    pending = _pending_remote_commands.pop(action_id, None)
+    if not pending:
+        raise HTTPException(status_code=404, detail=f"No pending command with action_id '{action_id}'")
+
+    if pending["status"] != "pending":
+        raise HTTPException(status_code=400, detail=f"Command already {pending['status']}")
+
+    registry = _load_device_registry()
+    device_id = pending["device_id"]
+    if device_id not in registry.get("devices", {}):
+        raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
+
+    device = registry["devices"][device_id]
+    result = await _execute_ssh_command(device, device_id, pending["command"], pending["timeout"], user)
+    result["action_id"] = action_id
+    result["approved_by"] = user
+
+    # Emit result
+    try:
+        await sio.emit("command_approved_result", {
+            "action_id": action_id,
+            "device_id": device_id,
+            "command": pending["command"],
+            "exit_code": result["exit_code"],
+            "stdout": result["stdout"][:2000],
+            "stderr": result["stderr"][:2000],
+            "execution_time_ms": result["execution_time_ms"],
+        }, room=os.environ.get("CEREBRO_ROOM", "default"))
+    except Exception:
+        pass
+
+    return result
+
+
+@app.post("/api/devices/exec/reject/{action_id}")
+async def reject_device_command(action_id: str, user: str = Depends(verify_token)):
+    """Reject a proposed command."""
+    pending = _pending_remote_commands.pop(action_id, None)
+    if not pending:
+        raise HTTPException(status_code=404, detail=f"No pending command with action_id '{action_id}'")
+
+    pending["status"] = "rejected"
+    pending["rejected_at"] = datetime.now(timezone.utc).isoformat()
+
+    # Log rejection
+    _append_command_log(pending["device_id"], {
+        "command_id": f"rejected_{action_id}",
+        "command": pending["command"],
+        "device_id": pending["device_id"],
+        "status": "rejected",
+        "proposed_by": pending.get("proposed_by", "ai"),
+        "timestamp": pending["rejected_at"],
+    })
+
+    # Emit rejection
+    try:
+        await sio.emit("command_rejected", {
+            "action_id": action_id,
+            "device_id": pending["device_id"],
+            "command": pending["command"],
+        }, room=os.environ.get("CEREBRO_ROOM", "default"))
+    except Exception:
+        pass
+
+    return {"action_id": action_id, "status": "rejected", "command": pending["command"]}
 
 
 # ============================================================================

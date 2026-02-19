@@ -5,9 +5,13 @@ const { DockerManager } = require('./docker-manager');
 const { LicenseManager } = require('./license-manager');
 const { createTray, updateTrayStatus } = require('./tray');
 
-// Disable GPU acceleration on Linux to prevent high CPU usage from particles/animations
+// Linux GPU handling: use real GPU if available, avoid SwiftShader fallback
 if (process.platform === 'linux') {
-  app.disableHardwareAcceleration();
+  // Force Chromium to use the actual GPU (NVIDIA/Intel) instead of SwiftShader blocklist fallback
+  app.commandLine.appendSwitch('ignore-gpu-blocklist');
+  app.commandLine.appendSwitch('enable-gpu-rasterization');
+  // Disable SwiftShader specifically — if no real GPU, prefer basic software rendering over SwiftShader
+  app.commandLine.appendSwitch('disable-software-rasterizer');
 }
 
 const isDev = process.env.CEREBRO_DEV === '1';
