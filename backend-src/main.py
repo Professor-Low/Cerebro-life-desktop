@@ -476,8 +476,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Frontend path
-FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+# Frontend path — check sibling directory first (Docker: /app/frontend/),
+# then parent-of-parent (local dev: backend-src/../frontend/)
+_frontend_candidate = Path(__file__).parent / "frontend"
+if not _frontend_candidate.exists():
+    _frontend_candidate = Path(__file__).parent.parent / "frontend"
+FRONTEND_DIR = _frontend_candidate
 
 # Serve static files (socket.io, etc.) from frontend/static/
 STATIC_DIR = FRONTEND_DIR / "static"
