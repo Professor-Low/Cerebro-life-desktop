@@ -49,6 +49,10 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
   clearSetupState: () => ipcRenderer.invoke('clear-setup-state'),
   restartComputer: () => ipcRenderer.invoke('restart-computer'),
 
+  // Claude credentials
+  checkClaudeCredentials: () => ipcRenderer.invoke('check-claude-credentials'),
+  refreshClaudeCredentials: () => ipcRenderer.invoke('refresh-claude-credentials'),
+
   // Event listeners for progress
   onPullProgress: (callback) => {
     ipcRenderer.on('pull-progress', (_event, data) => callback(data));
@@ -66,6 +70,14 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
   // Resume after restart signal
   onResumeAfterRestart: (callback) => {
     ipcRenderer.on('resume-after-restart', (_event, state) => callback(state));
+  },
+
+  // Credential events
+  onCredentialsExpired: (callback) => {
+    ipcRenderer.on('credentials-expired', (_event, data) => callback(data));
+  },
+  onCredentialsRefreshed: (callback) => {
+    ipcRenderer.on('credentials-refreshed', (_event, data) => callback(data));
   },
 
   isElectron: true,

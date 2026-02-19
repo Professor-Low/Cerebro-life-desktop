@@ -28,7 +28,8 @@ COPY docker/entrypoint-backend.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Create non-root user for Claude Code (--dangerously-skip-permissions requires non-root)
-RUN groupadd -r cerebro && useradd -r -g cerebro -m -d /home/cerebro cerebro && \
+# UID 1000 matches typical Linux host user so bind-mounted credentials are accessible
+RUN groupadd -g 1000 cerebro && useradd -u 1000 -g 1000 -m -d /home/cerebro cerebro && \
     mkdir -p /data/memory && chown -R cerebro:cerebro /data/memory /app
 
 # Set standalone environment defaults

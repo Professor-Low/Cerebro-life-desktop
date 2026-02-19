@@ -391,6 +391,13 @@ class DockerManager extends EventEmitter {
   async startStack() {
     this.emit('status', 'starting');
 
+    // Always refresh Claude credentials from host before starting
+    const credResult = this.refreshClaudeCredentials();
+    if (!credResult.valid) {
+      console.warn(`[Docker] Claude credentials issue: ${credResult.error}`);
+      this.emit('credentials-expired', { message: credResult.error, needsLogin: true });
+    }
+
     try {
       await this._run(this._dockerCmd(), [
         'compose', '-f', COMPOSE_FILE, '--env-file', ENV_FILE,
@@ -401,6 +408,7 @@ class DockerManager extends EventEmitter {
 
       this._running = true;
       this.emit('status', 'running');
+      this.startCredentialWatch();
       console.log('[Docker] Stack started');
       return true;
     } catch (err) {
@@ -421,6 +429,7 @@ class DockerManager extends EventEmitter {
    */
   async stopStack() {
     this.emit('status', 'stopping');
+    this.stopCredentialWatch();
 
     try {
       await this._run(this._dockerCmd(), [
@@ -992,6 +1001,117 @@ class DockerManager extends EventEmitter {
       }
     }
     return null;
+  }
+
+  /**
+   * Check if Claude CLI credentials exist and are still valid.
+   * Returns { valid, expiresIn, error, needsLogin }
+   */
+  checkClaudeCredentials() {
+    const containerCreds = path.join(CEREBRO_DIR, 'claude-config', '.credentials.json');
+    const hostCreds = path.join(os.homedir(), '.claude', '.credentials.json');
+
+    // Check container credentials first
+    const credsPath = fs.existsSync(containerCreds) ? containerCreds : hostCreds;
+
+    if (!fs.existsSync(credsPath)) {
+      return { valid: false, error: 'No Claude credentials found', needsLogin: true };
+    }
+
+    try {
+      const data = JSON.parse(fs.readFileSync(credsPath, 'utf-8'));
+      const oauth = data.claudeAiOauth;
+      if (!oauth || !oauth.accessToken) {
+        return { valid: false, error: 'No access token in credentials', needsLogin: true };
+      }
+
+      const expiresAt = oauth.expiresAt || 0;
+      const now = Date.now();
+      const expiresInMs = expiresAt - now;
+      const expiresInMinutes = Math.round(expiresInMs / 60000);
+
+      if (expiresInMs <= 0) {
+        return { valid: false, expiresIn: expiresInMinutes, error: 'Token expired', needsLogin: true };
+      }
+
+      // Warn if expiring within 30 minutes
+      if (expiresInMinutes < 30) {
+        return { valid: true, expiresIn: expiresInMinutes, warning: 'Token expiring soon' };
+      }
+
+      return { valid: true, expiresIn: expiresInMinutes };
+    } catch (err) {
+      return { valid: false, error: `Failed to read credentials: ${err.message}`, needsLogin: true };
+    }
+  }
+
+  /**
+   * Refresh container Claude credentials from host.
+   * Call this before starting agents or on a timer.
+   * Returns { refreshed, valid, error }
+   */
+  refreshClaudeCredentials() {
+    const hostCreds = path.join(os.homedir(), '.claude', '.credentials.json');
+    const destDir = path.join(CEREBRO_DIR, 'claude-config');
+    const destCreds = path.join(destDir, '.credentials.json');
+
+    if (!fs.existsSync(hostCreds)) {
+      return { refreshed: false, valid: false, error: 'No host credentials found — run: claude auth login' };
+    }
+
+    try {
+      // Check if host credentials are valid
+      const data = JSON.parse(fs.readFileSync(hostCreds, 'utf-8'));
+      const oauth = data.claudeAiOauth;
+      const expiresAt = (oauth && oauth.expiresAt) || 0;
+      const now = Date.now();
+
+      if (expiresAt <= now) {
+        return { refreshed: false, valid: false, error: 'Host credentials also expired — run: claude auth login' };
+      }
+
+      // Copy fresh credentials to container config
+      fs.mkdirSync(destDir, { recursive: true });
+      fs.copyFileSync(hostCreds, destCreds);
+      console.log(`[Docker] Refreshed Claude credentials (expires in ${Math.round((expiresAt - now) / 60000)}m)`);
+
+      return { refreshed: true, valid: true, expiresIn: Math.round((expiresAt - now) / 60000) };
+    } catch (err) {
+      return { refreshed: false, valid: false, error: `Credential refresh failed: ${err.message}` };
+    }
+  }
+
+  /**
+   * Start a periodic credential refresh timer.
+   * Checks every 15 minutes, refreshes from host if container creds are stale.
+   */
+  startCredentialWatch() {
+    if (this._credWatchInterval) return;
+
+    this._credWatchInterval = setInterval(() => {
+      const status = this.checkClaudeCredentials();
+      if (!status.valid || (status.expiresIn && status.expiresIn < 30)) {
+        console.log(`[Docker] Credentials ${status.valid ? 'expiring soon' : 'expired'}, refreshing...`);
+        const result = this.refreshClaudeCredentials();
+        if (!result.valid) {
+          this.emit('credentials-expired', {
+            message: result.error,
+            needsLogin: true,
+          });
+        } else {
+          this.emit('credentials-refreshed', { expiresIn: result.expiresIn });
+        }
+      }
+    }, 15 * 60 * 1000); // every 15 minutes
+
+    console.log('[Docker] Credential watch started (15min interval)');
+  }
+
+  stopCredentialWatch() {
+    if (this._credWatchInterval) {
+      clearInterval(this._credWatchInterval);
+      this._credWatchInterval = null;
+    }
   }
 
   isRunning() {

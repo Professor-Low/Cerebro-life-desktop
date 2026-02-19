@@ -284,6 +284,14 @@ app.whenReady().then(async () => {
     return;
   }
 
+  // Forward credential events to renderer
+  dockerManager.on('credentials-expired', (data) => {
+    if (mainWindow) mainWindow.webContents.send('credentials-expired', data);
+  });
+  dockerManager.on('credentials-refreshed', (data) => {
+    if (mainWindow) mainWindow.webContents.send('credentials-refreshed', data);
+  });
+
   // Returning user: start Docker stack and load frontend
   const dockerResult = await startDockerStack();
   if (!dockerResult.ok) {
@@ -537,6 +545,15 @@ ipcMain.handle('enable-autostart', () => {
     path: process.env.APPIMAGE || app.getPath('exe'),
   });
   return true;
+});
+
+// Claude credentials
+ipcMain.handle('check-claude-credentials', () => {
+  return dockerManager.checkClaudeCredentials();
+});
+
+ipcMain.handle('refresh-claude-credentials', () => {
+  return dockerManager.refreshClaudeCredentials();
 });
 
 // Restart & setup state
