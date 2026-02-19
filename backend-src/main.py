@@ -39,6 +39,7 @@ from pydantic import BaseModel
 import socketio
 import redis.asyncio as aioredis
 import jwt
+import bcrypt
 
 # Cognitive Loop imports
 try:
@@ -2190,6 +2191,15 @@ class TaskRequest(BaseModel):
 class LoginRequest(BaseModel):
     password: str
 
+class SetupRequest(BaseModel):
+    name: str
+    display_name: str
+    use_cases: list[str]
+    communication_style: str
+    verbosity: str
+    emoji_preference: bool
+    password: str
+
 class BriefingResponse(BaseModel):
     greeting: str
     time: str
@@ -3333,17 +3343,72 @@ You: [call delegate_to_claude with task="Run: Start-Process spotify"]
 async def root():
     return {"name": "Cerebro", "status": "online", "version": "1.0.0"}
 
+# ============================================================================
+# First-Time Setup (Onboarding)
+# ============================================================================
+
+@app.get("/api/setup/status")
+async def setup_status():
+    """Check if first-time setup has been completed."""
+    is_complete = await redis.get("cerebro:setup_complete")
+    # Backward compat: if CEREBRO_PASSWORD env is set, treat as already configured
+    if not is_complete and os.environ.get("CEREBRO_PASSWORD"):
+        is_complete = True
+    return {"setup_complete": bool(is_complete)}
+
+@app.post("/api/setup/complete")
+async def complete_setup(req: SetupRequest):
+    """Complete first-time onboarding. One-time use only."""
+    if await redis.get("cerebro:setup_complete"):
+        raise HTTPException(status_code=403, detail="Setup already completed")
+
+    # Hash and store password
+    pw_hash = bcrypt.hashpw(req.password.encode(), bcrypt.gensalt())
+    await redis.set("cerebro:password_hash", pw_hash.decode())
+
+    # Store user profile in Redis
+    profile = {
+        "name": req.name,
+        "display_name": req.display_name,
+        "use_cases": json.dumps(req.use_cases),
+        "communication_style": req.communication_style,
+        "verbosity": req.verbosity,
+        "emoji_preference": str(req.emoji_preference),
+        "setup_completed_at": datetime.now(timezone.utc).isoformat()
+    }
+    await redis.hset("cerebro:user_profile", mapping=profile)
+
+    # Write JSON backup to data volume
+    profile_path = Path(config.AI_MEMORY_PATH) / "user_profile.json"
+    profile_json = {**profile, "use_cases": req.use_cases, "emoji_preference": req.emoji_preference}
+    profile_path.write_text(json.dumps(profile_json, indent=2))
+
+    # Mark setup complete
+    await redis.set("cerebro:setup_complete", "1")
+
+    # Auto-login: return JWT
+    token = create_token(req.display_name)
+    return {"token": token, "user": req.display_name}
+
+# ============================================================================
+# Auth
+# ============================================================================
+
 @app.post("/auth/login")
 async def login(request: LoginRequest):
-    """Simple password login - returns JWT."""
-    # In production, use proper password hashing
-    stored_password = os.environ.get("CEREBRO_PASSWORD", "professor")
+    """Password login - checks Redis hash first, env var fallback."""
+    stored_hash = await redis.get("cerebro:password_hash")
+    if stored_hash:
+        if not bcrypt.checkpw(request.password.encode(), stored_hash.encode()):
+            raise HTTPException(status_code=401, detail="Invalid password")
+    else:
+        stored_password = os.environ.get("CEREBRO_PASSWORD", "professor")
+        if request.password != stored_password:
+            raise HTTPException(status_code=401, detail="Invalid password")
 
-    if request.password != stored_password:
-        raise HTTPException(status_code=401, detail="Invalid password")
-
-    token = create_token("professor")
-    return {"token": token, "user": "professor"}
+    display_name = await redis.hget("cerebro:user_profile", "display_name") or "professor"
+    token = create_token(display_name)
+    return {"token": token, "user": display_name}
 
 @app.get("/briefing", response_model=BriefingResponse)
 async def get_briefing(user: str = Depends(verify_token)):

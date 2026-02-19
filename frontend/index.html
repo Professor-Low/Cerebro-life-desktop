@@ -8427,6 +8427,241 @@
             display: none;
         }
 
+        /* ==================== ONBOARDING VIEW ==================== */
+        .onboarding-view {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            height: 100dvh;
+            padding: 20px;
+            background: var(--bg-primary);
+        }
+
+        .onboarding-container {
+            background: var(--bg-card);
+            border-radius: 24px;
+            padding: 40px 32px;
+            width: 100%;
+            max-width: 440px;
+            border: 1px solid var(--border);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .onboarding-progress {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-bottom: 28px;
+        }
+
+        .onboarding-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--border-light);
+            transition: all 0.4s var(--ease-out-expo);
+        }
+
+        .onboarding-dot.active {
+            background: var(--accent);
+            box-shadow: 0 0 10px var(--accent-glow);
+            transform: scale(1.3);
+        }
+
+        .onboarding-dot.done {
+            background: var(--accent-dark);
+        }
+
+        .onboarding-avatar {
+            width: 72px;
+            height: 72px;
+            background: var(--accent-gradient);
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin: 0 auto 24px;
+            box-shadow: 0 8px 30px var(--accent-glow-strong);
+            color: white;
+        }
+
+        .onboarding-message {
+            color: var(--text-primary);
+            font-size: 1.05rem;
+            line-height: 1.6;
+            min-height: 60px;
+            margin-bottom: 24px;
+            white-space: pre-line;
+            text-align: left;
+        }
+
+        .onboarding-message .cursor {
+            display: inline-block;
+            width: 2px;
+            height: 1.1em;
+            background: var(--accent);
+            margin-left: 2px;
+            animation: blink-cursor 0.8s steps(1) infinite;
+            vertical-align: text-bottom;
+        }
+
+        @keyframes blink-cursor {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        .onboarding-input {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .onboarding-input label {
+            display: block;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-bottom: 6px;
+            margin-top: 14px;
+        }
+
+        .onboarding-input input[type="text"],
+        .onboarding-input input[type="password"] {
+            width: 100%;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 14px 18px;
+            color: var(--text-primary);
+            font-size: 1rem;
+            transition: all 0.2s;
+            box-sizing: border-box;
+        }
+
+        .onboarding-input input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        .onboarding-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 8px;
+        }
+
+        .onboarding-pill {
+            padding: 10px 20px;
+            border-radius: 100px;
+            border: 1px solid var(--border-light);
+            background: var(--bg-elevated);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.25s var(--ease-out-expo);
+            font-size: 0.9rem;
+            user-select: none;
+        }
+
+        .onboarding-pill:hover {
+            border-color: var(--glass-border-hover);
+            color: var(--text-primary);
+            background: var(--bg-hover);
+        }
+
+        .onboarding-pill.selected {
+            background: var(--accent-dark);
+            border-color: var(--accent);
+            color: white;
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+
+        .onboarding-toggle-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 14px;
+        }
+
+        .onboarding-toggle-group .toggle-label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            min-width: 70px;
+        }
+
+        .onboarding-toggle-group .toggle-label.active-choice {
+            color: var(--accent-light);
+            font-weight: 600;
+        }
+
+        .onboarding-toggle-track {
+            flex: 1;
+            display: flex;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            background: var(--bg-elevated);
+        }
+
+        .onboarding-toggle-opt {
+            flex: 1;
+            padding: 10px 0;
+            text-align: center;
+            cursor: pointer;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            transition: all 0.25s var(--ease-out-expo);
+            user-select: none;
+        }
+
+        .onboarding-toggle-opt.active {
+            background: var(--accent-dark);
+            color: white;
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+
+        .onboarding-btn {
+            width: 100%;
+            padding: 16px;
+            background: var(--accent-gradient);
+            color: white;
+            border: none;
+            border-radius: 14px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 20px var(--accent-glow);
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        .onboarding-btn.visible {
+            opacity: 1;
+            transform: translateY(0);
+            transition: all 0.4s var(--ease-out-expo);
+        }
+
+        .onboarding-btn:active {
+            transform: scale(0.98);
+        }
+
+        .onboarding-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .onboarding-error {
+            color: var(--red);
+            font-size: 0.85rem;
+            margin-top: 8px;
+            min-height: 20px;
+        }
+
         /* ==================== UTILITIES ==================== */
         .spinner {
             width: 24px;
@@ -19700,6 +19935,23 @@
     <div id="particles-bg"></div>
 
     <div class="app" id="app">
+        <!-- Onboarding View (first-time setup) -->
+        <div class="onboarding-view hidden" id="onboarding-view">
+            <div class="onboarding-container">
+                <div class="onboarding-progress" id="onboarding-progress">
+                    <span class="onboarding-dot active"></span>
+                    <span class="onboarding-dot"></span>
+                    <span class="onboarding-dot"></span>
+                    <span class="onboarding-dot"></span>
+                </div>
+                <div class="onboarding-avatar">C</div>
+                <div class="onboarding-message" id="onboarding-message"></div>
+                <div class="onboarding-input" id="onboarding-input"></div>
+                <div class="onboarding-error" id="onboarding-error"></div>
+                <button class="onboarding-btn" id="onboarding-btn" onclick="advanceOnboarding()">Continue</button>
+            </div>
+        </div>
+
         <!-- Login View -->
         <div class="login-view" id="login-view">
             <div class="login-card">
@@ -22050,9 +22302,234 @@
 
         function showApp() {
             document.getElementById('login-view').classList.add('hidden');
+            document.getElementById('onboarding-view').classList.add('hidden');
             document.getElementById('main-app').classList.remove('hidden');
             document.getElementById('server-url').textContent = API_URL.replace('http://', '');
             initApp();
+        }
+
+        // ==================== ONBOARDING ====================
+        let onboardingStep = 0;
+        const onboardingData = { name: '', display_name: '', use_cases: [], communication_style: 'casual', verbosity: 'concise', emoji_preference: false, password: '' };
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.textContent;
+        }
+
+        const onboardingSteps = [
+            {
+                message: "Hey there! I'm Cerebro \u2014 your personal AI companion. I learn your preferences, remember your projects, and help you get things done.\n\nWhat's your name?",
+                render: function(container) {
+                    container.appendChild(Object.assign(document.createElement('label'), { textContent: 'Full name' }));
+                    container.appendChild(Object.assign(document.createElement('input'), { type: 'text', id: 'ob-name', placeholder: 'e.g. Alex Chen', autocomplete: 'name' }));
+                    container.appendChild(Object.assign(document.createElement('label'), { textContent: 'What should I call you?' }));
+                    container.appendChild(Object.assign(document.createElement('input'), { type: 'text', id: 'ob-display', placeholder: 'e.g. Alex' }));
+                },
+                validate: function() {
+                    var name = document.getElementById('ob-name').value.trim();
+                    var display = document.getElementById('ob-display').value.trim();
+                    if (!name) return 'Please enter your name.';
+                    onboardingData.name = name;
+                    onboardingData.display_name = display || name.split(' ')[0];
+                    return null;
+                }
+            },
+            {
+                message: function() { return 'Great to meet you, ' + escapeHtml(onboardingData.display_name) + '! What will we be working on together? Pick as many as you like.'; },
+                render: function(container) {
+                    var pills = document.createElement('div');
+                    pills.className = 'onboarding-pills';
+                    ['Coding', 'Research', 'Writing', 'Personal Projects', 'Work', 'Creative', 'Learning'].forEach(function(label) {
+                        var pill = document.createElement('div');
+                        pill.className = 'onboarding-pill';
+                        pill.textContent = label;
+                        pill.dataset.uc = label;
+                        pill.addEventListener('click', function() { pill.classList.toggle('selected'); });
+                        pills.appendChild(pill);
+                    });
+                    container.appendChild(pills);
+                },
+                validate: function() {
+                    var selected = Array.from(document.querySelectorAll('.onboarding-pill.selected')).map(function(el) { return el.dataset.uc; });
+                    if (!selected.length) return 'Pick at least one.';
+                    onboardingData.use_cases = selected;
+                    return null;
+                }
+            },
+            {
+                message: "How do you like your AI to communicate?",
+                render: function(container) {
+                    var toggles = [
+                        { field: 'communication_style', options: [{ val: 'casual', label: 'Casual', active: true }, { val: 'professional', label: 'Professional', active: false }] },
+                        { field: 'verbosity', options: [{ val: 'concise', label: 'Concise', active: true }, { val: 'detailed', label: 'Detailed', active: false }] },
+                        { field: 'emoji_preference', options: [{ val: 'true', label: 'Emojis', active: false }, { val: 'false', label: 'No Emojis', active: true }] }
+                    ];
+                    toggles.forEach(function(cfg) {
+                        var group = document.createElement('div');
+                        group.className = 'onboarding-toggle-group';
+                        var track = document.createElement('div');
+                        track.className = 'onboarding-toggle-track';
+                        track.dataset.field = cfg.field;
+                        cfg.options.forEach(function(opt) {
+                            var el = document.createElement('div');
+                            el.className = 'onboarding-toggle-opt' + (opt.active ? ' active' : '');
+                            el.textContent = opt.label;
+                            el.dataset.val = opt.val;
+                            el.addEventListener('click', function() {
+                                track.querySelectorAll('.onboarding-toggle-opt').forEach(function(o) { o.classList.remove('active'); });
+                                el.classList.add('active');
+                            });
+                            track.appendChild(el);
+                        });
+                        group.appendChild(track);
+                        container.appendChild(group);
+                    });
+                },
+                validate: function() {
+                    document.querySelectorAll('.onboarding-toggle-track').forEach(function(track) {
+                        var field = track.dataset.field;
+                        var active = track.querySelector('.onboarding-toggle-opt.active');
+                        if (active) {
+                            var val = active.dataset.val;
+                            onboardingData[field] = field === 'emoji_preference' ? val === 'true' : val;
+                        }
+                    });
+                    return null;
+                }
+            },
+            {
+                message: function() { return 'Last step \u2014 set a password to keep your Cerebro private, ' + escapeHtml(onboardingData.display_name) + '.'; },
+                render: function(container) {
+                    container.appendChild(Object.assign(document.createElement('label'), { textContent: 'Password' }));
+                    container.appendChild(Object.assign(document.createElement('input'), { type: 'password', id: 'ob-pw', placeholder: 'At least 4 characters', autocomplete: 'new-password' }));
+                    container.appendChild(Object.assign(document.createElement('label'), { textContent: 'Confirm password' }));
+                    container.appendChild(Object.assign(document.createElement('input'), { type: 'password', id: 'ob-pw2', placeholder: 'Re-enter password', autocomplete: 'new-password' }));
+                },
+                validate: function() {
+                    var pw = document.getElementById('ob-pw').value;
+                    var pw2 = document.getElementById('ob-pw2').value;
+                    if (pw.length < 4) return 'Password must be at least 4 characters.';
+                    if (pw !== pw2) return 'Passwords don\'t match.';
+                    onboardingData.password = pw;
+                    return null;
+                }
+            }
+        ];
+
+        function showOnboarding() {
+            document.getElementById('login-view').classList.add('hidden');
+            document.getElementById('onboarding-view').classList.remove('hidden');
+            onboardingStep = 0;
+            renderOnboardingStep();
+        }
+
+        function renderOnboardingStep() {
+            var step = onboardingSteps[onboardingStep];
+            var msgEl = document.getElementById('onboarding-message');
+            var inputEl = document.getElementById('onboarding-input');
+            var btnEl = document.getElementById('onboarding-btn');
+            var errEl = document.getElementById('onboarding-error');
+
+            errEl.textContent = '';
+            btnEl.classList.remove('visible');
+            inputEl.replaceChildren();
+            msgEl.textContent = '';
+
+            // Update progress dots
+            document.querySelectorAll('.onboarding-dot').forEach(function(dot, i) {
+                dot.classList.remove('active', 'done');
+                if (i < onboardingStep) dot.classList.add('done');
+                if (i === onboardingStep) dot.classList.add('active');
+            });
+
+            // Type out message then show inputs
+            var text = typeof step.message === 'function' ? step.message() : step.message;
+            typeMessage(text, function() {
+                step.render(inputEl);
+                btnEl.textContent = onboardingStep === onboardingSteps.length - 1 ? 'Finish Setup' : 'Continue';
+                setTimeout(function() { btnEl.classList.add('visible'); }, 100);
+
+                // Auto-focus first input and bind Enter key
+                var firstInput = inputEl.querySelector('input');
+                if (firstInput) {
+                    firstInput.focus();
+                    inputEl.querySelectorAll('input').forEach(function(inp) {
+                        inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') advanceOnboarding(); });
+                    });
+                }
+            });
+        }
+
+        function typeMessage(text, callback) {
+            var el = document.getElementById('onboarding-message');
+            var cursor = document.createElement('span');
+            cursor.className = 'cursor';
+            el.textContent = '';
+            el.appendChild(cursor);
+            var i = 0;
+            var interval = setInterval(function() {
+                if (i < text.length) {
+                    el.textContent = text.slice(0, i + 1);
+                    el.appendChild(cursor);
+                    i++;
+                } else {
+                    clearInterval(interval);
+                    el.textContent = text;
+                    if (callback) callback();
+                }
+            }, 25);
+        }
+
+        async function advanceOnboarding() {
+            var step = onboardingSteps[onboardingStep];
+            var errEl = document.getElementById('onboarding-error');
+            var btnEl = document.getElementById('onboarding-btn');
+
+            var err = step.validate();
+            if (err) {
+                errEl.textContent = err;
+                return;
+            }
+            errEl.textContent = '';
+
+            if (onboardingStep < onboardingSteps.length - 1) {
+                onboardingStep++;
+                renderOnboardingStep();
+            } else {
+                // Final step - submit to backend
+                btnEl.disabled = true;
+                btnEl.textContent = 'Setting up...';
+
+                try {
+                    var res = await fetch(API_URL + '/api/setup/complete', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(onboardingData)
+                    });
+                    if (!res.ok) {
+                        var errData = await res.json().catch(function() { return {}; });
+                        throw new Error(errData.detail || 'Setup failed');
+                    }
+                    var data = await res.json();
+                    token = data.token;
+                    localStorage.setItem('cerebro_token', token);
+
+                    // Show completion message
+                    var inputEl = document.getElementById('onboarding-input');
+                    inputEl.replaceChildren();
+                    btnEl.classList.remove('visible');
+                    document.querySelectorAll('.onboarding-dot').forEach(function(d) { d.classList.add('done'); });
+                    typeMessage('You\'re all set, ' + escapeHtml(onboardingData.display_name) + '! Let\'s get started.', function() {
+                        setTimeout(function() { showApp(); }, 1500);
+                    });
+                } catch (e) {
+                    errEl.textContent = e.message || 'Setup failed. Please try again.';
+                    btnEl.disabled = false;
+                    btnEl.textContent = 'Finish Setup';
+                }
+            }
         }
 
         // ==================== INIT ====================
@@ -37372,6 +37849,19 @@ Please proceed with implementing this recommendation. You have full permissions.
             const presenceGreeting = document.getElementById('presence-greeting');
             if (presenceGreeting && presenceGreeting.textContent === 'Hey') {
                 presenceGreeting.textContent = `Hey ${CEREBRO_USERNAME}`;
+            }
+
+            // Check if first-time setup is needed
+            try {
+                const setupRes = await fetch(API_URL + '/api/setup/status');
+                const setupData = await setupRes.json();
+                if (!setupData.setup_complete) {
+                    showOnboarding();
+                    return;
+                }
+            } catch(e) {
+                // If endpoint fails, fall through to normal login
+                console.log('Setup status check failed, continuing to login:', e);
             }
 
             if (token) {
