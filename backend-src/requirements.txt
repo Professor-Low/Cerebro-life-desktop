@@ -18,6 +18,9 @@ anthropic>=0.40.0
 # Authentication
 PyJWT>=2.8.0
 
+# Async file I/O
+aiofiles>=23.2.0
+
 # Utilities
 pydantic>=2.5.0
 pydantic-settings>=2.1.0
