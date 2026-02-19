@@ -474,8 +474,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Frontend path
+# Frontend path (parent.parent works on ASUS layout, parent fallback for Docker flat layout)
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+if not FRONTEND_DIR.exists():
+    FRONTEND_DIR = Path(__file__).parent / "frontend"
 
 # Serve static files (socket.io, etc.) from frontend/static/
 STATIC_DIR = FRONTEND_DIR / "static"
