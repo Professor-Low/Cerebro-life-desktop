@@ -17,7 +17,9 @@ anthropic>=0.40.0
 
 # Authentication
 PyJWT>=2.8.0
-bcrypt>=4.1.0
+
+# HTTP Requests (used by MCP modules for DGX Spark integration)
+requests>=2.31.0
 
 # Async file I/O
 aiofiles>=23.2.0

@@ -1437,6 +1437,84 @@
         }
         .live-agent-task { flex: 1; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .live-agent-time { color: var(--text-muted); font-size: 0.7rem; }
+
+        /* ==================== DEVICE & MEMORY HEALTH STYLES ==================== */
+        .device-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+            font-size: 0.8rem;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: background 0.15s;
+        }
+        .device-item:hover { background: rgba(255,255,255,0.04); margin: 0 -6px; padding: 6px 6px; }
+        .device-item-dot {
+            width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+        }
+        .device-item-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
+        .device-item-dot.stale { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+        .device-item-dot.offline { background: var(--red); }
+        .device-item-name { flex: 1; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .device-item-type { color: var(--text-muted); font-size: 0.7rem; }
+
+        .live-card-add-btn {
+            width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border);
+            background: transparent; color: var(--text-secondary); font-size: 0.9rem;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            margin-left: auto; transition: all 0.15s; line-height: 1;
+        }
+        .live-card-add-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+        .device-modal { width: 520px; max-width: 95vw; max-height: 85vh; overflow-y: auto; }
+        .device-modal-section {
+            padding: 14px 0; border-bottom: 1px solid var(--border);
+        }
+        .device-modal-section:last-child { border-bottom: none; }
+        .device-modal-section-title {
+            font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px;
+            color: var(--text-muted); margin-bottom: 10px; font-weight: 600;
+        }
+        .ssh-config-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+        }
+        .ssh-config-grid label { font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 4px; }
+        .ssh-config-grid input {
+            width: 100%; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border);
+            background: var(--bg-secondary); color: var(--text-primary); font-size: 0.82rem;
+        }
+        .btn-test-connection {
+            padding: 6px 14px; border-radius: 8px; border: 1px solid var(--accent);
+            background: transparent; color: var(--accent); font-size: 0.78rem;
+            cursor: pointer; transition: all 0.15s;
+        }
+        .btn-test-connection:hover { background: var(--accent); color: #fff; }
+        .btn-test-connection.loading { opacity: 0.6; pointer-events: none; }
+        .device-status-badge {
+            display: inline-block; padding: 3px 10px; border-radius: 12px;
+            font-size: 0.72rem; font-weight: 600;
+        }
+        .device-status-badge.online { background: rgba(34,197,94,0.15); color: var(--green); }
+        .device-status-badge.stale { background: rgba(234,179,8,0.15); color: var(--yellow); }
+        .device-status-badge.offline { background: rgba(239,68,68,0.15); color: var(--red); }
+        .ping-results { margin-top: 10px; font-size: 0.78rem; }
+        .ping-result-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+        .ping-result-dot { width: 6px; height: 6px; border-radius: 50%; }
+        .ping-result-dot.pass { background: var(--green); }
+        .ping-result-dot.fail { background: var(--red); }
+        .device-activity-item {
+            padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+            font-size: 0.78rem; color: var(--text-secondary);
+        }
+        .device-info-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 0.8rem; }
+        .device-info-label { color: var(--text-muted); }
+        .device-info-value { color: var(--text-primary); }
+        .add-device-form label { font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 4px; margin-top: 10px; }
+        .add-device-form input, .add-device-form select {
+            width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
+            background: var(--bg-secondary); color: var(--text-primary); font-size: 0.82rem;
+        }
         .autonomy-status-row {
             display: flex;
             align-items: center;
@@ -9446,230 +9524,6 @@
             font-size: 0.85rem;
             margin-top: 12px;
             display: none;
-        }
-
-        /* ==================== ONBOARDING VIEW ==================== */
-        .onboarding-view {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            height: 100dvh;
-            padding: 20px;
-            background: var(--bg-primary);
-        }
-
-        .onboarding-container {
-            background: var(--bg-card);
-            border-radius: 24px;
-            padding: 40px 32px;
-            width: 100%;
-            max-width: 440px;
-            border: 1px solid var(--border);
-            text-align: center;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .onboarding-progress {
-            display: flex;
-            gap: 8px;
-            justify-content: center;
-            margin-bottom: 28px;
-        }
-
-        .onboarding-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--border-light);
-            transition: all 0.4s var(--ease-out-expo);
-        }
-
-        .onboarding-dot.active {
-            background: var(--accent);
-            box-shadow: 0 0 10px var(--accent-glow);
-            transform: scale(1.3);
-        }
-
-        .onboarding-dot.done {
-            background: var(--accent-dark);
-        }
-
-        .onboarding-avatar {
-            width: 72px;
-            height: 72px;
-            background: var(--accent-gradient);
-            border-radius: 18px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.8rem;
-            font-weight: 700;
-            margin: 0 auto 24px;
-            box-shadow: 0 8px 30px var(--accent-glow-strong);
-            color: white;
-        }
-
-        .onboarding-message {
-            color: var(--text-primary);
-            font-size: 1.05rem;
-            line-height: 1.6;
-            min-height: 60px;
-            margin-bottom: 24px;
-            white-space: pre-line;
-            text-align: left;
-        }
-
-        .onboarding-message .cursor {
-            display: inline-block;
-            width: 2px;
-            height: 1.1em;
-            background: var(--accent);
-            margin-left: 2px;
-            animation: blink-cursor 0.8s steps(1) infinite;
-            vertical-align: text-bottom;
-        }
-
-        @keyframes blink-cursor {
-            0%, 50% { opacity: 1; }
-            51%, 100% { opacity: 0; }
-        }
-
-        .onboarding-input {
-            margin-bottom: 20px;
-            text-align: left;
-        }
-
-        .onboarding-input label {
-            display: block;
-            color: var(--text-secondary);
-            font-size: 0.85rem;
-            margin-bottom: 6px;
-            margin-top: 14px;
-        }
-
-        .onboarding-input input[type="text"],
-        .onboarding-input input[type="password"] {
-            width: 100%;
-            background: var(--bg-elevated);
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 14px 18px;
-            color: var(--text-primary);
-            font-size: 1rem;
-            transition: all 0.2s;
-            box-sizing: border-box;
-        }
-
-        .onboarding-input input:focus {
-            outline: none;
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px var(--accent-glow);
-        }
-
-        .onboarding-pills {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            justify-content: center;
-            margin-top: 8px;
-        }
-
-        .onboarding-pill {
-            padding: 10px 20px;
-            border-radius: 100px;
-            border: 1px solid var(--border-light);
-            background: var(--bg-elevated);
-            color: var(--text-secondary);
-            cursor: pointer;
-            transition: all 0.25s var(--ease-out-expo);
-            font-size: 0.9rem;
-            user-select: none;
-        }
-
-        .onboarding-pill:hover {
-            border-color: var(--glass-border-hover);
-            color: var(--text-primary);
-            background: var(--bg-hover);
-        }
-
-        .onboarding-pill.selected {
-            background: var(--accent-dark);
-            border-color: var(--accent);
-            color: white;
-            box-shadow: 0 0 15px var(--accent-glow);
-        }
-
-        .onboarding-toggle-group {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-top: 14px;
-        }
-
-        .onboarding-toggle-track {
-            flex: 1;
-            display: flex;
-            border-radius: 12px;
-            overflow: hidden;
-            border: 1px solid var(--border);
-            background: var(--bg-elevated);
-        }
-
-        .onboarding-toggle-opt {
-            flex: 1;
-            padding: 10px 0;
-            text-align: center;
-            cursor: pointer;
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-            transition: all 0.25s var(--ease-out-expo);
-            user-select: none;
-        }
-
-        .onboarding-toggle-opt.active {
-            background: var(--accent-dark);
-            color: white;
-            box-shadow: 0 0 15px var(--accent-glow);
-        }
-
-        .onboarding-btn {
-            width: 100%;
-            padding: 16px;
-            background: var(--accent-gradient);
-            color: white;
-            border: none;
-            border-radius: 14px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 0 4px 20px var(--accent-glow);
-            opacity: 0;
-            transform: translateY(10px);
-        }
-
-        .onboarding-btn.visible {
-            opacity: 1;
-            transform: translateY(0);
-            transition: all 0.4s var(--ease-out-expo);
-        }
-
-        .onboarding-btn:active {
-            transform: scale(0.98);
-        }
-
-        .onboarding-btn:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-        }
-
-        .onboarding-error {
-            color: var(--red);
-            font-size: 0.85rem;
-            margin-top: 8px;
-            min-height: 20px;
         }
 
         /* ==================== UTILITIES ==================== */
@@ -21355,23 +21209,6 @@
     <div id="particles-bg"></div>
 
     <div class="app" id="app">
-        <!-- Onboarding View (first-time setup) -->
-        <div class="onboarding-view hidden" id="onboarding-view">
-            <div class="onboarding-container">
-                <div class="onboarding-progress" id="onboarding-progress">
-                    <span class="onboarding-dot active"></span>
-                    <span class="onboarding-dot"></span>
-                    <span class="onboarding-dot"></span>
-                    <span class="onboarding-dot"></span>
-                </div>
-                <div class="onboarding-avatar">C</div>
-                <div class="onboarding-message" id="onboarding-message"></div>
-                <div class="onboarding-input" id="onboarding-input"></div>
-                <div class="onboarding-error" id="onboarding-error"></div>
-                <button class="onboarding-btn" id="onboarding-btn" onclick="advanceOnboarding()">Continue</button>
-            </div>
-        </div>
-
         <!-- Login View -->
         <div class="login-view" id="login-view">
             <div class="login-card">
@@ -21437,7 +21274,7 @@
                                 <img src="/static/cerebro-logo-128.png" alt="Cerebro" class="hero-orb-img">
                             </div>
                             <div class="hero-info">
-                                <div class="hero-greeting" id="presence-greeting">Hey Professor</div>
+                                <div class="hero-greeting" id="presence-greeting">Hey there</div>
                                 <div class="hero-status">
                                     <div class="status-indicator" id="cerebro-status-indicator"></div>
                                     <span id="cerebro-status-text">Awake and ready</span>
@@ -21505,24 +21342,25 @@
                                         <div class="live-empty">No agents running</div>
                                     </div>
                                 </div>
-                                <div class="live-card" onclick="openHomeDetail('activity', {type:'health', title:'System Health'})">
+                                <div class="live-card" onclick="openHomeDetail('activity', {type:'health', title:'Memory Health'})">
                                     <div class="live-card-header">
-                                        <span class="live-card-icon">&#x1F5A5;&#xFE0F;</span>
-                                        <span class="live-card-title">System Health</span>
+                                        <span class="live-card-icon">&#x1F9E0;</span>
+                                        <span class="live-card-title">Memory Health</span>
                                     </div>
-                                    <div class="live-card-body" id="live-health-body">
-                                        <div class="status-grid" id="system-status-grid">
-                                            <div class="status-item"><span class="status-dot online"></span><span class="status-name">Loading...</span></div>
+                                    <div class="live-card-body" id="memory-health-grid">
+                                        <div class="status-grid">
+                                            <div class="status-item"><span class="status-dot unknown"></span><span class="status-name">Loading...</span></div>
                                         </div>
                                     </div>
                                 </div>
-                                <div class="live-card" onclick="openHomeDetail('activity', {type:'autonomy', title:'Autonomy'})">
+                                <div class="live-card">
                                     <div class="live-card-header">
-                                        <span class="live-card-icon">&#x1F9E0;</span>
-                                        <span class="live-card-title">Autonomy</span>
+                                        <span class="live-card-icon">&#x1F4BB;</span>
+                                        <span class="live-card-title">Active Devices</span>
+                                        <button class="live-card-add-btn" onclick="event.stopPropagation(); openAddDeviceModal()" title="Add device">+</button>
                                     </div>
-                                    <div class="live-card-body" id="live-autonomy-body">
-                                        <div class="live-empty">Idle</div>
+                                    <div class="live-card-body" id="live-devices-body">
+                                        <div class="live-empty">No devices</div>
                                     </div>
                                 </div>
                             </div>
@@ -23297,6 +23135,106 @@
             </div>
         </div>
 
+        <!-- Device Detail Modal -->
+        <div class="modal-overlay" id="device-detail-modal" onclick="if(event.target === this) closeDeviceModal()">
+            <div class="modal device-modal">
+                <div class="detail-header" id="device-detail-header">
+                    <div class="detail-header-info">
+                        <span class="detail-icon" id="device-detail-icon">&#x1F4BB;</span>
+                        <div class="detail-titles">
+                            <div class="detail-title" id="device-detail-title"></div>
+                            <div class="detail-subtitle" id="device-detail-subtitle"></div>
+                        </div>
+                    </div>
+                    <button class="modal-close" onclick="closeDeviceModal()">&times;</button>
+                </div>
+                <div class="detail-body" style="padding: 16px;">
+                    <div class="device-modal-section" id="device-status-section">
+                        <div class="device-modal-section-title">Status</div>
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <span class="device-status-badge" id="device-detail-badge"></span>
+                            <button class="btn-test-connection" id="device-test-btn" onclick="testDeviceConnection()">Test Connection</button>
+                        </div>
+                        <div class="ping-results" id="device-ping-results" style="display:none;"></div>
+                    </div>
+                    <div class="device-modal-section" id="device-info-section">
+                        <div class="device-modal-section-title">Device Info</div>
+                        <div id="device-info-grid"></div>
+                    </div>
+                    <div class="device-modal-section">
+                        <div class="device-modal-section-title">Editable Fields</div>
+                        <label style="font-size:0.75rem; color:var(--text-secondary); display:block; margin-bottom:4px;">Friendly Name</label>
+                        <input type="text" id="device-edit-name" style="width:100%; padding:6px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary); font-size:0.82rem; margin-bottom:8px;">
+                        <label style="font-size:0.75rem; color:var(--text-secondary); display:block; margin-bottom:4px;">Description</label>
+                        <input type="text" id="device-edit-desc" style="width:100%; padding:6px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary); font-size:0.82rem;">
+                    </div>
+                    <div class="device-modal-section">
+                        <div class="device-modal-section-title">SSH Configuration</div>
+                        <div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:8px; opacity:0.7;">Set Host/IP for ping testing and remote access</div>
+                        <div class="ssh-config-grid">
+                            <div><label>Host / IP</label><input type="text" id="device-ssh-host" placeholder="e.g. 192.168.0.6"></div>
+                            <div><label>Port</label><input type="number" id="device-ssh-port" placeholder="22" value="22"></div>
+                            <div><label>Username</label><input type="text" id="device-ssh-user" placeholder="e.g. user"></div>
+                            <div><label>Key Path</label><input type="text" id="device-ssh-key" placeholder="~/.ssh/id_rsa"></div>
+                        </div>
+                    </div>
+                    <div class="device-modal-section">
+                        <div class="device-modal-section-title">Recent Activity</div>
+                        <div id="device-activity-list"><div class="live-empty">Loading...</div></div>
+                    </div>
+                </div>
+                <div class="detail-footer" style="padding: 12px 16px; display:flex; gap:10px; justify-content:flex-end; border-top:1px solid var(--border);">
+                    <button class="detail-action-btn" onclick="closeDeviceModal()">Cancel</button>
+                    <button class="detail-action-btn primary" onclick="saveDeviceChanges()">Save Changes</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Device Modal -->
+        <div class="modal-overlay" id="add-device-modal" onclick="if(event.target === this) closeAddDeviceModal()">
+            <div class="modal device-modal">
+                <div class="modal-header">
+                    <span class="modal-title">&#x2795; Add Device</span>
+                    <button class="modal-close" onclick="closeAddDeviceModal()">&times;</button>
+                </div>
+                <div style="padding: 16px;">
+                    <div class="add-device-form">
+                        <label>Hostname <span style="color:var(--red);">*</span></label>
+                        <input type="text" id="add-device-hostname" placeholder="e.g. my-server-01" required>
+                        <label>Friendly Name</label>
+                        <input type="text" id="add-device-name" placeholder="e.g. My Development Server">
+                        <label>Device Type</label>
+                        <select id="add-device-type">
+                            <option value="unknown">Unknown</option>
+                            <option value="linux_pc">Linux PC</option>
+                            <option value="windows_pc">Windows PC</option>
+                            <option value="mac">Mac</option>
+                            <option value="dgx_spark">DGX Spark</option>
+                            <option value="asus_gx10">ASUS GX10</option>
+                            <option value="crystal">Crystal</option>
+                            <option value="server">Server</option>
+                            <option value="raspberry_pi">Raspberry Pi</option>
+                        </select>
+                        <label>Description</label>
+                        <input type="text" id="add-device-desc" placeholder="Brief description">
+                        <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
+                            <div class="device-modal-section-title">SSH Configuration (optional)</div>
+                            <div class="ssh-config-grid" style="margin-top:8px;">
+                                <div><label>Host / IP</label><input type="text" id="add-device-ssh-host" placeholder="e.g. 192.168.0.6"></div>
+                                <div><label>Port</label><input type="number" id="add-device-ssh-port" placeholder="22" value="22"></div>
+                                <div><label>Username</label><input type="text" id="add-device-ssh-user" placeholder="e.g. user"></div>
+                                <div><label>Key Path</label><input type="text" id="add-device-ssh-key" placeholder="~/.ssh/id_rsa"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="detail-footer" style="padding: 12px 16px; display:flex; gap:10px; justify-content:flex-end; border-top:1px solid var(--border);">
+                    <button class="detail-action-btn" onclick="closeAddDeviceModal()">Cancel</button>
+                    <button class="detail-action-btn primary" onclick="submitAddDevice()">Add Device</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Agent Detail Modal (legacy, replaced by page) -->
         <div class="modal-overlay" id="agent-detail-modal" style="display: none !important;"></div>
 
@@ -23849,7 +23787,7 @@
         const CEREBRO_DGX_HOST = CEREBRO_CONFIG.dgxHost || '';
         const CEREBRO_DATA_DIR = CEREBRO_CONFIG.dataDir || '';
         const CEREBRO_CDP_URL = CEREBRO_CONFIG.cdpUrl || 'http://localhost:9222';
-        const CEREBRO_USERNAME = CEREBRO_CONFIG.username || 'Professor';
+        const CEREBRO_USERNAME = CEREBRO_CONFIG.username || '';
 
         console.log('Cerebro connecting to:', API_URL);
 
@@ -23902,229 +23840,9 @@
 
         function showApp() {
             document.getElementById('login-view').classList.add('hidden');
-            document.getElementById('onboarding-view').classList.add('hidden');
             document.getElementById('main-app').classList.remove('hidden');
             document.getElementById('server-url').textContent = API_URL.replace('http://', '');
             initApp();
-        }
-
-        // ==================== ONBOARDING ====================
-        let onboardingStep = 0;
-        const onboardingData = { name: '', display_name: '', use_cases: [], communication_style: 'casual', verbosity: 'concise', emoji_preference: false, password: '' };
-
-        function escapeHtml(str) {
-            var div = document.createElement('div');
-            div.textContent = str;
-            return div.textContent;
-        }
-
-        const onboardingSteps = [
-            {
-                message: "Hey there! I'm Cerebro \u2014 your personal AI companion. I learn your preferences, remember your projects, and help you get things done.\n\nWhat's your name?",
-                render: function(container) {
-                    container.appendChild(Object.assign(document.createElement('label'), { textContent: 'Full name' }));
-                    container.appendChild(Object.assign(document.createElement('input'), { type: 'text', id: 'ob-name', placeholder: 'e.g. Alex Chen', autocomplete: 'name' }));
-                    container.appendChild(Object.assign(document.createElement('label'), { textContent: 'What should I call you?' }));
-                    container.appendChild(Object.assign(document.createElement('input'), { type: 'text', id: 'ob-display', placeholder: 'e.g. Alex' }));
-                },
-                validate: function() {
-                    var name = document.getElementById('ob-name').value.trim();
-                    var display = document.getElementById('ob-display').value.trim();
-                    if (!name) return 'Please enter your name.';
-                    onboardingData.name = name;
-                    onboardingData.display_name = display || name.split(' ')[0];
-                    return null;
-                }
-            },
-            {
-                message: function() { return 'Great to meet you, ' + escapeHtml(onboardingData.display_name) + '! What will we be working on together? Pick as many as you like.'; },
-                render: function(container) {
-                    var pills = document.createElement('div');
-                    pills.className = 'onboarding-pills';
-                    ['Coding', 'Research', 'Writing', 'Personal Projects', 'Work', 'Creative', 'Learning'].forEach(function(label) {
-                        var pill = document.createElement('div');
-                        pill.className = 'onboarding-pill';
-                        pill.textContent = label;
-                        pill.dataset.uc = label;
-                        pill.addEventListener('click', function() { pill.classList.toggle('selected'); });
-                        pills.appendChild(pill);
-                    });
-                    container.appendChild(pills);
-                },
-                validate: function() {
-                    var selected = Array.from(document.querySelectorAll('.onboarding-pill.selected')).map(function(el) { return el.dataset.uc; });
-                    if (!selected.length) return 'Pick at least one.';
-                    onboardingData.use_cases = selected;
-                    return null;
-                }
-            },
-            {
-                message: "How do you like your AI to communicate?",
-                render: function(container) {
-                    var toggles = [
-                        { field: 'communication_style', options: [{ val: 'casual', label: 'Casual', active: true }, { val: 'professional', label: 'Professional', active: false }] },
-                        { field: 'verbosity', options: [{ val: 'concise', label: 'Concise', active: true }, { val: 'detailed', label: 'Detailed', active: false }] },
-                        { field: 'emoji_preference', options: [{ val: 'true', label: 'Emojis', active: false }, { val: 'false', label: 'No Emojis', active: true }] }
-                    ];
-                    toggles.forEach(function(cfg) {
-                        var group = document.createElement('div');
-                        group.className = 'onboarding-toggle-group';
-                        var track = document.createElement('div');
-                        track.className = 'onboarding-toggle-track';
-                        track.dataset.field = cfg.field;
-                        cfg.options.forEach(function(opt) {
-                            var el = document.createElement('div');
-                            el.className = 'onboarding-toggle-opt' + (opt.active ? ' active' : '');
-                            el.textContent = opt.label;
-                            el.dataset.val = opt.val;
-                            el.addEventListener('click', function() {
-                                track.querySelectorAll('.onboarding-toggle-opt').forEach(function(o) { o.classList.remove('active'); });
-                                el.classList.add('active');
-                            });
-                            track.appendChild(el);
-                        });
-                        group.appendChild(track);
-                        container.appendChild(group);
-                    });
-                },
-                validate: function() {
-                    document.querySelectorAll('.onboarding-toggle-track').forEach(function(track) {
-                        var field = track.dataset.field;
-                        var active = track.querySelector('.onboarding-toggle-opt.active');
-                        if (active) {
-                            var val = active.dataset.val;
-                            onboardingData[field] = field === 'emoji_preference' ? val === 'true' : val;
-                        }
-                    });
-                    return null;
-                }
-            },
-            {
-                message: function() { return 'Last step \u2014 set a password to keep your Cerebro private, ' + escapeHtml(onboardingData.display_name) + '.'; },
-                render: function(container) {
-                    container.appendChild(Object.assign(document.createElement('label'), { textContent: 'Password' }));
-                    container.appendChild(Object.assign(document.createElement('input'), { type: 'password', id: 'ob-pw', placeholder: 'At least 4 characters', autocomplete: 'new-password' }));
-                    container.appendChild(Object.assign(document.createElement('label'), { textContent: 'Confirm password' }));
-                    container.appendChild(Object.assign(document.createElement('input'), { type: 'password', id: 'ob-pw2', placeholder: 'Re-enter password', autocomplete: 'new-password' }));
-                },
-                validate: function() {
-                    var pw = document.getElementById('ob-pw').value;
-                    var pw2 = document.getElementById('ob-pw2').value;
-                    if (pw.length < 4) return 'Password must be at least 4 characters.';
-                    if (pw !== pw2) return 'Passwords don\'t match.';
-                    onboardingData.password = pw;
-                    return null;
-                }
-            }
-        ];
-
-        function showOnboarding() {
-            document.getElementById('login-view').classList.add('hidden');
-            document.getElementById('onboarding-view').classList.remove('hidden');
-            onboardingStep = 0;
-            renderOnboardingStep();
-        }
-
-        function renderOnboardingStep() {
-            var step = onboardingSteps[onboardingStep];
-            var msgEl = document.getElementById('onboarding-message');
-            var inputEl = document.getElementById('onboarding-input');
-            var btnEl = document.getElementById('onboarding-btn');
-            var errEl = document.getElementById('onboarding-error');
-
-            errEl.textContent = '';
-            btnEl.classList.remove('visible');
-            inputEl.replaceChildren();
-            msgEl.textContent = '';
-
-            document.querySelectorAll('.onboarding-dot').forEach(function(dot, i) {
-                dot.classList.remove('active', 'done');
-                if (i < onboardingStep) dot.classList.add('done');
-                if (i === onboardingStep) dot.classList.add('active');
-            });
-
-            var text = typeof step.message === 'function' ? step.message() : step.message;
-            typeMessage(text, function() {
-                step.render(inputEl);
-                btnEl.textContent = onboardingStep === onboardingSteps.length - 1 ? 'Finish Setup' : 'Continue';
-                setTimeout(function() { btnEl.classList.add('visible'); }, 100);
-
-                var firstInput = inputEl.querySelector('input');
-                if (firstInput) {
-                    firstInput.focus();
-                    inputEl.querySelectorAll('input').forEach(function(inp) {
-                        inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') advanceOnboarding(); });
-                    });
-                }
-            });
-        }
-
-        function typeMessage(text, callback) {
-            var el = document.getElementById('onboarding-message');
-            var cursor = document.createElement('span');
-            cursor.className = 'cursor';
-            el.textContent = '';
-            el.appendChild(cursor);
-            var i = 0;
-            var interval = setInterval(function() {
-                if (i < text.length) {
-                    el.textContent = text.slice(0, i + 1);
-                    el.appendChild(cursor);
-                    i++;
-                } else {
-                    clearInterval(interval);
-                    el.textContent = text;
-                    if (callback) callback();
-                }
-            }, 25);
-        }
-
-        async function advanceOnboarding() {
-            var step = onboardingSteps[onboardingStep];
-            var errEl = document.getElementById('onboarding-error');
-            var btnEl = document.getElementById('onboarding-btn');
-
-            var err = step.validate();
-            if (err) {
-                errEl.textContent = err;
-                return;
-            }
-            errEl.textContent = '';
-
-            if (onboardingStep < onboardingSteps.length - 1) {
-                onboardingStep++;
-                renderOnboardingStep();
-            } else {
-                btnEl.disabled = true;
-                btnEl.textContent = 'Setting up...';
-
-                try {
-                    var res = await fetch(API_URL + '/api/setup/complete', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(onboardingData)
-                    });
-                    if (!res.ok) {
-                        var errData = await res.json().catch(function() { return {}; });
-                        throw new Error(errData.detail || 'Setup failed');
-                    }
-                    var data = await res.json();
-                    token = data.token;
-                    localStorage.setItem('cerebro_token', token);
-
-                    var inputEl = document.getElementById('onboarding-input');
-                    inputEl.replaceChildren();
-                    btnEl.classList.remove('visible');
-                    document.querySelectorAll('.onboarding-dot').forEach(function(d) { d.classList.add('done'); });
-                    typeMessage('You\'re all set, ' + escapeHtml(onboardingData.display_name) + '! Let\'s get started.', function() {
-                        setTimeout(function() { showApp(); }, 1500);
-                    });
-                } catch (e) {
-                    errEl.textContent = e.message || 'Setup failed. Please try again.';
-                    btnEl.disabled = false;
-                    btnEl.textContent = 'Finish Setup';
-                }
-            }
         }
 
         // ==================== INIT ====================
@@ -24597,7 +24315,7 @@
                 sec.appendChild(lbl);
                 var cnt = document.createElement('div');
                 cnt.className = 'detail-section-content';
-                var bodyId = data.type === 'agents' ? 'live-agents-body' : data.type === 'health' ? 'live-health-body' : 'live-autonomy-body';
+                var bodyId = data.type === 'agents' ? 'live-agents-body' : data.type === 'health' ? 'memory-health-grid' : 'live-devices-body';
                 var srcBody = document.getElementById(bodyId);
                 if (srcBody) {
                     var clone = srcBody.cloneNode(true);
@@ -24669,7 +24387,8 @@
                 btn.onclick = function() {
                     closeHomeDetail();
                     if (data.type === 'agents') switchView('agents');
-                    else if (data.type === 'health') switchView('settings');
+                    else if (data.type === 'health') { /* Memory health - stay on home */ }
+                    else if (data.type === 'devices') { /* Devices - stay on home */ }
                     else switchView('chat');
                 };
                 frag.appendChild(btn);
@@ -24783,10 +24502,10 @@
 
         async function loadLiveActivity() {
             const headers = { 'Authorization': 'Bearer ' + token };
-            const [agentsResp, statusResp, autonomyResp] = await Promise.allSettled([
+            const [agentsResp, healthResp, devicesResp] = await Promise.allSettled([
                 fetch(API_URL + '/agents', { headers }),
-                fetch(API_URL + '/system-status', { headers }),
-                fetch(API_URL + '/api/autonomy/status', { headers }),
+                fetch(API_URL + '/api/memory/health', { headers }),
+                fetch(API_URL + '/api/devices', { headers }),
             ]);
 
             // Running agents
@@ -24830,62 +24549,336 @@
                 agentsBody.appendChild(empty);
             }
 
-            // System status
+            // Memory Health
+            const healthGrid = document.getElementById('memory-health-grid');
             try {
-                const statusData = statusResp.status === 'fulfilled' ? await statusResp.value.json() : {};
-                const grid = document.getElementById('system-status-grid');
-                if (grid && statusData.services) {
-                    grid.textContent = '';
-                    var statusIndex = 0;
-                    Object.entries(statusData.services).forEach(([name, info]) => {
-                        const status = (typeof info === 'object' ? info.status : info) || 'unknown';
-                        const cls = (status === 'online' || status === 'ok' || status === 'connected') ? 'online' :
-                                    (status === 'offline' || status === 'error') ? 'offline' : 'unknown';
+                const healthData = healthResp.status === 'fulfilled' ? await healthResp.value.json() : {};
+                if (healthGrid && healthData.components) {
+                    healthGrid.textContent = '';
+                    const grid = document.createElement('div');
+                    grid.className = 'status-grid';
+                    var hIdx = 0;
+                    Object.entries(healthData.components).forEach(([key, comp]) => {
+                        const status = comp.status || 'unknown';
+                        const cls = status === 'online' ? 'online' : status === 'offline' ? 'offline' : 'unknown';
                         const item = document.createElement('div');
                         item.className = 'status-item stagger-in';
-                        item.style.setProperty('--si', statusIndex++);
+                        item.style.setProperty('--si', hIdx++);
                         const dot = document.createElement('span');
                         dot.className = 'status-dot ' + cls;
                         item.appendChild(dot);
                         const n = document.createElement('span');
                         n.className = 'status-name';
-                        n.textContent = name;
+                        n.textContent = comp.name || key;
                         item.appendChild(n);
                         grid.appendChild(item);
                     });
+                    healthGrid.appendChild(grid);
                 }
-            } catch (e) {}
-
-            // Autonomy
-            const autoBody = document.getElementById('live-autonomy-body');
-            try {
-                const autoData = autonomyResp.status === 'fulfilled' ? await autonomyResp.value.json() : {};
-                autoBody.textContent = '';
-                const row = document.createElement('div');
-                row.className = 'autonomy-status-row';
-                const badge = document.createElement('span');
-                if (autoData.status === 'running' || autoData.running) {
-                    badge.className = 'autonomy-badge running';
-                    badge.textContent = 'Running';
-                    row.appendChild(badge);
-                    const lvl = document.createElement('span');
-                    lvl.textContent = 'Level ' + (autoData.autonomy_level || autoData.level || 1);
-                    row.appendChild(lvl);
-                } else {
-                    badge.className = 'autonomy-badge idle';
-                    badge.textContent = 'Idle';
-                    row.appendChild(badge);
-                }
-                autoBody.appendChild(row);
             } catch (e) {
-                autoBody.textContent = '';
-                const row = document.createElement('div');
-                row.className = 'autonomy-status-row';
-                const badge = document.createElement('span');
-                badge.className = 'autonomy-badge idle';
-                badge.textContent = 'Idle';
-                row.appendChild(badge);
-                autoBody.appendChild(row);
+                if (healthGrid) {
+                    healthGrid.textContent = '';
+                    const empty = document.createElement('div');
+                    empty.className = 'live-empty';
+                    empty.textContent = 'Unable to check';
+                    healthGrid.appendChild(empty);
+                }
+            }
+
+            // Active Devices
+            const devicesBody = document.getElementById('live-devices-body');
+            try {
+                const devData = devicesResp.status === 'fulfilled' ? await devicesResp.value.json() : {};
+                const devices = devData.devices || [];
+                window._cachedDevices = devices;
+                devicesBody.textContent = '';
+                if (devices.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.className = 'live-empty';
+                    empty.textContent = 'No devices registered';
+                    devicesBody.appendChild(empty);
+                } else {
+                    devices.forEach((d, index) => {
+                        const row = document.createElement('div');
+                        row.className = 'device-item stagger-in';
+                        row.style.setProperty('--si', index);
+                        row.onclick = () => openDeviceDetailModal(d.id, d);
+                        const dot = document.createElement('div');
+                        dot.className = 'device-item-dot ' + getDeviceStatusClass(d.last_seen);
+                        row.appendChild(dot);
+                        const name = document.createElement('span');
+                        name.className = 'device-item-name';
+                        name.textContent = d.friendly_name || d.device_name || d.hostname || d.id;
+                        row.appendChild(name);
+                        const dtype = document.createElement('span');
+                        dtype.className = 'device-item-type';
+                        dtype.textContent = (d.device_type || '').replace(/_/g, ' ');
+                        row.appendChild(dtype);
+                        devicesBody.appendChild(row);
+                    });
+                }
+            } catch (e) {
+                devicesBody.textContent = '';
+                const empty = document.createElement('div');
+                empty.className = 'live-empty';
+                empty.textContent = 'No devices registered';
+                devicesBody.appendChild(empty);
+            }
+        }
+
+        function getDeviceStatusClass(lastSeen) {
+            if (!lastSeen) return 'offline';
+            const diff = Date.now() - new Date(lastSeen).getTime();
+            if (diff < 3600000) return 'online';
+            if (diff < 86400000) return 'stale';
+            return 'offline';
+        }
+
+        // ==================== DEVICE MANAGEMENT FUNCTIONS ====================
+
+        var _currentDeviceId = null;
+
+        function openDeviceDetailModal(deviceId, deviceData) {
+            _currentDeviceId = deviceId;
+            const modal = document.getElementById('device-detail-modal');
+            document.getElementById('device-detail-title').textContent = deviceData.friendly_name || deviceData.device_name || deviceId;
+            document.getElementById('device-detail-subtitle').textContent = (deviceData.device_type || 'unknown').replace(/_/g, ' ') + ' — ' + (deviceData.hostname || deviceId);
+
+            const statusCls = getDeviceStatusClass(deviceData.last_seen);
+            const badge = document.getElementById('device-detail-badge');
+            badge.className = 'device-status-badge ' + statusCls;
+            badge.textContent = statusCls.charAt(0).toUpperCase() + statusCls.slice(1);
+
+            document.getElementById('device-ping-results').style.display = 'none';
+            document.getElementById('device-ping-results').textContent = '';
+
+            const infoGrid = document.getElementById('device-info-grid');
+            infoGrid.textContent = '';
+            var infoRows = [
+                ['Hostname', deviceData.hostname || deviceId],
+                ['OS', deviceData.os || '—'],
+                ['Architecture', deviceData.architecture || '—'],
+                ['Registered', deviceData.registered_at ? new Date(deviceData.registered_at).toLocaleDateString() : '—'],
+                ['Last Seen', deviceData.last_seen ? getTimeAgo(deviceData.last_seen) : 'Never'],
+                ['Conversations', (deviceData.conversation_count || 0).toString()],
+            ];
+            infoRows.forEach(function(r) {
+                var row = document.createElement('div');
+                row.className = 'device-info-row';
+                var lbl = document.createElement('span');
+                lbl.className = 'device-info-label';
+                lbl.textContent = r[0];
+                row.appendChild(lbl);
+                var val = document.createElement('span');
+                val.className = 'device-info-value';
+                val.textContent = r[1];
+                row.appendChild(val);
+                infoGrid.appendChild(row);
+            });
+
+            document.getElementById('device-edit-name').value = deviceData.friendly_name || '';
+            document.getElementById('device-edit-desc').value = deviceData.description || '';
+
+            var ssh = deviceData.ssh_config || {};
+            document.getElementById('device-ssh-host').value = ssh.host || '';
+            document.getElementById('device-ssh-port').value = ssh.port || 22;
+            document.getElementById('device-ssh-user').value = ssh.username || '';
+            document.getElementById('device-ssh-key').value = ssh.key_path || '';
+
+            modal.classList.add('active');
+            loadDeviceActivity(deviceId);
+        }
+
+        function closeDeviceModal() {
+            document.getElementById('device-detail-modal').classList.remove('active');
+            _currentDeviceId = null;
+        }
+
+        async function saveDeviceChanges() {
+            if (!_currentDeviceId) return;
+            var payload = {
+                friendly_name: document.getElementById('device-edit-name').value,
+                description: document.getElementById('device-edit-desc').value,
+                ssh_config: {
+                    host: document.getElementById('device-ssh-host').value,
+                    port: parseInt(document.getElementById('device-ssh-port').value) || 22,
+                    username: document.getElementById('device-ssh-user').value,
+                    key_path: document.getElementById('device-ssh-key').value,
+                }
+            };
+            try {
+                const resp = await fetch(API_URL + '/api/devices/' + _currentDeviceId, {
+                    method: 'PATCH',
+                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (resp.ok) {
+                    showToast('Device updated', 'success');
+                    closeDeviceModal();
+                    loadLiveActivity();
+                } else {
+                    const err = await resp.json();
+                    showToast('Error: ' + (err.detail || 'Unknown'), 'error');
+                }
+            } catch (e) {
+                showToast('Failed to save: ' + e.message, 'error');
+            }
+        }
+
+        async function testDeviceConnection() {
+            if (!_currentDeviceId) return;
+            var btn = document.getElementById('device-test-btn');
+            var resultsDiv = document.getElementById('device-ping-results');
+            btn.classList.add('loading');
+            btn.textContent = 'Testing...';
+            resultsDiv.style.display = 'block';
+            resultsDiv.textContent = 'Running connection tests...';
+            try {
+                const resp = await fetch(API_URL + '/api/devices/' + _currentDeviceId + '/ping', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await resp.json();
+                resultsDiv.textContent = '';
+                var pingRow = document.createElement('div');
+                pingRow.className = 'ping-result-row';
+                var pingDot = document.createElement('span');
+                pingDot.className = 'ping-result-dot ' + (data.ping && data.ping.reachable ? 'pass' : 'fail');
+                pingRow.appendChild(pingDot);
+                var pingTxt = document.createElement('span');
+                pingTxt.textContent = 'ICMP Ping: ' + (data.ping && data.ping.reachable ? 'Reachable' : 'Unreachable');
+                pingRow.appendChild(pingTxt);
+                resultsDiv.appendChild(pingRow);
+                if (data.ssh_port) {
+                    var sshRow = document.createElement('div');
+                    sshRow.className = 'ping-result-row';
+                    var sshDot = document.createElement('span');
+                    sshDot.className = 'ping-result-dot ' + (data.ssh_port.open ? 'pass' : 'fail');
+                    sshRow.appendChild(sshDot);
+                    var sshTxt = document.createElement('span');
+                    sshTxt.textContent = 'SSH Port ' + data.ssh_port.port + ': ' + (data.ssh_port.open ? 'Open' : 'Closed');
+                    sshRow.appendChild(sshTxt);
+                    resultsDiv.appendChild(sshRow);
+                }
+                if (data.ssh_auth) {
+                    var authRow = document.createElement('div');
+                    authRow.className = 'ping-result-row';
+                    var authDot = document.createElement('span');
+                    authDot.className = 'ping-result-dot ' + (data.ssh_auth.success ? 'pass' : 'fail');
+                    authRow.appendChild(authDot);
+                    var authTxt = document.createElement('span');
+                    authTxt.textContent = 'SSH Auth: ' + (data.ssh_auth.success ? 'Success' : 'Failed');
+                    authRow.appendChild(authTxt);
+                    resultsDiv.appendChild(authRow);
+                }
+                // Show hint if pinging by hostname instead of IP
+                if (data.hint) {
+                    var hintRow = document.createElement('div');
+                    hintRow.className = 'ping-result-row';
+                    hintRow.style.cssText = 'color:var(--yellow); font-size:0.72rem; margin-top:4px; opacity:0.85;';
+                    hintRow.textContent = '\u26A0 ' + data.hint;
+                    resultsDiv.appendChild(hintRow);
+                }
+            } catch (e) {
+                resultsDiv.textContent = 'Connection test failed: ' + e.message;
+            }
+            btn.classList.remove('loading');
+            btn.textContent = 'Test Connection';
+        }
+
+        async function loadDeviceActivity(deviceId) {
+            var container = document.getElementById('device-activity-list');
+            container.textContent = '';
+            var loading = document.createElement('div');
+            loading.className = 'live-empty';
+            loading.textContent = 'Loading activity...';
+            container.appendChild(loading);
+            try {
+                const resp = await fetch(API_URL + '/api/devices/' + deviceId + '/activity?limit=5', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await resp.json();
+                container.textContent = '';
+                if (!data.conversations || data.conversations.length === 0) {
+                    var empty = document.createElement('div');
+                    empty.className = 'live-empty';
+                    empty.textContent = 'No conversations from this device';
+                    container.appendChild(empty);
+                } else {
+                    data.conversations.forEach(function(c) {
+                        var item = document.createElement('div');
+                        item.className = 'device-activity-item';
+                        var summary = document.createElement('div');
+                        summary.style.color = 'var(--text-primary)';
+                        summary.textContent = c.summary || c.id;
+                        item.appendChild(summary);
+                        var ts = document.createElement('div');
+                        ts.style.cssText = 'font-size:0.7rem; color:var(--text-muted); margin-top:2px;';
+                        ts.textContent = c.timestamp ? getTimeAgo(c.timestamp) : '';
+                        item.appendChild(ts);
+                        container.appendChild(item);
+                    });
+                }
+            } catch (e) {
+                container.textContent = '';
+                var err = document.createElement('div');
+                err.className = 'live-empty';
+                err.textContent = 'Failed to load activity';
+                container.appendChild(err);
+            }
+        }
+
+        function openAddDeviceModal() {
+            document.getElementById('add-device-hostname').value = '';
+            document.getElementById('add-device-name').value = '';
+            document.getElementById('add-device-type').value = 'unknown';
+            document.getElementById('add-device-desc').value = '';
+            document.getElementById('add-device-ssh-host').value = '';
+            document.getElementById('add-device-ssh-port').value = '22';
+            document.getElementById('add-device-ssh-user').value = '';
+            document.getElementById('add-device-ssh-key').value = '';
+            document.getElementById('add-device-modal').classList.add('active');
+        }
+
+        function closeAddDeviceModal() {
+            document.getElementById('add-device-modal').classList.remove('active');
+        }
+
+        async function submitAddDevice() {
+            var hostname = document.getElementById('add-device-hostname').value.trim();
+            if (!hostname) { showToast('Hostname is required', 'warning'); return; }
+            var payload = {
+                hostname: hostname,
+                device_name: document.getElementById('add-device-name').value.trim() || hostname,
+                friendly_name: document.getElementById('add-device-name').value.trim() || hostname,
+                device_type: document.getElementById('add-device-type').value,
+                description: document.getElementById('add-device-desc').value.trim(),
+            };
+            var sshHost = document.getElementById('add-device-ssh-host').value.trim();
+            if (sshHost) {
+                payload.ssh_config = {
+                    host: sshHost,
+                    port: parseInt(document.getElementById('add-device-ssh-port').value) || 22,
+                    username: document.getElementById('add-device-ssh-user').value.trim(),
+                    key_path: document.getElementById('add-device-ssh-key').value.trim(),
+                };
+            }
+            try {
+                const resp = await fetch(API_URL + '/api/devices', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (resp.ok) {
+                    showToast('Device added', 'success');
+                    closeAddDeviceModal();
+                    loadLiveActivity();
+                } else {
+                    const err = await resp.json();
+                    showToast('Error: ' + (err.detail || 'Unknown'), 'error');
+                }
+            } catch (e) {
+                showToast('Failed to add device: ' + e.message, 'error');
             }
         }
 
@@ -26292,32 +26285,7 @@
 
         // ==================== SYSTEM STATUS ====================
         async function loadSystemStatus() {
-            try {
-                const response = await fetch(`${API_URL}/system-status`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (!response.ok) return;
-
-                const data = await response.json();
-                const grid = document.getElementById('system-status-grid');
-
-                let html = '';
-                for (const [key, service] of Object.entries(data.services || {})) {
-                    const statusClass = service.status === 'online' ? 'online' : service.status === 'offline' ? 'offline' : 'unknown';
-                    html += `
-                        <div class="status-item">
-                            <span class="status-dot ${statusClass}"></span>
-                            <span class="status-name">${service.name}</span>
-                        </div>
-                    `;
-                }
-
-                grid.innerHTML = html || '<div class="status-item"><span class="status-dot unknown"></span><span class="status-name">No services</span></div>';
-
-            } catch (e) {
-                console.error('System status error:', e);
-            }
+            // No-op: health is now loaded via loadLiveActivity -> /api/memory/health
         }
 
         // ==================== RECENT AGENTS ====================
@@ -29082,7 +29050,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         model: 'kokoro',
-                        input: 'Hello Professor, I am Cerebro. How can I help you today?',
+                        input: 'Hello, I am Cerebro. How can I help you today?',
                         voice: voice,
                         response_format: 'wav',
                         speed: TTS_CONFIG.speed
@@ -29113,7 +29081,7 @@
 
         async function testCurrentVoice() {
             const greetings = [
-                'Systems online. All modules nominal, Professor.',
+                'Systems online. All modules nominal.',
                 'Cerebro standing by. What would you like me to work on?',
                 'I have analyzed the data. Ready to present findings.',
                 'Running diagnostics. Everything checks out.'
@@ -42742,18 +42710,6 @@ Please proceed with implementing this recommendation. You have full permissions.
             const presenceGreeting = document.getElementById('presence-greeting');
             if (presenceGreeting && presenceGreeting.textContent === 'Hey') {
                 presenceGreeting.textContent = `Hey ${CEREBRO_USERNAME}`;
-            }
-
-            // Check if first-time setup is needed
-            try {
-                const setupRes = await fetch(API_URL + '/api/setup/status');
-                const setupData = await setupRes.json();
-                if (!setupData.setup_complete) {
-                    showOnboarding();
-                    return;
-                }
-            } catch(e) {
-                console.log('Setup status check failed, continuing to login:', e);
             }
 
             if (token) {

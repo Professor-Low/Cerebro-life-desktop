@@ -23,13 +23,17 @@ services:
       CEREBRO_HOST: "0.0.0.0"
       CEREBRO_PORT: "59000"
       CEREBRO_STANDALONE: "1"
+      CEREBRO_DEVICE: "${CEREBRO_DEVICE:-standalone}"
       CEREBRO_NAS_IP: ""
-      CEREBRO_MCP_SRC: ""
+      CEREBRO_MCP_SRC: "/app/mcp_modules"
       CEREBRO_SECRET: "${CEREBRO_SECRET}"
+      HOME: /home/cerebro
+    tmpfs:
+      - /home/cerebro:uid=1000,gid=1000
     volumes:
       - cerebro-data:/data/memory
       - "${CLAUDE_CLI_PATH:-/usr/local/bin/claude}:/usr/local/bin/claude:ro"
-      - "${CLAUDE_CONFIG_PATH:-~/.claude}:/root/.claude:ro"
+      - "${CEREBRO_DIR:-~/.cerebro}/claude-config:/home/cerebro/.claude"
     depends_on:
       redis:
         condition: service_healthy
@@ -40,16 +44,6 @@ services:
       timeout: 5s
       start_period: 15s
       retries: 3
-
-  memory:
-    image: ghcr.io/professor-low/cerebro-memory:latest
-    volumes:
-      - cerebro-data:/data/memory
-    environment:
-      AI_MEMORY_PATH: /data/memory
-      CEREBRO_STANDALONE: "1"
-      CEREBRO_NAS_IP: ""
-    restart: unless-stopped
 
 volumes:
   cerebro-redis:

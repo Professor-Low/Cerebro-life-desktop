@@ -12,7 +12,6 @@ const COMPOSE_FILE = path.join(CEREBRO_DIR, 'docker-compose.yml');
 const ENV_FILE = path.join(CEREBRO_DIR, '.env');
 const SETUP_STATE_FILE = path.join(CEREBRO_DIR, '.setup-state.json');
 const BACKEND_IMAGE = 'ghcr.io/professor-low/cerebro-backend';
-const MEMORY_IMAGE = 'ghcr.io/professor-low/cerebro-memory';
 
 class DockerManager extends EventEmitter {
   constructor() {
@@ -237,7 +236,7 @@ class DockerManager extends EventEmitter {
       console.log('[Docker] Claude config dir not found, removing bind mount from compose file');
       content = content.split('\n').filter(line => {
         const trimmed = line.trim();
-        return !trimmed.includes('CLAUDE_CONFIG_PATH') && !trimmed.includes('.claude:ro');
+        return !trimmed.includes('claude-config:/home/cerebro/.claude');
       }).join('\n');
     }
 
@@ -264,6 +263,10 @@ class DockerManager extends EventEmitter {
 
     const claudeConfigPath = path.join(os.homedir(), '.claude');
     existingEnv.CLAUDE_CONFIG_PATH = claudeConfigPath;
+    existingEnv.CEREBRO_DIR = CEREBRO_DIR;
+
+    // Create a clean Claude config for the container (no hooks from host)
+    this._createClaudeConfig(claudeConfigPath);
 
     const envContent = Object.entries(existingEnv)
       .map(([k, v]) => `${k}=${v}`)
@@ -271,6 +274,71 @@ class DockerManager extends EventEmitter {
 
     fs.writeFileSync(ENV_FILE, envContent);
     console.log(`[Docker] Wrote .env to ${ENV_FILE}`);
+  }
+
+  /**
+   * Create a clean copy of Claude config for the Docker container.
+   * Strips hooks (they reference host paths) and copies credentials.
+   */
+  _createClaudeConfig(sourceConfigDir) {
+    const destDir = path.join(CEREBRO_DIR, 'claude-config');
+    try {
+      fs.mkdirSync(destDir, { recursive: true });
+
+      // Copy credentials if they exist
+      const credSrc = path.join(sourceConfigDir, '.credentials.json');
+      if (fs.existsSync(credSrc)) {
+        fs.copyFileSync(credSrc, path.join(destDir, '.credentials.json'));
+      }
+
+      // Copy settings without hooks or host-specific config
+      const settingsSrc = path.join(sourceConfigDir, 'settings.json');
+      if (fs.existsSync(settingsSrc)) {
+        const settings = JSON.parse(fs.readFileSync(settingsSrc, 'utf-8'));
+        delete settings.hooks;
+        delete settings.mcpServers;  // MCP server configs reference host paths
+        fs.writeFileSync(
+          path.join(destDir, 'settings.json'),
+          JSON.stringify(settings, null, 2)
+        );
+      }
+
+      // Create empty subdirs needed by Claude CLI
+      for (const sub of ['cache', 'debug', 'plugins', 'projects', 'todos', 'downloads']) {
+        fs.mkdirSync(path.join(destDir, sub), { recursive: true });
+      }
+
+      // Remove host-specific files that should never leak into standalone containers
+      const junkFiles = [
+        'CLAUDE.md', 'mcp.json', 'statusline.sh', 'history.jsonl',
+      ];
+      for (const f of junkFiles) {
+        const fp = path.join(destDir, f);
+        if (fs.existsSync(fp)) {
+          fs.unlinkSync(fp);
+          console.log(`[Docker] Removed leaked host file: ${f}`);
+        }
+      }
+      const junkDirs = ['hooks', 'session-env'];
+      for (const d of junkDirs) {
+        const dp = path.join(destDir, d);
+        if (fs.existsSync(dp)) {
+          fs.rmSync(dp, { recursive: true, force: true });
+          console.log(`[Docker] Removed leaked host dir: ${d}`);
+        }
+      }
+
+      // Write standalone CLAUDE.md for agent instructions inside container
+      const standaloneMdSrc = path.join(__dirname, '..', 'docker', 'standalone-claude.md');
+      if (fs.existsSync(standaloneMdSrc)) {
+        fs.copyFileSync(standaloneMdSrc, path.join(destDir, 'CLAUDE.md'));
+        console.log(`[Docker] Injected standalone CLAUDE.md for agents`);
+      }
+
+      console.log(`[Docker] Created clean Claude config at ${destDir}`);
+    } catch (err) {
+      console.warn(`[Docker] Failed to create Claude config: ${err.message}`);
+    }
   }
 
   /**
@@ -1023,13 +1091,17 @@ class DockerManager extends EventEmitter {
       CEREBRO_HOST: "0.0.0.0"
       CEREBRO_PORT: "59000"
       CEREBRO_STANDALONE: "1"
+      CEREBRO_DEVICE: "\${CEREBRO_DEVICE:-standalone}"
       CEREBRO_NAS_IP: ""
-      CEREBRO_MCP_SRC: ""
+      CEREBRO_MCP_SRC: "/app/mcp_modules"
       CEREBRO_SECRET: "\${CEREBRO_SECRET}"
+      HOME: /home/cerebro
+    tmpfs:
+      - /home/cerebro:uid=1000,gid=1000
     volumes:
       - cerebro-data:/data/memory
       - "\${CLAUDE_CLI_PATH:-/usr/local/bin/claude}:/usr/local/bin/claude:ro"
-      - "\${CLAUDE_CONFIG_PATH:-~/.claude}:/root/.claude:ro"
+      - "\${CEREBRO_DIR:-~/.cerebro}/claude-config:/home/cerebro/.claude"
     depends_on:
       redis:
         condition: service_healthy
@@ -1040,16 +1112,6 @@ class DockerManager extends EventEmitter {
       timeout: 5s
       start_period: 15s
       retries: 3
-
-  memory:
-    image: ghcr.io/professor-low/cerebro-memory:latest
-    volumes:
-      - cerebro-data:/data/memory
-    environment:
-      AI_MEMORY_PATH: /data/memory
-      CEREBRO_STANDALONE: "1"
-      CEREBRO_NAS_IP: ""
-    restart: unless-stopped
 
 volumes:
   cerebro-redis:

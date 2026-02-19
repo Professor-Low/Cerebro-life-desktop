@@ -39,7 +39,6 @@ from pydantic import BaseModel
 import socketio
 import redis.asyncio as aioredis
 import jwt
-import bcrypt
 
 # Cognitive Loop imports
 try:
@@ -474,10 +473,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Frontend path (parent.parent works on ASUS layout, parent fallback for Docker flat layout)
-FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
-if not FRONTEND_DIR.exists():
-    FRONTEND_DIR = Path(__file__).parent / "frontend"
+# Frontend path — check both Docker layout (/app/frontend/) and dev layout (../frontend/)
+_app_frontend = Path(__file__).parent / "frontend"
+_dev_frontend = Path(__file__).parent.parent / "frontend"
+FRONTEND_DIR = _app_frontend if _app_frontend.exists() else _dev_frontend
 
 # Serve static files (socket.io, etc.) from frontend/static/
 STATIC_DIR = FRONTEND_DIR / "static"
@@ -814,9 +813,31 @@ used_call_signs: set = set()
 # Platform Detection — agents get OS-appropriate instructions
 # ============================================================================
 _IS_LINUX = sys.platform == "linux"
+_IS_STANDALONE = os.environ.get("CEREBRO_STANDALONE", "") == "1"
 
 _PLATFORM_CONTEXT = (
 """
+## ENVIRONMENT & CAPABILITIES
+You are running inside a Cerebro standalone Docker container with bash access.
+You have --dangerously-skip-permissions enabled.
+
+### Your Environment
+- Linux container with standard tools (bash, curl, python3)
+- AI Memory stored locally at /data/memory
+- Use `hostname`, `uname -a`, `ip addr` to discover the system
+
+### Cerebro HTTP API (localhost:59000)
+- Browser control: GET /api/browser/page_state, POST /api/browser/click, /fill, /scroll, /press_key
+- Screenshots: GET /api/browser/screenshot/file
+- Ask user: POST /api/agent/ask (blocks until user responds, 5min timeout)
+- Spawn child agent: POST /internal/spawn-child-agent
+
+### Rules
+- Do NOT assume external servers, NAS, or SSH targets exist
+- Always verify actions worked (check exit codes, read output)
+- Use the Ask User endpoint when you need user input
+- Be concise in your responses
+""" if _IS_STANDALONE else """
 ## ENVIRONMENT & CAPABILITIES
 You are running on the Cerebro Server (ASUS GX10, Ubuntu 24.04, ARM64) with FULL SYSTEM ACCESS.
 You are the orchestrator of Professor's entire network. You have --dangerously-skip-permissions enabled.
@@ -1814,7 +1835,8 @@ async def run_agent(
     full_prompt_parts = [role_prompt]
 
     # Inject Cerebro capabilities context so agents know what tools are available
-    full_prompt_parts.append("""
+    if not _IS_STANDALONE:
+        full_prompt_parts.append("""
 ---
 
 ## Cerebro Capabilities (HTTP API at localhost:59000)
@@ -1875,6 +1897,29 @@ ssh darkhorse 'command here'
 
 IMPORTANT: When tasks mention "desktop", "main PC", "Notepad", or "main monitor" — use `ssh pc` to create files and open them.
 When tasks mention "Spark" or "DGX" — use `ssh spark`. When tasks mention "darkhorse" or "Pi" — use `ssh darkhorse`.
+""")
+    else:
+        full_prompt_parts.append("""
+---
+
+## Cerebro Capabilities (HTTP API at localhost:59000)
+
+### Browser Control (shared Chrome)
+- **Page state:** `curl -s http://localhost:59000/api/browser/page_state`
+- **Navigate:** `curl -s -X POST http://localhost:59000/api/browser/agent/navigate -H "Content-Type: application/json" -d '{"url":"https://..."}'`
+- **Click:** `curl -s -X POST http://localhost:59000/api/browser/click -H "Content-Type: application/json" -d '{"element_index":5}'`
+- **Fill:** `curl -s -X POST http://localhost:59000/api/browser/fill -H "Content-Type: application/json" -d '{"element_index":3,"value":"text"}'`
+- **Scroll:** `curl -s -X POST http://localhost:59000/api/browser/scroll -H "Content-Type: application/json" -d '{"direction":"down","amount":500}'`
+- **Screenshot:** `curl -s http://localhost:59000/api/browser/screenshot/file`
+
+### Ask User (blocks until response, 5min timeout)
+- `curl -s -X POST http://localhost:59000/api/agent/ask -H "Content-Type: application/json" -d '{"question":"Should I proceed?","options":["Yes","No"],"agent_id":"AGENT_ID"}'`
+
+### Spawn Child Agent
+- `curl -s -X POST http://localhost:59000/internal/spawn-child-agent -H "Content-Type: application/json" -d '{"task":"...","type":"worker"}'`
+
+You are running inside a Docker container. Do NOT assume external servers, NAS, or SSH targets exist.
+Use `hostname`, `uname -a`, `ip addr` to discover this system.
 """)
 
     full_prompt_parts.append("\n---\n\n## Task Details\n")
@@ -1999,6 +2044,9 @@ When tasks mention "Spark" or "DGX" — use `ssh spark`. When tasks mention "dar
         agent_env.pop("CLAUDECODE", None)
         # Signal hooks to exit immediately (avoids brain_maintenance, wake-nas, etc.)
         agent_env["CEREBRO_AGENT"] = "1"
+        # Standalone: ensure HOME points to cerebro user dir where credentials live
+        if _IS_STANDALONE:
+            agent_env["HOME"] = "/home/cerebro"
 
         process = sp.Popen(
             cmd_args,
@@ -2403,15 +2451,6 @@ class TaskRequest(BaseModel):
     background: bool = False
 
 class LoginRequest(BaseModel):
-    password: str
-
-class SetupRequest(BaseModel):
-    name: str
-    display_name: str
-    use_cases: list[str]
-    communication_style: str
-    verbosity: str
-    emoji_preference: bool
     password: str
 
 class BriefingResponse(BaseModel):
@@ -3543,72 +3582,17 @@ You: [call delegate_to_claude with task="Run: Start-Process spotify"]
 async def root():
     return {"name": "Cerebro", "status": "online", "version": "1.0.0"}
 
-# ============================================================================
-# First-Time Setup (Onboarding)
-# ============================================================================
-
-@app.get("/api/setup/status")
-async def setup_status():
-    """Check if first-time setup has been completed."""
-    is_complete = await redis.get("cerebro:setup_complete")
-    # Backward compat: if CEREBRO_PASSWORD env is set, treat as already configured
-    if not is_complete and os.environ.get("CEREBRO_PASSWORD"):
-        is_complete = True
-    return {"setup_complete": bool(is_complete)}
-
-@app.post("/api/setup/complete")
-async def complete_setup(req: SetupRequest):
-    """Complete first-time onboarding. One-time use only."""
-    if await redis.get("cerebro:setup_complete"):
-        raise HTTPException(status_code=403, detail="Setup already completed")
-
-    # Hash and store password
-    pw_hash = bcrypt.hashpw(req.password.encode(), bcrypt.gensalt())
-    await redis.set("cerebro:password_hash", pw_hash.decode())
-
-    # Store user profile in Redis
-    profile = {
-        "name": req.name,
-        "display_name": req.display_name,
-        "use_cases": json.dumps(req.use_cases),
-        "communication_style": req.communication_style,
-        "verbosity": req.verbosity,
-        "emoji_preference": str(req.emoji_preference),
-        "setup_completed_at": datetime.now(timezone.utc).isoformat()
-    }
-    await redis.hset("cerebro:user_profile", mapping=profile)
-
-    # Write JSON backup to data volume
-    profile_path = Path(config.AI_MEMORY_PATH) / "user_profile.json"
-    profile_json = {**profile, "use_cases": req.use_cases, "emoji_preference": req.emoji_preference}
-    profile_path.write_text(json.dumps(profile_json, indent=2))
-
-    # Mark setup complete
-    await redis.set("cerebro:setup_complete", "1")
-
-    # Auto-login: return JWT
-    token = create_token(req.display_name)
-    return {"token": token, "user": req.display_name}
-
-# ============================================================================
-# Auth
-# ============================================================================
-
 @app.post("/auth/login")
 async def login(request: LoginRequest):
-    """Password login - checks Redis hash first, env var fallback."""
-    stored_hash = await redis.get("cerebro:password_hash")
-    if stored_hash:
-        if not bcrypt.checkpw(request.password.encode(), stored_hash.encode()):
-            raise HTTPException(status_code=401, detail="Invalid password")
-    else:
-        stored_password = os.environ.get("CEREBRO_PASSWORD", "professor")
-        if request.password != stored_password:
-            raise HTTPException(status_code=401, detail="Invalid password")
+    """Simple password login - returns JWT."""
+    # In production, use proper password hashing
+    stored_password = os.environ.get("CEREBRO_PASSWORD", "professor")
 
-    display_name = await redis.hget("cerebro:user_profile", "display_name") or "professor"
-    token = create_token(display_name)
-    return {"token": token, "user": display_name}
+    if request.password != stored_password:
+        raise HTTPException(status_code=401, detail="Invalid password")
+
+    token = create_token("professor")
+    return {"token": token, "user": "professor"}
 
 @app.get("/briefing", response_model=BriefingResponse)
 async def get_briefing(user: str = Depends(verify_token)):
@@ -4898,6 +4882,9 @@ async def run_agent_continuation(agent_id: str, call_sign: str, task: str, agent
         agent_env.pop("CLAUDECODE", None)
         # Signal hooks to exit immediately (avoids brain_maintenance, wake-nas, etc.)
         agent_env["CEREBRO_AGENT"] = "1"
+        # Standalone: ensure HOME points to cerebro user dir where credentials live
+        if _IS_STANDALONE:
+            agent_env["HOME"] = "/home/cerebro"
 
         # Resolve model for continuation (inherit from agent_data or default to sonnet)
         cont_model = agent_data.get("model", "sonnet")
@@ -11652,6 +11639,327 @@ async def serve_uploaded_image(upload_id: str):
             return FileResponse(str(f), media_type=media_types.get(ext, "image/jpeg"))
 
     raise HTTPException(status_code=404, detail="Upload not found")
+
+
+# ============================================================================
+# Memory Health & Device Management
+# ============================================================================
+
+DEVICE_REGISTRY_PATH = Path(config.AI_MEMORY_PATH) / "devices" / "device_registry.json"
+
+
+def _load_device_registry() -> dict:
+    """Load device registry from JSON file."""
+    if DEVICE_REGISTRY_PATH.exists():
+        try:
+            with open(DEVICE_REGISTRY_PATH, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"devices": {}, "created_at": datetime.now(timezone.utc).isoformat(), "last_updated": datetime.now(timezone.utc).isoformat()}
+
+
+def _save_device_registry(registry: dict):
+    """Save device registry to JSON file."""
+    registry["last_updated"] = datetime.now(timezone.utc).isoformat()
+    DEVICE_REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(DEVICE_REGISTRY_PATH, 'w', encoding='utf-8') as f:
+        json.dump(registry, f, indent=2, ensure_ascii=False)
+
+
+@app.get("/api/memory/health")
+async def get_memory_health(full: bool = False, user: str = Depends(verify_token)):
+    """Get dynamic memory health status using FastHealthChecker."""
+    try:
+        _health_src = os.path.join(os.path.dirname(__file__), '..', 'memory', 'src')
+        if _health_src not in sys.path:
+            sys.path.insert(0, _health_src)
+        from health_checker import FastHealthChecker, HealthChecker
+
+        if full:
+            checker = HealthChecker(config.AI_MEMORY_PATH)
+            report = checker.check_all()
+        else:
+            checker = FastHealthChecker(config.AI_MEMORY_PATH)
+            report = checker.check_all()
+
+        # Map statuses for frontend
+        components = {}
+        friendly_names = {
+            'nas': 'NAS Storage',
+            'local_brain': 'Local Brain',
+            'local_cache': 'Local Cache',
+            'embeddings': 'Embeddings',
+            'indexes': 'Vector Index',
+            'database': 'Database',
+            'mcp_components': 'MCP Components'
+        }
+        for name, check in report.get('checks', {}).items():
+            raw_status = check.get('status', 'unknown')
+            if raw_status == 'healthy':
+                mapped = 'online'
+            elif raw_status in ('down', 'error'):
+                mapped = 'offline'
+            else:
+                mapped = 'unknown'
+
+            components[name] = {
+                'name': friendly_names.get(name, name.replace('_', ' ').title()),
+                'status': mapped,
+                'raw_status': raw_status,
+                'details': {k: v for k, v in check.items() if k != 'status'}
+            }
+
+        return {
+            'overall': report.get('overall', 'unknown'),
+            'timestamp': report.get('timestamp'),
+            'check_type': report.get('check_type', 'full'),
+            'check_time_ms': report.get('check_time_ms'),
+            'components': components
+        }
+    except ImportError:
+        # Fallback: basic checks without FastHealthChecker module
+        components = {}
+        try:
+            nas_path = Path(config.AI_MEMORY_PATH)
+            if nas_path.exists():
+                components['storage'] = {'name': 'Storage', 'status': 'online', 'raw_status': 'healthy'}
+            else:
+                components['storage'] = {'name': 'Storage', 'status': 'offline', 'raw_status': 'down'}
+        except Exception:
+            components['storage'] = {'name': 'Storage', 'status': 'offline', 'raw_status': 'error'}
+
+        try:
+            if redis:
+                await redis.ping()
+                components['cache'] = {'name': 'Local Cache', 'status': 'online', 'raw_status': 'healthy'}
+            else:
+                components['cache'] = {'name': 'Local Cache', 'status': 'offline', 'raw_status': 'down'}
+        except Exception:
+            components['cache'] = {'name': 'Local Cache', 'status': 'offline', 'raw_status': 'error'}
+
+        overall = 'healthy' if all(c['status'] == 'online' for c in components.values()) else 'degraded'
+        return {
+            'overall': overall,
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+            'check_type': 'fallback',
+            'components': components
+        }
+    except Exception as e:
+        return {
+            'overall': 'unknown',
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+            'check_type': 'error',
+            'error': str(e),
+            'components': {}
+        }
+
+
+@app.get("/api/devices")
+async def list_devices(user: str = Depends(verify_token)):
+    """List all registered compute devices."""
+    registry = _load_device_registry()
+    devices = []
+    for hostname, info in registry.get("devices", {}).items():
+        devices.append({"id": hostname, **info})
+    return {"devices": devices, "count": len(devices)}
+
+
+@app.post("/api/devices")
+async def register_device(request: Request, user: str = Depends(verify_token)):
+    """Register a new compute device."""
+    body = await request.json()
+    hostname = body.get("hostname")
+    if not hostname:
+        raise HTTPException(status_code=400, detail="hostname is required")
+
+    registry = _load_device_registry()
+    if hostname in registry.get("devices", {}):
+        raise HTTPException(status_code=409, detail=f"Device '{hostname}' already registered")
+
+    device_record = {
+        "hostname": hostname,
+        "device_type": body.get("device_type", "unknown"),
+        "device_name": body.get("device_name", hostname),
+        "friendly_name": body.get("friendly_name", body.get("device_name", hostname)),
+        "description": body.get("description", ""),
+        "os": body.get("os", ""),
+        "architecture": body.get("architecture", ""),
+        "registered_at": datetime.now(timezone.utc).isoformat(),
+        "last_seen": datetime.now(timezone.utc).isoformat(),
+        "conversation_count": 0,
+    }
+
+    ssh_config = body.get("ssh_config")
+    if ssh_config:
+        device_record["ssh_config"] = {
+            "host": ssh_config.get("host", hostname),
+            "port": ssh_config.get("port", 22),
+            "username": ssh_config.get("username", ""),
+            "key_path": ssh_config.get("key_path", ""),
+        }
+
+    registry.setdefault("devices", {})[hostname] = device_record
+    _save_device_registry(registry)
+    return {"success": True, "device": {"id": hostname, **device_record}}
+
+
+@app.patch("/api/devices/{device_id}")
+async def update_device(device_id: str, request: Request, user: str = Depends(verify_token)):
+    """Update a device's editable fields."""
+    registry = _load_device_registry()
+    if device_id not in registry.get("devices", {}):
+        raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
+
+    body = await request.json()
+    device = registry["devices"][device_id]
+
+    for field in ("friendly_name", "description", "device_type", "device_name"):
+        if field in body:
+            device[field] = body[field]
+
+    if "ssh_config" in body:
+        existing_ssh = device.get("ssh_config", {})
+        ssh = body["ssh_config"]
+        device["ssh_config"] = {
+            "host": ssh.get("host", existing_ssh.get("host", device_id)),
+            "port": ssh.get("port", existing_ssh.get("port", 22)),
+            "username": ssh.get("username", existing_ssh.get("username", "")),
+            "key_path": ssh.get("key_path", existing_ssh.get("key_path", "")),
+        }
+
+    device["last_seen"] = datetime.now(timezone.utc).isoformat()
+    _save_device_registry(registry)
+    return {"success": True, "device": {"id": device_id, **device}}
+
+
+@app.delete("/api/devices/{device_id}")
+async def delete_device(device_id: str, user: str = Depends(verify_token)):
+    """Remove a device from the registry."""
+    registry = _load_device_registry()
+    if device_id not in registry.get("devices", {}):
+        raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
+
+    del registry["devices"][device_id]
+    _save_device_registry(registry)
+    return {"success": True, "deleted": device_id}
+
+
+@app.post("/api/devices/{device_id}/ping")
+async def ping_device(device_id: str, user: str = Depends(verify_token)):
+    """Test connection to a device: ICMP ping + SSH port check + optional auth test."""
+    import socket as _socket
+
+    registry = _load_device_registry()
+    if device_id not in registry.get("devices", {}):
+        raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
+
+    device = registry["devices"][device_id]
+    ssh_config = device.get("ssh_config", {})
+    ssh_host = ssh_config.get("host", "").strip()
+    host = ssh_host or device.get("hostname", device_id)
+    host_source = "ssh_config" if ssh_host else "hostname"
+    ssh_port = ssh_config.get("port", 22)
+
+    results = {
+        "host": host,
+        "host_source": host_source,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    if host_source == "hostname":
+        results["hint"] = "Set Host/IP in SSH Configuration for accurate testing"
+
+    # ICMP ping
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ping", "-c", "1", "-W", "3", host,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+        results["ping"] = {
+            "reachable": proc.returncode == 0,
+            "output": stdout.decode().strip()[:200] if stdout else ""
+        }
+    except asyncio.TimeoutError:
+        results["ping"] = {"reachable": False, "error": "Ping timed out"}
+    except Exception as e:
+        results["ping"] = {"reachable": False, "error": str(e)}
+
+    # SSH port check
+    try:
+        sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+        sock.settimeout(3)
+        port_result = sock.connect_ex((host, int(ssh_port)))
+        results["ssh_port"] = {"open": port_result == 0, "port": ssh_port}
+        sock.close()
+    except Exception as e:
+        results["ssh_port"] = {"open": False, "port": ssh_port, "error": str(e)}
+
+    # SSH auth test (only if key_path provided and port is open)
+    ssh_username = ssh_config.get("username", "")
+    ssh_key_path = ssh_config.get("key_path", "")
+    if ssh_username and ssh_key_path and results.get("ssh_port", {}).get("open"):
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=3",
+                "-o", "StrictHostKeyChecking=no",
+                "-i", ssh_key_path, "-p", str(ssh_port),
+                ssh_username + "@" + host, "echo", "ok",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=5)
+            results["ssh_auth"] = {
+                "success": proc.returncode == 0,
+                "output": (stdout.decode().strip() if stdout else stderr.decode().strip())[:100]
+            }
+        except asyncio.TimeoutError:
+            results["ssh_auth"] = {"success": False, "error": "SSH auth timed out"}
+        except Exception as e:
+            results["ssh_auth"] = {"success": False, "error": str(e)}
+
+    # Update last_seen on successful ping
+    if results.get("ping", {}).get("reachable"):
+        registry["devices"][device_id]["last_seen"] = datetime.now(timezone.utc).isoformat()
+        _save_device_registry(registry)
+
+    return results
+
+
+@app.get("/api/devices/{device_id}/activity")
+async def get_device_activity(device_id: str, limit: int = 10, user: str = Depends(verify_token)):
+    """Get recent conversations from a specific device."""
+    registry = _load_device_registry()
+    if device_id not in registry.get("devices", {}):
+        raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
+
+    device = registry["devices"][device_id]
+    device_tag = device.get("device_type", "unknown")
+
+    conversations = []
+    try:
+        conv_path = Path(config.AI_MEMORY_PATH) / "conversations"
+        if conv_path.exists():
+            for conv_file in sorted(conv_path.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True)[:100]:
+                try:
+                    with open(conv_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    meta = data.get("metadata", {})
+                    if meta.get("device_tag") == device_tag:
+                        first_msg = data.get("messages", [{}])[0].get("content", "")[:100] if data.get("messages") else ""
+                        conversations.append({
+                            "id": data.get("conversation_id", conv_file.stem),
+                            "summary": first_msg,
+                            "timestamp": meta.get("timestamp", ""),
+                            "device_tag": device_tag
+                        })
+                        if len(conversations) >= limit:
+                            break
+                except Exception:
+                    continue
+    except Exception:
+        pass
+
+    return {"device_id": device_id, "device_tag": device_tag, "conversations": conversations, "count": len(conversations)}
 
 
 # ============================================================================

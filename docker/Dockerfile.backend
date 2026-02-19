@@ -2,9 +2,9 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system dependencies for potential numpy/scipy usage
+# Install system dependencies
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl && \
+    apt-get install -y --no-install-recommends curl gosu && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
@@ -14,13 +14,28 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy backend source
 COPY backend-src/ .
 
+# Copy MCP modules (bundled for standalone - goals, causal, predict, learning)
+COPY backend-src/mcp_modules/ /app/mcp_modules/
+
 # Copy frontend (served as static files by FastAPI)
 COPY frontend/ /app/frontend/
+
+# Copy standalone CLAUDE.md for agent instructions
+COPY docker/standalone-claude.md /app/standalone-claude.md
 
 # Copy and set entrypoint (creates data directories before app starts)
 COPY docker/entrypoint-backend.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# Create non-root user for Claude Code (--dangerously-skip-permissions requires non-root)
+RUN groupadd -r cerebro && useradd -r -g cerebro -m -d /home/cerebro cerebro && \
+    mkdir -p /data/memory && chown -R cerebro:cerebro /data/memory /app
+
+# Set standalone environment defaults
+ENV CEREBRO_STANDALONE=1
+ENV CEREBRO_MCP_SRC=/app/mcp_modules
+
+# Entrypoint runs as root to fix volume permissions, then drops to cerebro user
 EXPOSE 59000
 
 HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \

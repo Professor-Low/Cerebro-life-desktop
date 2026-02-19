@@ -5,6 +5,11 @@ const { DockerManager } = require('./docker-manager');
 const { LicenseManager } = require('./license-manager');
 const { createTray, updateTrayStatus } = require('./tray');
 
+// Disable GPU acceleration on Linux to prevent high CPU usage from particles/animations
+if (process.platform === 'linux') {
+  app.disableHardwareAcceleration();
+}
+
 const isDev = process.env.CEREBRO_DEV === '1';
 const dockerManager = new DockerManager();
 const licenseManager = new LicenseManager();
@@ -462,9 +467,18 @@ ipcMain.handle('configure-mcp', async () => {
     if (!config.mcpServers) config.mcpServers = {};
 
     // Point MCP at the Docker container's memory server
+    // Use 'docker run' instead of 'docker exec' because the memory container
+    // exits after init — it doesn't stay running as a persistent service.
     config.mcpServers['cerebro'] = {
       command: 'docker',
-      args: ['exec', '-i', 'cerebro-memory-1', 'cerebro', 'serve'],
+      args: [
+        'run', '--rm', '-i',
+        '-v', 'cerebro_cerebro-data:/data/memory',
+        '-e', 'AI_MEMORY_PATH=/data/memory',
+        '-e', 'CEREBRO_STANDALONE=1',
+        'ghcr.io/professor-low/cerebro-memory:latest',
+        'cerebro', 'serve',
+      ],
       env: {},
     };
 
