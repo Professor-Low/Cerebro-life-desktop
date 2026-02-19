@@ -327,9 +327,9 @@ class DockerManager extends EventEmitter {
       await this._run(this._dockerCmd(), [
         'compose', '-f', COMPOSE_FILE, '--env-file', ENV_FILE,
         'up', '-d', '--remove-orphans',
-      ], { timeout: 60000 });
+      ], { timeout: 120000 });
 
-      await this._waitForBackend();
+      await this._waitForBackend(240); // 120s timeout
 
       this._running = true;
       this.emit('status', 'running');
@@ -337,6 +337,13 @@ class DockerManager extends EventEmitter {
       return true;
     } catch (err) {
       this.emit('status', 'error');
+      // Append container logs to help diagnose
+      try {
+        const logs = await this.getLogs(30);
+        if (logs && !logs.startsWith('Error')) {
+          err.message += '\n\nContainer logs:\n' + logs;
+        }
+      } catch { /* ignore log fetch errors */ }
       throw err;
     }
   }
@@ -443,13 +450,14 @@ class DockerManager extends EventEmitter {
   /**
    * Wait for the backend to respond on port 59000.
    */
-  _waitForBackend(maxAttempts = 60) {
+  _waitForBackend(maxAttempts = 240) {
+    const timeoutSec = Math.round(maxAttempts * 0.5);
     return new Promise((resolve, reject) => {
       let attempts = 0;
 
       const check = () => {
         if (attempts >= maxAttempts) {
-          reject(new Error('Backend health check timed out after 30s'));
+          reject(new Error(`Backend health check timed out after ${timeoutSec}s`));
           return;
         }
         attempts++;

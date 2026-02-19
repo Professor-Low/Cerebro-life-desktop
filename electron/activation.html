@@ -972,7 +972,7 @@
       var btn = document.getElementById('launch-btn');
       btn.disabled = true;
       btn.textContent = 'Starting Cerebro...';
-      showStatus('launch-status', 'Starting containers and loading frontend...', 'loading');
+      showStatus('launch-status', 'Starting containers (this may take up to 2 minutes)...', 'loading');
 
       window.cerebroDesktop.wizardComplete().then(function(result) {
         if (result && result.success) {
@@ -980,12 +980,17 @@
           // The main process will navigate the window to the frontend
         } else {
           btn.disabled = false;
-          btn.textContent = 'Launch Cerebro';
-          showStatus('launch-status', result && result.error ? result.error : 'Failed to start. Please try again.', 'error');
+          btn.textContent = 'Retry Launch';
+          var errMsg = result && result.error ? result.error : 'Failed to start. Please try again.';
+          // Truncate long error messages (container logs) for display
+          if (errMsg.length > 200) {
+            errMsg = errMsg.substring(0, 200) + '...';
+          }
+          showStatus('launch-status', errMsg, 'error');
         }
       }).catch(function(err) {
         btn.disabled = false;
-        btn.textContent = 'Launch Cerebro';
+        btn.textContent = 'Retry Launch';
         showStatus('launch-status', err.message || 'Failed to start. Please try again.', 'error');
       });
     }
