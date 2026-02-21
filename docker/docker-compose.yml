@@ -33,8 +33,6 @@ services:
     volumes:
       - cerebro-data:/data/memory
       - "${CLAUDE_CONFIG_DIR:-~/.claude}:/home/cerebro/.claude"
-      - "C:/Users/marke/Desktop/Cerebro-life-desktop/frontend:/app/frontend"
-      - "C:/Users/marke/Desktop/Cerebro-life-desktop/backend-src/main.py:/app/main.py"
     depends_on:
       redis:
         condition: service_healthy

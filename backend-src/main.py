@@ -7,6 +7,8 @@ It wraps the Claude Agent SDK to give you the same tools accessible from anywher
 
 import os
 import asyncio
+import secrets
+import bcrypt
 
 # Load .env file if present (for API keys, etc.)
 try:
@@ -467,7 +469,7 @@ app = FastAPI(
 # CORS for web/mobile access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=config.ALLOWED_ORIGINS + ["*"],  # Tailscale IPs
+    allow_origins=config.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -494,7 +496,7 @@ async def serve_frontend():
 # Socket.IO for real-time updates
 sio = socketio.AsyncServer(
     async_mode='asgi',
-    cors_allowed_origins='*',
+    cors_allowed_origins=config.ALLOWED_ORIGINS,
     logger=True
 )
 socket_app = socketio.ASGIApp(sio, app)
@@ -772,6 +774,7 @@ async def create_notification(notif_type: str, title: str, message: str, link: s
 
 # Track all running agents
 active_agents = {}  # agent_id -> agent_info
+_specops_locks: dict[str, asyncio.Lock] = {}
 
 
 def reload_agents_from_persistence():
@@ -2730,7 +2733,7 @@ class BriefingResponse(BaseModel):
 # Authentication
 # ============================================================================
 
-def create_token(user_id: str = "professor") -> str:
+def create_token(user_id: str = "User") -> str:
     """Create a JWT token."""
     payload = {
         "sub": user_id,
@@ -2756,6 +2759,11 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) 
 
 @app.on_event("startup")
 async def startup():
+    # Ensure JWT secret is set
+    if not config.SECRET_KEY:
+        config.SECRET_KEY = secrets.token_hex(32)
+        print("[SECURITY] WARNING: CEREBRO_SECRET not set! Generated ephemeral key (tokens won't survive restarts)")
+
     global redis, proactive_manager, predictive_service, learning_injector
 
     # Initialize Redis
@@ -3534,9 +3542,10 @@ async def auth_setup(request: SetupRequest):
     if profile.get("setup_complete"):
         raise HTTPException(status_code=400, detail="Setup already completed")
 
+    hashed = bcrypt.hashpw(request.password.encode(), bcrypt.gensalt()).decode()
     profile.update({
         "name": request.name,
-        "password": request.password,
+        "password": hashed,
         "use_cases": request.use_cases,
         "style": request.style,
         "setup_complete": True,
@@ -3551,11 +3560,23 @@ async def auth_setup(request: SetupRequest):
 async def login(request: LoginRequest):
     """Password login — checks stored profile first, then env var fallback."""
     profile = _load_user_profile()
-    stored_password = profile.get("password") or os.environ.get("CEREBRO_PASSWORD", "professor")
+    stored_password = profile.get("password") or os.environ.get("CEREBRO_PASSWORD", "")
     username = profile.get("name", "User")
 
-    if request.password != stored_password:
-        raise HTTPException(status_code=401, detail="Invalid password")
+    if not stored_password:
+        raise HTTPException(status_code=401, detail="Setup required")
+
+    # Check if stored password is a bcrypt hash
+    if stored_password.startswith("$2b$"):
+        if not bcrypt.checkpw(request.password.encode(), stored_password.encode()):
+            raise HTTPException(status_code=401, detail="Invalid password")
+    else:
+        # Legacy plaintext comparison — auto-upgrade to hash
+        if request.password != stored_password:
+            raise HTTPException(status_code=401, detail="Invalid password")
+        # Upgrade to bcrypt hash
+        profile["password"] = bcrypt.hashpw(request.password.encode(), bcrypt.gensalt()).decode()
+        _save_user_profile(profile)
 
     token = create_token(username)
     return {"token": token, "user": username}
@@ -3875,7 +3896,7 @@ async def get_mood():
 
 
 @app.get("/scheduler/debug")
-async def scheduler_debug():
+async def scheduler_debug(user: str = Depends(verify_token)):
     """Debug endpoint to check APScheduler state."""
     if not SCHEDULER_AVAILABLE or not scheduler:
         return {"error": "Scheduler not available", "SCHEDULER_AVAILABLE": SCHEDULER_AVAILABLE}
@@ -4739,18 +4760,19 @@ async def update_specops_settings(agent_id: str, request: SpecopsUpdateRequest, 
     if not agent.get("is_specops"):
         raise HTTPException(400, "Agent is not a Special Ops agent")
 
-    # Update fields
-    if request.work_style is not None:
-        agent["work_style"] = request.work_style
-        agent.setdefault("specops_config", {})["work_style"] = request.work_style
-    if request.cycle_interval is not None:
-        agent["cycle_interval"] = request.cycle_interval
-        agent.setdefault("specops_config", {})["cycle_interval"] = request.cycle_interval
-    if request.auto_continue is not None:
-        agent["auto_continue"] = request.auto_continue
-    if request.mission_duration is not None:
-        agent["mission_duration"] = request.mission_duration
-        agent.setdefault("specops_config", {})["mission_duration"] = request.mission_duration
+    # Update fields (acquire lock to prevent race with mission loop)
+    async with _specops_locks.get(agent_id, asyncio.Lock()):
+        if request.work_style is not None:
+            agent["work_style"] = request.work_style
+            agent.setdefault("specops_config", {})["work_style"] = request.work_style
+        if request.cycle_interval is not None:
+            agent["cycle_interval"] = request.cycle_interval
+            agent.setdefault("specops_config", {})["cycle_interval"] = request.cycle_interval
+        if request.auto_continue is not None:
+            agent["auto_continue"] = request.auto_continue
+        if request.mission_duration is not None:
+            agent["mission_duration"] = request.mission_duration
+            agent.setdefault("specops_config", {})["mission_duration"] = request.mission_duration
 
     await sio.emit("agent_update", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
     await _emit_specops_update(agent)
@@ -5191,6 +5213,7 @@ async def run_specops_mission(agent_id: str):
     agent = active_agents.get(agent_id)
     if not agent:
         return
+    _specops_locks[agent_id] = asyncio.Lock()
 
     print(f"[SpecOps] Mission supervisor started for {agent_id} — {agent.get('mission_name', 'Unnamed')}")
 
@@ -5200,22 +5223,24 @@ async def run_specops_mission(agent_id: str):
         agent = active_agents.get(agent_id)
         if not agent:
             print(f"[SpecOps] Agent {agent_id} disappeared — mission ended")
+            _specops_locks.pop(agent_id, None)
             return
 
         # === Parse output and create journal entry ===
-        cycle_num = agent.get("cycle_count", 0) + 1
-        agent["cycle_count"] = cycle_num
-        journal_entry = _parse_mission_status(agent.get("output", ""), cycle_num)
-        agent.setdefault("mission_journal", []).append(journal_entry)
+        async with _specops_locks.get(agent_id, asyncio.Lock()):
+            cycle_num = agent.get("cycle_count", 0) + 1
+            agent["cycle_count"] = cycle_num
+            journal_entry = _parse_mission_status(agent.get("output", ""), cycle_num)
+            agent.setdefault("mission_journal", []).append(journal_entry)
 
-        # Update mission elapsed time
-        started = agent.get("mission_started_at")
-        if started:
-            try:
-                start_dt = datetime.fromisoformat(started.replace('Z', '+00:00'))
-                agent["mission_elapsed"] = int((datetime.now(timezone.utc) - start_dt).total_seconds())
-            except Exception:
-                pass
+            # Update mission elapsed time
+            started = agent.get("mission_started_at")
+            if started:
+                try:
+                    start_dt = datetime.fromisoformat(started.replace('Z', '+00:00'))
+                    agent["mission_elapsed"] = int((datetime.now(timezone.utc) - start_dt).total_seconds())
+                except Exception:
+                    pass
 
         print(f"[SpecOps] {agent_id} cycle #{cycle_num} complete — status: {final_status}, progress: {journal_entry.get('progress', '?')}")
         await _emit_specops_update(agent)
@@ -5224,6 +5249,7 @@ async def run_specops_mission(agent_id: str):
         # 1. Agent was stopped or failed
         if final_status in (AgentStatus.STOPPED, AgentStatus.FAILED):
             print(f"[SpecOps] Mission ended — agent {final_status}")
+            _specops_locks.pop(agent_id, None)
             return
 
         # 2. Auto-continue disabled
@@ -5231,6 +5257,7 @@ async def run_specops_mission(agent_id: str):
             print(f"[SpecOps] Mission paused — auto_continue is OFF")
             agent["status"] = AgentStatus.COMPLETED
             await sio.emit("agent_update", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
+            _specops_locks.pop(agent_id, None)
             return
 
         # 3. Mission duration exceeded
@@ -5240,6 +5267,7 @@ async def run_specops_mission(agent_id: str):
             agent["status"] = AgentStatus.COMPLETED
             await sio.emit("agent_update", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
             await _emit_specops_update(agent)
+            _specops_locks.pop(agent_id, None)
             return
 
         # === Determine cycle delay based on work style ===
@@ -5279,11 +5307,13 @@ async def run_specops_mission(agent_id: str):
                 agent = active_agents.get(agent_id)
                 if not agent or agent.get("status") == AgentStatus.STOPPED:
                     print(f"[SpecOps] Mission cancelled during cycling")
+                    _specops_locks.pop(agent_id, None)
                     return
                 if not agent.get("auto_continue", True):
                     print(f"[SpecOps] Auto-continue disabled during cycling")
                     agent["status"] = AgentStatus.COMPLETED
                     await sio.emit("agent_update", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
+                    _specops_locks.pop(agent_id, None)
                     return
         else:
             await asyncio.sleep(sleep_seconds)
@@ -5291,6 +5321,7 @@ async def run_specops_mission(agent_id: str):
         # === Re-check agent still exists ===
         agent = active_agents.get(agent_id)
         if not agent:
+            _specops_locks.pop(agent_id, None)
             return
 
         # === Start next cycle via continuation ===
