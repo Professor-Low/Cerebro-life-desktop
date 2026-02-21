@@ -27821,7 +27821,7 @@
                 // Try to read mood from local file or API
                 const response = await fetch(`${API_URL}/api/mood`, {
                     method: 'GET',
-                    headers: { 'Accept': 'application/json' }
+                    headers: { 'Accept': 'application/json', 'Authorization': `Bearer ${token}` }
                 }).catch(() => null);
 
                 if (response && response.ok) {
