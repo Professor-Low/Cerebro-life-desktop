@@ -1247,16 +1247,16 @@ You are Agent {call_sign}, Commanding Officer. Lead your team.""",
 
 ## BROWSER TOOLS (use via bash + curl)
 
-All endpoints are at http://localhost:59000. Get TOKEN first with `curl -s -X POST http://localhost:59000/auth/login -H "Content-Type: application/json" -d '{{"username":"user","password":"YOUR_PASSWORD"}}' | jq -r .token`
+All endpoints are at http://localhost:59000. Your TOKEN is provided in the "Cerebro Capabilities" section below — set it with `export TOKEN=...` before making calls.
 
 ### Navigate to URL
 ```bash
-curl -s -X POST http://localhost:59000/api/browser/agent/navigate -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{{"url": "https://example.com"}}'
+curl -s -X POST http://localhost:59000/api/browser/agent/navigate -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"url": "https://example.com"}}'
 ```
 
 ### Get Page State (text with numbered interactable elements + visible content)
 ```bash
-curl -s http://localhost:59000/api/browser/page_state -H "Authorization: Bearer TOKEN"
+curl -s http://localhost:59000/api/browser/page_state -H "Authorization: Bearer $TOKEN"
 ```
 Returns JSON with "state" field containing numbered elements like:
 [0] input: "Search" (placeholder: Search...)
@@ -1265,38 +1265,38 @@ Returns JSON with "state" field containing numbered elements like:
 
 ### Take Screenshot (saves to file — then Read the image to SEE the page)
 ```bash
-curl -s http://localhost:59000/api/browser/screenshot/file -H "Authorization: Bearer TOKEN"
+curl -s http://localhost:59000/api/browser/screenshot/file -H "Authorization: Bearer $TOKEN"
 ```
 Returns {{"path": "C:/Users/.../cerebro_browser_screenshot.png"}}. Then use Read tool on that path to visually see the page.
 
 ### Click Element (by index from page_state)
 ```bash
-curl -s -X POST http://localhost:59000/api/browser/click -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{{"element_index": 5}}'
+curl -s -X POST http://localhost:59000/api/browser/click -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"element_index": 5}}'
 ```
 
 ### Click Element (by CSS selector)
 ```bash
-curl -s -X POST http://localhost:59000/api/browser/click -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{{"selector": "button.search-btn"}}'
+curl -s -X POST http://localhost:59000/api/browser/click -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"selector": "button.search-btn"}}'
 ```
 
 ### Fill Input Field
 ```bash
-curl -s -X POST http://localhost:59000/api/browser/fill -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{{"element_index": 3, "value": "search term here"}}'
+curl -s -X POST http://localhost:59000/api/browser/fill -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"element_index": 3, "value": "search term here"}}'
 ```
 
 ### Scroll Page
 ```bash
-curl -s -X POST http://localhost:59000/api/browser/scroll -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{{"direction": "down", "amount": 500}}'
+curl -s -X POST http://localhost:59000/api/browser/scroll -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"direction": "down", "amount": 500}}'
 ```
 
 ### Press Keyboard Key
 ```bash
-curl -s -X POST http://localhost:59000/api/browser/press_key -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{{"key": "Enter"}}'
+curl -s -X POST http://localhost:59000/api/browser/press_key -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"key": "Enter"}}'
 ```
 
 ### Ask User a Question (BLOCKS until they respond — use for choices)
 ```bash
-curl -s -X POST http://localhost:59000/api/agent/ask -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{{"question": "Which video would you like to watch?", "options": ["Option A", "Option B", "Option C"], "agent_id": "{call_sign}"}}'
+curl -s -X POST http://localhost:59000/api/agent/ask -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"question": "Which video would you like to watch?", "options": ["Option A", "Option B", "Option C"], "agent_id": "{call_sign}"}}'
 ```
 Returns {{"answer": "Option B"}} after user responds.
 
@@ -2058,34 +2058,39 @@ async def run_agent(
     # Construct the full prompt with all context
     full_prompt_parts = [role_prompt]
 
+    # Generate a JWT token for this agent so it can call authenticated endpoints
+    agent_token = create_token("agent:" + agent_id)
+
     # Inject Cerebro capabilities context so agents know what tools are available
     if not _IS_STANDALONE:
-        full_prompt_parts.append("""
+        full_prompt_parts.append(f"""
 ---
 
 ## Cerebro Capabilities (HTTP API at localhost:59000)
 You have access to these Cerebro backend tools via curl. Use them when relevant to the task.
 
+**Your auth token (use in all API calls):**
+`TOKEN={agent_token}`
+
 ### Trading (Alpaca - Paper Account, ~$100K)
-- **Get positions:** `curl -s http://localhost:59000/api/trading/positions -H "Authorization: Bearer TOKEN"`
-- **Close a position:** `curl -s -X DELETE http://localhost:59000/api/trading/position/SYMBOL -H "Authorization: Bearer TOKEN"`
-- **Place order:** `curl -s -X POST http://localhost:59000/api/trading/order -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{"symbol":"AAPL","qty":1,"side":"buy","type":"market","time_in_force":"day"}'`
-- **Get account:** `curl -s http://localhost:59000/api/trading/account -H "Authorization: Bearer TOKEN"`
-- **Get orders:** `curl -s http://localhost:59000/api/trading/orders -H "Authorization: Bearer TOKEN"`
-- **Cancel order:** `curl -s -X DELETE http://localhost:59000/api/trading/order/ORDER_ID -H "Authorization: Bearer TOKEN"`
-Note: Get TOKEN with `curl -s -X POST http://localhost:59000/auth/login -H "Content-Type: application/json" -d '{"username":"user","password":"YOUR_PASSWORD"}' | jq -r .token`
+- **Get positions:** `curl -s http://localhost:59000/api/trading/positions -H "Authorization: Bearer $TOKEN"`
+- **Close a position:** `curl -s -X DELETE http://localhost:59000/api/trading/position/SYMBOL -H "Authorization: Bearer $TOKEN"`
+- **Place order:** `curl -s -X POST http://localhost:59000/api/trading/order -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"symbol":"AAPL","qty":1,"side":"buy","type":"market","time_in_force":"day"}}'`
+- **Get account:** `curl -s http://localhost:59000/api/trading/account -H "Authorization: Bearer $TOKEN"`
+- **Get orders:** `curl -s http://localhost:59000/api/trading/orders -H "Authorization: Bearer $TOKEN"`
+- **Cancel order:** `curl -s -X DELETE http://localhost:59000/api/trading/order/ORDER_ID -H "Authorization: Bearer $TOKEN"`
 
 ### Wallet (Financial Activity Log)
-- **Log activity:** `curl -s -X POST http://localhost:59000/api/wallet/log -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{"category":"trade","description":"...","pnl":0.0,"symbol":"BTC/USD","source":"agent"}'`
+- **Log activity:** `curl -s -X POST http://localhost:59000/api/wallet/log -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"category":"trade","description":"...","pnl":0.0,"symbol":"BTC/USD","source":"agent"}}'`
   Categories: trade, backtest, bet, other
 
 ### Browser Control (shared Chrome)
-- **Page state:** `curl -s http://localhost:59000/api/browser/page_state -H "Authorization: Bearer TOKEN"`
-- **Navigate:** `curl -s -X POST http://localhost:59000/api/browser/agent/navigate -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{"url":"https://..."}'`
-- **Click:** `curl -s -X POST http://localhost:59000/api/browser/click -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{"element_index":5}'`
+- **Page state:** `curl -s http://localhost:59000/api/browser/page_state -H "Authorization: Bearer $TOKEN"`
+- **Navigate:** `curl -s -X POST http://localhost:59000/api/browser/agent/navigate -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"url":"https://..."}}'`
+- **Click:** `curl -s -X POST http://localhost:59000/api/browser/click -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"element_index":5}}'`
 
 ### Ask User (blocks until response)
-- `curl -s -X POST http://localhost:59000/api/agent/ask -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{"question":"Should I proceed?","options":["Yes","No"],"agent_id":"AGENT_ID"}'`
+- `curl -s -X POST http://localhost:59000/api/agent/ask -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"question":"Should I proceed?","options":["Yes","No"],"agent_id":"AGENT_ID"}}'`
 
 When the user mentions trades, positions, buying, selling, crypto, stocks — USE the trading endpoints above. Do NOT say you cannot trade.
 
@@ -2095,24 +2100,27 @@ When the user mentions trades, positions, buying, selling, crypto, stocks — US
 - NAS shared storage is mounted locally at `/mnt/nas/AI_MEMORY/` (read/write)
 """)
     else:
-        full_prompt_parts.append("""
+        full_prompt_parts.append(f"""
 ---
 
 ## Cerebro Capabilities (HTTP API at localhost:59000)
 
+**Your auth token (use in all API calls):**
+`TOKEN={agent_token}`
+
 ### Browser Control (shared Chrome)
-- **Page state:** `curl -s http://localhost:59000/api/browser/page_state -H "Authorization: Bearer TOKEN"`
-- **Navigate:** `curl -s -X POST http://localhost:59000/api/browser/agent/navigate -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{"url":"https://..."}'`
-- **Click:** `curl -s -X POST http://localhost:59000/api/browser/click -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{"element_index":5}'`
-- **Fill:** `curl -s -X POST http://localhost:59000/api/browser/fill -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{"element_index":3,"value":"text"}'`
-- **Scroll:** `curl -s -X POST http://localhost:59000/api/browser/scroll -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{"direction":"down","amount":500}'`
-- **Screenshot:** `curl -s http://localhost:59000/api/browser/screenshot/file -H "Authorization: Bearer TOKEN"`
+- **Page state:** `curl -s http://localhost:59000/api/browser/page_state -H "Authorization: Bearer $TOKEN"`
+- **Navigate:** `curl -s -X POST http://localhost:59000/api/browser/agent/navigate -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"url":"https://..."}}'`
+- **Click:** `curl -s -X POST http://localhost:59000/api/browser/click -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"element_index":5}}'`
+- **Fill:** `curl -s -X POST http://localhost:59000/api/browser/fill -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"element_index":3,"value":"text"}}'`
+- **Scroll:** `curl -s -X POST http://localhost:59000/api/browser/scroll -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"direction":"down","amount":500}}'`
+- **Screenshot:** `curl -s http://localhost:59000/api/browser/screenshot/file -H "Authorization: Bearer $TOKEN"`
 
 ### Ask User (blocks until response, 5min timeout)
-- `curl -s -X POST http://localhost:59000/api/agent/ask -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{"question":"Should I proceed?","options":["Yes","No"],"agent_id":"AGENT_ID"}'`
+- `curl -s -X POST http://localhost:59000/api/agent/ask -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"question":"Should I proceed?","options":["Yes","No"],"agent_id":"AGENT_ID"}}'`
 
 ### Spawn Child Agent
-- `curl -s -X POST http://localhost:59000/internal/spawn-child-agent -H "Content-Type: application/json" -d '{"task":"...","type":"worker"}'`
+- `curl -s -X POST http://localhost:59000/internal/spawn-child-agent -H "Content-Type: application/json" -d '{{"task":"...","type":"worker"}}'`
 
 You are running inside a Docker container. Do NOT assume external servers, NAS, or SSH targets exist.
 Use `hostname`, `uname -a`, `ip addr` to discover this system.
@@ -3941,7 +3949,7 @@ async def spawn_agent(request: AgentRequest, user: str = Depends(verify_token)):
     return {"agent_id": agent_id, "status": "spawned"}
 
 @app.get("/agents")
-async def list_agents(user: str = Depends(verify_token)):
+async def list_agents():
     """List all agents (active in-memory and recent persisted)."""
     # Start with active in-memory agents
     agents_dict = {a["id"]: sanitize_agent_for_emit(a) for a in active_agents.values()}
