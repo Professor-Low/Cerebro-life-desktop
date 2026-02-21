@@ -463,7 +463,7 @@ smart_suggestion_generator = SmartSuggestionGenerator(Path(config.AI_MEMORY_PATH
 app = FastAPI(
     title="Cerebro - Digital Companion",
     description="Your AI companion with full system access",
-    version="1.0.0"
+    version="1.5.6"
 )
 
 # CORS for web/mobile access
@@ -955,35 +955,12 @@ You are running on the Cerebro Server (ASUS GX10, Ubuntu 24.04, ARM64) with FULL
 You are the orchestrator of Professor's entire network. You have --dangerously-skip-permissions enabled.
 
 ### Your Machine (Cerebro Server)
-- 119GB unified RAM, NVIDIA GB10 GPU, 916GB NVMe
 - Native bash — use standard Linux commands
-- NAS mounted at /mnt/nas/AI_MEMORY (16TB shared storage)
+- NAS mounted at /mnt/nas/AI_MEMORY (shared storage)
 
-### Network — You Can SSH Into All Of These:
-- `ssh pc` → Professor's Windows 11 PC (192.168.0.166:2222) — PRIMARY DEVELOPMENT MACHINE
-  - This is where coding projects, repos, and dev tools live (C:\\Users\\marke\\)
-  - Node.js, Python 3.13, Git, npm, Docker Desktop installed
-  - Claude Code CLI installed with full MCP server ecosystem
-  - For ANY coding/development task, SSH here to work on the actual project files
-  - Shell is PowerShell by default; use `cmd /c` or `powershell -Command` for Windows commands
-  - Paths use backslashes: C:\\Users\\marke\\ProjectName\\
-  - NAS mapped as Z: drive (Z:\\AI_MEMORY)
-- `ssh spark` → DGX Spark (192.168.0.6) — 128GB RAM, GB10 GPU, COMPUTE NODE
-  - Search service: curl http://192.168.0.6:8780/search?q=...
-  - Embeddings: curl http://192.168.0.6:8781/embed
-  - Ollama LLM: curl http://192.168.0.6:11434/api/generate
-  - Cognitive services (reasoning, causal, prediction, consolidation, self-eval)
-  - TTS (Kokoro)
-- `ssh nas` → NAS (192.168.0.21) — 16TB storage, shared AI_MEMORY
-- `ssh darkhorse` → Kali Pi (192.168.0.81) — security tools
-- `ssh crystal` → Crystal (192.168.0.185)
-
-### IMPORTANT: Where To Do What
-- **Coding/development tasks** → `ssh pc` (Windows PC has all dev tools, repos, and project files)
-- **Heavy compute (ML, search, LLM)** → `ssh spark` or call Spark HTTP services
-- **Data/memory access** → Local NAS mount at /mnt/nas/AI_MEMORY (or `ssh pc` uses Z:\\AI_MEMORY)
-- **Browser automation** → Use Cerebro HTTP API below (shared Chromium on this server)
-- **Security tools** → `ssh darkhorse`
+### Network
+- Devices listed in /data/memory/network_config.json (if configured)
+- Use `cat /data/memory/network_config.json` to discover available SSH targets
 
 ### Cerebro HTTP API (localhost:59000)
 - Browser control: /api/browser/page_state, /api/browser/click, /api/browser/fill
@@ -1270,16 +1247,16 @@ You are Agent {call_sign}, Commanding Officer. Lead your team.""",
 
 ## BROWSER TOOLS (use via bash + curl)
 
-All endpoints are at http://localhost:59000. No authentication needed.
+All endpoints are at http://localhost:59000. Get TOKEN first with `curl -s -X POST http://localhost:59000/auth/login -H "Content-Type: application/json" -d '{{"username":"user","password":"YOUR_PASSWORD"}}' | jq -r .token`
 
 ### Navigate to URL
 ```bash
-curl -s -X POST http://localhost:59000/api/browser/agent/navigate -H "Content-Type: application/json" -d '{{"url": "https://example.com"}}'
+curl -s -X POST http://localhost:59000/api/browser/agent/navigate -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{{"url": "https://example.com"}}'
 ```
 
 ### Get Page State (text with numbered interactable elements + visible content)
 ```bash
-curl -s http://localhost:59000/api/browser/page_state
+curl -s http://localhost:59000/api/browser/page_state -H "Authorization: Bearer TOKEN"
 ```
 Returns JSON with "state" field containing numbered elements like:
 [0] input: "Search" (placeholder: Search...)
@@ -1288,38 +1265,38 @@ Returns JSON with "state" field containing numbered elements like:
 
 ### Take Screenshot (saves to file — then Read the image to SEE the page)
 ```bash
-curl -s http://localhost:59000/api/browser/screenshot/file
+curl -s http://localhost:59000/api/browser/screenshot/file -H "Authorization: Bearer TOKEN"
 ```
 Returns {{"path": "C:/Users/.../cerebro_browser_screenshot.png"}}. Then use Read tool on that path to visually see the page.
 
 ### Click Element (by index from page_state)
 ```bash
-curl -s -X POST http://localhost:59000/api/browser/click -H "Content-Type: application/json" -d '{{"element_index": 5}}'
+curl -s -X POST http://localhost:59000/api/browser/click -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{{"element_index": 5}}'
 ```
 
 ### Click Element (by CSS selector)
 ```bash
-curl -s -X POST http://localhost:59000/api/browser/click -H "Content-Type: application/json" -d '{{"selector": "button.search-btn"}}'
+curl -s -X POST http://localhost:59000/api/browser/click -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{{"selector": "button.search-btn"}}'
 ```
 
 ### Fill Input Field
 ```bash
-curl -s -X POST http://localhost:59000/api/browser/fill -H "Content-Type: application/json" -d '{{"element_index": 3, "value": "search term here"}}'
+curl -s -X POST http://localhost:59000/api/browser/fill -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{{"element_index": 3, "value": "search term here"}}'
 ```
 
 ### Scroll Page
 ```bash
-curl -s -X POST http://localhost:59000/api/browser/scroll -H "Content-Type: application/json" -d '{{"direction": "down", "amount": 500}}'
+curl -s -X POST http://localhost:59000/api/browser/scroll -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{{"direction": "down", "amount": 500}}'
 ```
 
 ### Press Keyboard Key
 ```bash
-curl -s -X POST http://localhost:59000/api/browser/press_key -H "Content-Type: application/json" -d '{{"key": "Enter"}}'
+curl -s -X POST http://localhost:59000/api/browser/press_key -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{{"key": "Enter"}}'
 ```
 
 ### Ask User a Question (BLOCKS until they respond — use for choices)
 ```bash
-curl -s -X POST http://localhost:59000/api/agent/ask -H "Content-Type: application/json" -d '{{"question": "Which video would you like to watch?", "options": ["Option A", "Option B", "Option C"], "agent_id": "{call_sign}"}}'
+curl -s -X POST http://localhost:59000/api/agent/ask -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{{"question": "Which video would you like to watch?", "options": ["Option A", "Option B", "Option C"], "agent_id": "{call_sign}"}}'
 ```
 Returns {{"answer": "Option B"}} after user responds.
 
@@ -2096,54 +2073,26 @@ You have access to these Cerebro backend tools via curl. Use them when relevant 
 - **Get account:** `curl -s http://localhost:59000/api/trading/account -H "Authorization: Bearer TOKEN"`
 - **Get orders:** `curl -s http://localhost:59000/api/trading/orders -H "Authorization: Bearer TOKEN"`
 - **Cancel order:** `curl -s -X DELETE http://localhost:59000/api/trading/order/ORDER_ID -H "Authorization: Bearer TOKEN"`
-Note: Get TOKEN with `curl -s -X POST http://localhost:59000/auth/login -H "Content-Type: application/json" -d '{"username":"professor","password":"professor"}' | jq -r .token`
+Note: Get TOKEN with `curl -s -X POST http://localhost:59000/auth/login -H "Content-Type: application/json" -d '{"username":"user","password":"YOUR_PASSWORD"}' | jq -r .token`
 
 ### Wallet (Financial Activity Log)
-- **Log activity:** `curl -s -X POST http://localhost:59000/api/wallet/log -H "Content-Type: application/json" -d '{"category":"trade","description":"...","pnl":0.0,"symbol":"BTC/USD","source":"agent"}'`
+- **Log activity:** `curl -s -X POST http://localhost:59000/api/wallet/log -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{"category":"trade","description":"...","pnl":0.0,"symbol":"BTC/USD","source":"agent"}'`
   Categories: trade, backtest, bet, other
 
 ### Browser Control (shared Chrome)
-- **Page state:** `curl -s http://localhost:59000/api/browser/page_state`
-- **Navigate:** `curl -s -X POST http://localhost:59000/api/browser/agent/navigate -H "Content-Type: application/json" -d '{"url":"https://..."}'`
-- **Click:** `curl -s -X POST http://localhost:59000/api/browser/click -H "Content-Type: application/json" -d '{"element_index":5}'`
+- **Page state:** `curl -s http://localhost:59000/api/browser/page_state -H "Authorization: Bearer TOKEN"`
+- **Navigate:** `curl -s -X POST http://localhost:59000/api/browser/agent/navigate -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{"url":"https://..."}'`
+- **Click:** `curl -s -X POST http://localhost:59000/api/browser/click -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{"element_index":5}'`
 
 ### Ask User (blocks until response)
-- `curl -s -X POST http://localhost:59000/api/agent/ask -H "Content-Type: application/json" -d '{"question":"Should I proceed?","options":["Yes","No"],"agent_id":"AGENT_ID"}'`
+- `curl -s -X POST http://localhost:59000/api/agent/ask -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{"question":"Should I proceed?","options":["Yes","No"],"agent_id":"AGENT_ID"}'`
 
 When the user mentions trades, positions, buying, selling, crypto, stocks — USE the trading endpoints above. Do NOT say you cannot trade.
 
-### Remote Machines (SSH Access - Passwordless)
-You are running on the **ASUS GX10** (Linux, 192.168.0.70). You have passwordless SSH to these machines:
-
-| Alias | Machine | IP | OS | User | Notes |
-|-------|---------|----|----|------|-------|
-| `pc` | Professor's main PC | 192.168.0.166:2222 | Windows 11 | marke | Main monitor, desktop at `C:\\Users\\marke\\Desktop\\` |
-| `spark` | DGX Spark | 192.168.0.6 | Linux | professorlow | 128GB RAM, GB10 GPU |
-| `darkhorse` | Raspberry Pi | 192.168.0.81 | Kali Linux | professor | |
-
-**To create files on the Windows PC:**
-```bash
-# Write content to a file on the desktop
-ssh pc 'echo CONTENT > C:\\Users\\marke\\Desktop\\filename.txt'
-# For multi-line content, pipe through PowerShell:
-printf '%s' "$CONTENT" | ssh pc 'powershell -Command "$input | Out-File -FilePath C:\\Users\\marke\\Desktop\\filename.txt -Encoding utf8"'
-# Or use multiple echo lines (simpler):
-ssh pc "echo Line 1 > C:\\Users\\marke\\Desktop\\filename.txt && echo Line 2 >> C:\\Users\\marke\\Desktop\\filename.txt"
-# Open a file in Notepad on the main monitor
-ssh pc 'start notepad.exe C:\\Users\\marke\\Desktop\\filename.txt'
-# IMPORTANT: Windows uses CMD shell, NOT bash. Use 'echo', 'type', 'del', 'dir' — NOT 'cat', 'rm', 'ls'.
-```
-
-**To run commands on Spark or Darkhorse:**
-```bash
-ssh spark 'command here'
-ssh darkhorse 'command here'
-```
-
-**NAS shared storage** is mounted locally at `/mnt/nas/AI_MEMORY/` (read/write).
-
-IMPORTANT: When tasks mention "desktop", "main PC", "Notepad", or "main monitor" — use `ssh pc` to create files and open them.
-When tasks mention "Spark" or "DGX" — use `ssh spark`. When tasks mention "darkhorse" or "Pi" — use `ssh darkhorse`.
+### Remote Machines (SSH Access)
+- Devices listed in /data/memory/network_config.json (if configured)
+- Use `cat /data/memory/network_config.json` to discover available SSH targets and their aliases
+- NAS shared storage is mounted locally at `/mnt/nas/AI_MEMORY/` (read/write)
 """)
     else:
         full_prompt_parts.append("""
@@ -2152,15 +2101,15 @@ When tasks mention "Spark" or "DGX" — use `ssh spark`. When tasks mention "dar
 ## Cerebro Capabilities (HTTP API at localhost:59000)
 
 ### Browser Control (shared Chrome)
-- **Page state:** `curl -s http://localhost:59000/api/browser/page_state`
-- **Navigate:** `curl -s -X POST http://localhost:59000/api/browser/agent/navigate -H "Content-Type: application/json" -d '{"url":"https://..."}'`
-- **Click:** `curl -s -X POST http://localhost:59000/api/browser/click -H "Content-Type: application/json" -d '{"element_index":5}'`
-- **Fill:** `curl -s -X POST http://localhost:59000/api/browser/fill -H "Content-Type: application/json" -d '{"element_index":3,"value":"text"}'`
-- **Scroll:** `curl -s -X POST http://localhost:59000/api/browser/scroll -H "Content-Type: application/json" -d '{"direction":"down","amount":500}'`
-- **Screenshot:** `curl -s http://localhost:59000/api/browser/screenshot/file`
+- **Page state:** `curl -s http://localhost:59000/api/browser/page_state -H "Authorization: Bearer TOKEN"`
+- **Navigate:** `curl -s -X POST http://localhost:59000/api/browser/agent/navigate -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{"url":"https://..."}'`
+- **Click:** `curl -s -X POST http://localhost:59000/api/browser/click -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{"element_index":5}'`
+- **Fill:** `curl -s -X POST http://localhost:59000/api/browser/fill -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{"element_index":3,"value":"text"}'`
+- **Scroll:** `curl -s -X POST http://localhost:59000/api/browser/scroll -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{"direction":"down","amount":500}'`
+- **Screenshot:** `curl -s http://localhost:59000/api/browser/screenshot/file -H "Authorization: Bearer TOKEN"`
 
 ### Ask User (blocks until response, 5min timeout)
-- `curl -s -X POST http://localhost:59000/api/agent/ask -H "Content-Type: application/json" -d '{"question":"Should I proceed?","options":["Yes","No"],"agent_id":"AGENT_ID"}'`
+- `curl -s -X POST http://localhost:59000/api/agent/ask -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{"question":"Should I proceed?","options":["Yes","No"],"agent_id":"AGENT_ID"}'`
 
 ### Spawn Child Agent
 - `curl -s -X POST http://localhost:59000/internal/spawn-child-agent -H "Content-Type: application/json" -d '{"task":"...","type":"worker"}'`
@@ -2851,7 +2800,18 @@ async def redis_task_listener():
 
 @sio.event
 async def connect(sid, environ, auth=None):
-    print(f"Client connected: {sid}")
+    # Verify auth token
+    if not auth or not auth.get("token"):
+        print(f"[Socket] Rejected connection {sid}: no auth token")
+        raise ConnectionRefusedError("Authentication required")
+    try:
+        payload = jwt.decode(auth["token"], config.SECRET_KEY, algorithms=["HS256"])
+        user_id = payload["sub"]
+    except jwt.InvalidTokenError:
+        print(f"[Socket] Rejected connection {sid}: invalid token")
+        raise ConnectionRefusedError("Invalid token")
+
+    print(f"Client connected: {sid} (user: {user_id})")
     # Add to professor's room for cross-device sync
     await sio.enter_room(sid, "professor")
     if "professor" not in connected_clients:
@@ -3503,7 +3463,7 @@ async def process_with_claude_code(content: str, session_id: str = "default", mo
 
 @app.get("/")
 async def root():
-    return {"name": "Cerebro", "status": "online", "version": "1.5.3"}
+    return {"name": "Cerebro", "status": "online", "version": "1.5.6"}
 
 def _get_user_profile_path() -> Path:
     return Path(config.AI_MEMORY_PATH) / "user_profile.json"
@@ -3658,12 +3618,12 @@ async def get_briefing(user: str = Depends(verify_token)):
 # ============================================================================
 
 @app.get("/api/models")
-async def get_models():
+async def get_models(user: str = Depends(verify_token)):
     """Return available Claude models for the model selector."""
     return {"models": AVAILABLE_MODELS, "default": config.DEFAULT_MODEL}
 
 @app.get("/api/models/current")
-async def get_current_model():
+async def get_current_model(user: str = Depends(verify_token)):
     """Get the current default model."""
     return {"model": config.DEFAULT_MODEL}
 
@@ -3671,7 +3631,7 @@ class SetModelRequest(BaseModel):
     model: str
 
 @app.post("/api/models/current")
-async def set_current_model(request: SetModelRequest):
+async def set_current_model(request: SetModelRequest, user: str = Depends(verify_token)):
     """Set the default model (persisted in config for this session)."""
     if request.model not in VALID_MODEL_IDS:
         raise HTTPException(status_code=400, detail=f"Invalid model: {request.model}. Valid models: {list(VALID_MODEL_IDS)}")
@@ -3869,7 +3829,7 @@ async def health():
 
 
 @app.get("/api/mood")
-async def get_mood():
+async def get_mood(user: str = Depends(verify_token)):
     """Get current mood from NAS file - for Cerebro dashboard integration."""
     mood_file = Path(config.AI_MEMORY_PATH) / "mood" / "current_mood.json"
     try:
@@ -10464,7 +10424,7 @@ async def reload_skills_cache(user: str = Depends(verify_token)):
 # ============================================================================
 
 @app.get("/api/simulation/health")
-async def simulation_health():
+async def simulation_health(user: str = Depends(verify_token)):
     """Check SimEngine availability."""
     from sim_engine_client import get_sim_engine_client
     client = get_sim_engine_client()
@@ -10473,7 +10433,7 @@ async def simulation_health():
 
 
 @app.post("/api/simulation/run")
-async def run_simulation_endpoint(request: Request):
+async def run_simulation_endpoint(request: Request, user: str = Depends(verify_token)):
     """Run a simulation via natural language."""
     body = await request.json()
     query = body.get("query", body.get("text", ""))
@@ -10500,7 +10460,7 @@ async def run_simulation_endpoint(request: Request):
 # ============================================================================
 
 @app.get("/api/trading/health")
-async def trading_health():
+async def trading_health(user: str = Depends(verify_token)):
     """Check Alpaca connectivity and account status."""
     from alpaca_client import get_alpaca_client
     client = get_alpaca_client()
@@ -10625,8 +10585,8 @@ async def trading_cancel_order(order_id: str, user: str = Depends(verify_token))
 
 
 @app.get("/api/trading/quote/{symbol:path}")
-async def trading_quote(symbol: str):
-    """Get latest quote for a stock or crypto symbol. No auth required.
+async def trading_quote(symbol: str, user: str = Depends(verify_token)):
+    """Get latest quote for a stock or crypto symbol.
     Stocks: /api/trading/quote/AAPL
     Crypto: /api/trading/quote/BTC/USD
     """
@@ -10643,8 +10603,8 @@ async def trading_quote(symbol: str):
 
 
 @app.get("/api/trading/bars/{symbol:path}")
-async def trading_bars(symbol: str, timeframe: str = "1Day", limit: int = 30):
-    """Get historical price bars (OHLCV). No auth required.
+async def trading_bars(symbol: str, timeframe: str = "1Day", limit: int = 30, user: str = Depends(verify_token)):
+    """Get historical price bars (OHLCV).
     Stocks: /api/trading/bars/AAPL
     Crypto: /api/trading/bars/BTC/USD
     """
@@ -10674,8 +10634,8 @@ async def trading_portfolio_history(period: str = "1M", timeframe: str = "1D", u
 
 
 @app.get("/api/trading/clock")
-async def trading_clock():
-    """Get market clock (is market open/closed). No auth required."""
+async def trading_clock(user: str = Depends(verify_token)):
+    """Get market clock (is market open/closed)."""
     from alpaca_client import get_alpaca_client
     client = get_alpaca_client()
     if not client.configured:
@@ -10699,8 +10659,8 @@ async def trading_log(limit: int = 50, user: str = Depends(verify_token)):
 # ============================================================================
 
 @app.post("/api/wallet/log")
-async def wallet_log_entry(request: Request):
-    """Log any financial activity. No auth — agents use curl."""
+async def wallet_log_entry(request: Request, user: str = Depends(verify_token)):
+    """Log any financial activity."""
     from alpaca_client import log_wallet_entry
     body = await request.json()
     entry = log_wallet_entry(
@@ -11108,9 +11068,8 @@ async def _ensure_browser_running():
 
 
 @app.get("/api/browser/page_state")
-async def browser_page_state():
-    """Get compressed page state with numbered interactable elements + content.
-    No auth required — called by Claude agents via curl."""
+async def browser_page_state(user: str = Depends(verify_token)):
+    """Get compressed page state with numbered interactable elements + content."""
     try:
         from cognitive_loop.page_understanding import PageUnderstanding
         mgr, page = await _ensure_browser_running()
@@ -11128,9 +11087,8 @@ async def browser_page_state():
 
 
 @app.post("/api/browser/click")
-async def browser_click(request: BrowserClickRequest):
-    """Click an element by index (from page_state) or CSS selector.
-    No auth required — called by Claude agents via curl."""
+async def browser_click(request: BrowserClickRequest, user: str = Depends(verify_token)):
+    """Click an element by index (from page_state) or CSS selector."""
     try:
         mgr, page = await _ensure_browser_running()
 
@@ -11162,9 +11120,8 @@ async def browser_click(request: BrowserClickRequest):
 
 
 @app.post("/api/browser/fill")
-async def browser_fill(request: BrowserFillRequest):
-    """Fill an input element by index or selector.
-    No auth required — called by Claude agents via curl."""
+async def browser_fill(request: BrowserFillRequest, user: str = Depends(verify_token)):
+    """Fill an input element by index or selector."""
     try:
         mgr, page = await _ensure_browser_running()
 
@@ -11195,9 +11152,8 @@ async def browser_fill(request: BrowserFillRequest):
 
 
 @app.post("/api/browser/scroll")
-async def browser_scroll(request: BrowserScrollRequest):
-    """Scroll the page up or down.
-    No auth required — called by Claude agents via curl."""
+async def browser_scroll(request: BrowserScrollRequest, user: str = Depends(verify_token)):
+    """Scroll the page up or down."""
     try:
         mgr, page = await _ensure_browser_running()
         delta = request.amount if request.direction == "down" else -request.amount
@@ -11211,9 +11167,8 @@ async def browser_scroll(request: BrowserScrollRequest):
 
 
 @app.post("/api/browser/press_key")
-async def browser_press_key(request: BrowserPressKeyRequest):
-    """Press a keyboard key (Enter, Tab, Escape, etc.).
-    No auth required — called by Claude agents via curl."""
+async def browser_press_key(request: BrowserPressKeyRequest, user: str = Depends(verify_token)):
+    """Press a keyboard key (Enter, Tab, Escape, etc.)."""
     try:
         mgr, page = await _ensure_browser_running()
         await page.keyboard.press(request.key)
@@ -11225,10 +11180,9 @@ async def browser_press_key(request: BrowserPressKeyRequest):
 
 
 @app.get("/api/browser/screenshot/file")
-async def browser_screenshot_file():
+async def browser_screenshot_file(user: str = Depends(verify_token)):
     """Save a screenshot to a temp file and return the path.
-    Claude agents can then Read the image file to visually analyze it.
-    No auth required — called by Claude agents via curl."""
+    Claude agents can then Read the image file to visually analyze it."""
     try:
         import tempfile
         mgr, page = await _ensure_browser_running()
@@ -11242,8 +11196,8 @@ async def browser_screenshot_file():
 
 
 @app.post("/api/browser/agent/navigate")
-async def browser_agent_navigate(request: BrowserNavigateRequest):
-    """Navigate the browser to a URL — no auth, auto-launches browser.
+async def browser_agent_navigate(request: BrowserNavigateRequest, user: str = Depends(verify_token)):
+    """Navigate the browser to a URL, auto-launches browser.
     Called by Claude agents via curl."""
     try:
         mgr, page = await _ensure_browser_running()
@@ -11272,9 +11226,8 @@ class AgentAskRequest(BaseModel):
 
 
 @app.post("/api/notify/file-ready")
-async def notify_file_ready(request: Request):
-    """Notify frontend that an agent created a file on the NAS workspace.
-    No auth required — called by Claude agents via curl."""
+async def notify_file_ready(request: Request, user: str = Depends(verify_token)):
+    """Notify frontend that an agent created a file on the NAS workspace."""
     try:
         body = await request.json()
     except Exception:
@@ -11306,9 +11259,8 @@ async def notify_file_ready(request: Request):
 
 
 @app.post("/api/agent/ask")
-async def agent_ask(request: AgentAskRequest):
-    """Claude agent asks user a question. BLOCKS until user responds (up to 5 min).
-    No auth required — called by Claude agents via curl."""
+async def agent_ask(request: AgentAskRequest, user: str = Depends(verify_token)):
+    """Claude agent asks user a question. BLOCKS until user responds (up to 5 min)."""
     import uuid as uuid_lib
     question_id = f"agentq_{uuid_lib.uuid4().hex[:12]}"
 
