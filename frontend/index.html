@@ -46,8 +46,8 @@
         }
     </style>
     <script>
-        // Detect standalone early: Electron preload or Docker localhost:59000
-        window.__STANDALONE = !!(window.cerebroDesktop) || (location.port === '59000' && location.hostname === 'localhost');
+        // Detect standalone early: Electron preload or Docker localhost:61000
+        window.__STANDALONE = !!(window.cerebroDesktop) || (location.port === '61000' && location.hostname === 'localhost');
         if (window.__STANDALONE) {
             document.addEventListener('DOMContentLoaded', function() {
                 document.body.classList.add('standalone-mode');
@@ -92,6 +92,13 @@
             --glass-border: rgba(139, 92, 246, 0.2);
             --glass-border-hover: rgba(139, 92, 246, 0.45);
             --glass-blur: 20px;
+
+            /* === SPECIAL OPS (Pink theme) === */
+            --specops-pink: #ff2d78;
+            --specops-pink-light: #ff5e9e;
+            --specops-glow: rgba(255, 45, 120, 0.25);
+            --specops-gradient: linear-gradient(135deg, #ff2d78, #ff006e, #e6005c);
+            --specops-border: rgba(255, 45, 120, 0.3);
 
             /* === TEXT (High contrast) === */
             --text-primary: #f4f4f5;
@@ -2908,6 +2915,15 @@
             justify-content: space-between;
             align-items: center;
         }
+        .agents-header-row > button,
+        .agents-header-row > .btn {
+            min-width: 110px;
+            padding: 8px 0 !important;
+            font-size: 0.8rem;
+            text-align: center;
+            justify-content: center;
+            box-sizing: border-box;
+        }
 
         .agents-count {
             font-size: 0.8rem;
@@ -3095,21 +3111,37 @@
         .agents-search::placeholder {
             color: var(--text-muted);
         }
-        .agents-sort {
-            padding: 8px 12px;
+        .agents-sort-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0;
             background: var(--glass-bg);
             border: 1px solid var(--border);
             border-radius: 10px;
-            color: #fff;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.8rem;
-            cursor: pointer;
-            outline: none;
-            min-width: 110px;
+            overflow: hidden;
         }
-        .agents-sort option {
-            background: #1a1a2e;
-            color: #fff;
+        .agents-sort-toggle .sort-arrow-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 7px 10px;
+            font-size: 0.9rem;
+            line-height: 1;
+            transition: all 0.15s;
+        }
+        .agents-sort-toggle .sort-arrow-btn:hover {
+            color: var(--text-primary);
+            background: rgba(139, 92, 246, 0.12);
+        }
+        .agents-sort-toggle .sort-arrow-btn.active {
+            color: var(--accent);
+            background: rgba(139, 92, 246, 0.15);
+        }
+        .agents-sort-toggle .sort-divider {
+            width: 1px;
+            height: 18px;
+            background: var(--border);
         }
 
         /* Grid layout for agents container */
@@ -3235,6 +3267,11 @@
         .agent-card-compact .compact-status.queued {
             color: var(--text-muted);
             background: rgba(107, 114, 128, 0.15);
+            border: none;
+        }
+        .agent-card-compact .compact-status.cycling {
+            color: var(--specops-pink-light);
+            background: rgba(255, 45, 120, 0.15);
             border: none;
         }
         .agent-card-compact .compact-task {
@@ -3439,6 +3476,214 @@
             50% { box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), -4px 0 30px var(--glow-medium); }
         }
 
+        /* === SPECIAL OPS CARD STYLES === */
+        .agent-card.specops {
+            border-left: 3px solid var(--specops-pink);
+            background: linear-gradient(135deg, rgba(255, 45, 120, 0.05), var(--glass-bg));
+        }
+        .agent-card.specops.running {
+            border-left: 3px solid var(--specops-pink);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3), -4px 0 20px var(--specops-glow);
+            animation: specOpsPulse 2s infinite;
+        }
+        .agent-card.specops.cycling {
+            border-left: 3px solid var(--specops-pink-light);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2), -4px 0 15px rgba(255,45,120,0.15);
+            animation: specOpsCycling 4s ease-in-out infinite;
+        }
+        .agent-card.specops.completed {
+            border-left: 3px solid var(--specops-pink);
+            opacity: 0.85;
+        }
+        @keyframes specOpsPulse {
+            0%, 100% { box-shadow: 0 4px 20px rgba(0,0,0,0.3), -4px 0 20px var(--specops-glow); }
+            50% { box-shadow: 0 4px 20px rgba(0,0,0,0.3), -4px 0 35px rgba(255,45,120,0.4); }
+        }
+        @keyframes specOpsCycling {
+            0%, 100% { opacity: 0.9; box-shadow: 0 4px 15px rgba(0,0,0,0.2), -4px 0 15px rgba(255,45,120,0.15); }
+            50% { opacity: 0.7; box-shadow: 0 4px 15px rgba(0,0,0,0.2), -4px 0 10px rgba(255,45,120,0.1); }
+        }
+        .specops-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            background: var(--specops-gradient);
+            border-radius: 10px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: white;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+        .specops-mission-name {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--specops-pink);
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            margin-top: 4px;
+        }
+        .specops-metrics {
+            display: flex;
+            gap: 12px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+        .specops-metric {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 6px 10px;
+            background: rgba(255, 45, 120, 0.08);
+            border: 1px solid rgba(255, 45, 120, 0.15);
+            border-radius: 8px;
+            min-width: 60px;
+        }
+        .specops-metric-value {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--specops-pink-light);
+        }
+        .specops-metric-label {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .specops-journal-preview {
+            margin-top: 8px;
+            padding: 8px 12px;
+            border-left: 2px solid var(--specops-pink);
+            background: rgba(255, 45, 120, 0.04);
+            border-radius: 0 6px 6px 0;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            max-height: 60px;
+            overflow: hidden;
+        }
+        /* Compact card specops variant */
+        .agent-card-compact.specops {
+            border-left: 2px solid var(--specops-pink);
+            background: linear-gradient(135deg, rgba(255,45,120,0.05), var(--glass-bg));
+        }
+        .agent-card-compact.specops.running { animation: specOpsPulse 2s infinite; }
+        .agent-card-compact.specops.cycling { animation: specOpsCycling 4s ease-in-out infinite; }
+        .compact-specops-badge {
+            display: inline-block;
+            padding: 1px 6px;
+            background: var(--specops-gradient);
+            border-radius: 8px;
+            font-size: 0.55rem;
+            font-weight: 700;
+            color: white;
+            letter-spacing: 0.3px;
+            margin-left: 6px;
+        }
+        /* Spawn form specops */
+        .mode-btn[data-mode="specops"].active {
+            background: var(--specops-gradient);
+            color: white;
+        }
+        .specops-form-section {
+            border: 1px solid var(--specops-border);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            background: rgba(255, 45, 120, 0.03);
+        }
+        .specops-form-section .form-label {
+            color: var(--specops-pink-light);
+        }
+        .specops-selector {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .specops-selector .sel-btn {
+            padding: 8px 14px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-elevated);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s ease;
+        }
+        .specops-selector .sel-btn:hover {
+            border-color: var(--specops-pink);
+            color: var(--text-primary);
+        }
+        .specops-selector .sel-btn.active {
+            background: rgba(255, 45, 120, 0.15);
+            border-color: var(--specops-pink);
+            color: var(--specops-pink-light);
+            font-weight: 600;
+        }
+        /* Detail panel specops controls */
+        .specops-controls {
+            display: flex;
+            gap: 12px;
+            padding: 12px;
+            border: 1px solid var(--specops-border);
+            border-radius: 10px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+            background: rgba(255, 45, 120, 0.03);
+        }
+        .specops-controls select {
+            padding: 6px 10px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--specops-border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.8rem;
+        }
+        .specops-controls .toggle-btn {
+            padding: 6px 14px;
+            border-radius: 6px;
+            border: 1px solid var(--specops-border);
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+        .specops-controls .toggle-btn.on {
+            background: var(--specops-pink);
+            color: white;
+            border-color: var(--specops-pink);
+        }
+        .specops-controls .toggle-btn.off {
+            background: var(--bg-elevated);
+            color: var(--text-muted);
+        }
+        /* Journal full display */
+        .specops-journal {
+            margin-top: 12px;
+        }
+        .specops-journal-entry {
+            padding: 10px 14px;
+            border-left: 2px solid var(--specops-pink);
+            background: rgba(255, 45, 120, 0.04);
+            border-radius: 0 8px 8px 0;
+            margin-bottom: 8px;
+        }
+        .specops-journal-entry-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.7rem;
+            color: var(--specops-pink-light);
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .specops-journal-entry-body {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
         .agent-header {
             display: flex;
             justify-content: space-between;
@@ -3530,11 +3775,13 @@
             letter-spacing: 0.5px;
         }
 
-        /* Select button in agents header */
+        /* Select / Edit Groups buttons in agents header */
         .btn-select-header {
             font-size: 0.8rem;
-            padding: 6px 14px;
+            padding: 6px 0;
             border-radius: 10px;
+            min-width: 100px;
+            text-align: center;
         }
 
         /* Selection action bar */
@@ -4024,6 +4271,11 @@
         .agent-status.queued {
             background: rgba(234, 179, 8, 0.2);
             color: var(--yellow);
+        }
+
+        .agent-status.cycling {
+            background: rgba(255, 45, 120, 0.2);
+            color: var(--specops-pink-light);
         }
 
         .agent-task {
@@ -4658,6 +4910,464 @@
             margin: 1.5em 0;
         }
 
+        /* ==================== UNIFIED AGENT SPLIT PANEL ==================== */
+        .agent-panel-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 10000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .agent-panel-overlay.active {
+            display: flex;
+            animation: modalOverlayIn 0.25s ease-out;
+        }
+
+        .agent-panel {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            width: 95vw;
+            max-width: 1400px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
+            animation: modalIn 0.25s ease-out;
+        }
+
+        .agent-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 24px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .agent-panel-header .agent-title {
+            font-size: 1.05rem;
+            font-weight: 600;
+            flex: 1;
+            margin-right: 12px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .agent-panel-header .modal-close-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.4rem;
+            cursor: pointer;
+            padding: 4px 8px;
+            margin-left: 12px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            flex-shrink: 0;
+            line-height: 1;
+        }
+
+        .agent-panel-header .modal-close-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .agent-panel-body {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        .agent-panel-left {
+            width: 420px;
+            min-width: 420px;
+            border-right: 1px solid var(--border);
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .agent-panel-right {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .agent-panel-footer {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 12px;
+            padding: 14px 24px;
+            border-top: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        /* Panel mode containers */
+        .panel-mode { display: none; }
+        .panel-mode.active { display: flex; flex-direction: column; flex: 1; }
+
+        /* Tips section (right panel - create mode) */
+        .tips-section {
+            margin-bottom: 24px;
+        }
+
+        .tips-section-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+
+        .tip-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 10px;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            color: var(--text-secondary);
+        }
+
+        .tip-card .tip-title {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        /* Template gallery */
+        .template-gallery {
+            margin-bottom: 16px;
+        }
+
+        .template-gallery-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .template-gallery-header .tips-section-title {
+            margin-bottom: 0;
+        }
+
+        .template-save-btn {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .template-save-btn:hover {
+            background: var(--accent-glow);
+            color: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .template-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .template-card:hover {
+            border-color: var(--accent);
+            background: var(--bg-hover);
+        }
+
+        .template-card .template-name {
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .template-card .template-desc {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* template-delete button removed — delete via context menu */
+
+        .template-empty {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        /* Template context menu */
+        .template-context-menu {
+            position: absolute;
+            background: rgba(30, 30, 50, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(139, 92, 246, 0.25);
+            border-radius: 12px;
+            padding: 4px 0;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(139, 92, 246, 0.1);
+            z-index: 10000;
+            min-width: 140px;
+            animation: popupFadeIn 0.15s ease-out;
+        }
+        .template-context-menu-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            transition: background 0.15s;
+            white-space: nowrap;
+        }
+        .template-context-menu-item:first-child { border-radius: 8px 8px 0 0; }
+        .template-context-menu-item:last-child { border-radius: 0 0 8px 8px; }
+        .template-context-menu-item:hover { background: rgba(139, 92, 246, 0.15); }
+        .template-context-menu-item .popup-icon { width: 18px; text-align: center; flex-shrink: 0; }
+
+        /* Template inline editor */
+        .template-editor {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+        }
+        .template-editor .editor-title {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+        }
+        .template-editor label {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+            margin-top: 10px;
+        }
+        .template-editor label:first-of-type { margin-top: 0; }
+        .template-editor input,
+        .template-editor textarea,
+        .template-editor select {
+            width: 100%;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 10px;
+            color: var(--text-primary);
+            font-size: 0.82rem;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+        .template-editor input:focus,
+        .template-editor textarea:focus,
+        .template-editor select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        .template-editor textarea { resize: vertical; min-height: 60px; }
+        .template-editor-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 14px;
+        }
+        .template-editor-actions button {
+            flex: 1;
+            padding: 8px 0;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            transition: all 0.2s;
+        }
+        .template-editor-actions .editor-save {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+        .template-editor-actions .editor-save:hover { opacity: 0.85; }
+        .template-editor-actions .editor-cancel {
+            background: transparent;
+            color: var(--text-muted);
+        }
+        .template-editor-actions .editor-cancel:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        /* Agent running indicator (right panel - running mode) */
+        .agent-running-indicator {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+            gap: 20px;
+            padding: 40px;
+        }
+
+        .agent-spinner {
+            width: 48px;
+            height: 48px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .agent-running-indicator .running-text {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+        }
+
+        .agent-running-indicator .running-task {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            max-width: 400px;
+            text-align: center;
+            line-height: 1.5;
+        }
+
+        .agent-running-indicator .running-elapsed {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-family: 'SF Mono', monospace;
+        }
+
+        /* Panel ask area (right side - detail mode) */
+        .panel-ask-area {
+            margin-top: 16px;
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .panel-ask-area input {
+            flex: 1;
+            padding: 10px 14px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            outline: none;
+        }
+
+        .panel-ask-area input:focus {
+            border-color: var(--accent);
+        }
+
+        .panel-ask-area button {
+            padding: 10px 18px;
+            border-radius: 10px;
+            border: none;
+            background: var(--accent);
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .panel-ask-area button:hover {
+            filter: brightness(1.15);
+        }
+
+        /* Left panel detail actions */
+        .panel-left-actions {
+            margin-top: auto;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+        }
+
+        .panel-left-actions .followup-row {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .panel-left-actions textarea {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            resize: vertical;
+            min-height: 50px;
+        }
+
+        .panel-left-actions .agent-action-btn {
+            width: 100%;
+        }
+
+        /* Responsive - stack panels vertically */
+        @media (max-width: 900px) {
+            .agent-panel {
+                max-width: 100%;
+                width: 100%;
+                max-height: 100vh;
+                border-radius: 0;
+            }
+
+            .agent-panel-body {
+                flex-direction: column;
+            }
+
+            .agent-panel-left {
+                width: 100%;
+                min-width: unset;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+                max-height: 45vh;
+            }
+
+            .agent-panel-right {
+                flex: 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .agent-panel {
+                border-radius: 0;
+                max-height: 100vh;
+                height: 100vh;
+            }
+        }
+
         /* Recommendations Section */
         .recommendations-section {
             background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(99, 102, 241, 0.1));
@@ -5217,12 +5927,14 @@
             background: var(--accent-gradient);
             color: white;
             border: none;
-            padding: 6px 14px;
+            padding: 6px 0;
             border-radius: 10px;
             font-size: 0.8rem;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
+            min-width: 100px;
+            text-align: center;
         }
 
         .btn-spawn-compact:hover {
@@ -11411,6 +12123,19 @@
         .progress-modal-entry-time { font-family: 'Space Mono', monospace; font-size: 0.55rem; color: var(--text-muted); white-space: nowrap; padding-top: 2px; flex-shrink: 0; }
         .progress-modal-entry-badge { flex-shrink: 0; }
         .progress-modal-entry-content { font-family: 'Rajdhani', sans-serif; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; min-width: 0; }
+        /* ===== CREDENTIAL EXPIRY MODAL ===== */
+        .cred-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(6px); z-index: 10001; display: flex; align-items: center; justify-content: center; animation: msg-fade-in 0.2s ease; }
+        .cred-modal { width: 90vw; max-width: 400px; background: rgba(12,12,20,0.97); border: 1px solid rgba(239,68,68,0.35); border-radius: 16px; padding: 28px 24px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 40px rgba(239,68,68,0.08); }
+        .cred-modal-icon { font-size: 2.2rem; margin-bottom: 12px; }
+        .cred-modal-title { font-family: 'Rajdhani', sans-serif; font-size: 1.15rem; font-weight: 700; color: var(--text-primary); margin-bottom: 8px; }
+        .cred-modal-desc { font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 20px; }
+        .cred-modal-actions { display: flex; gap: 10px; justify-content: center; }
+        .cred-modal-actions button { padding: 10px 20px; border-radius: 10px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.2s; border: 1px solid var(--border); }
+        .cred-modal-btn-login { background: var(--accent-gradient); color: #fff; border-color: var(--accent) !important; }
+        .cred-modal-btn-login:hover { opacity: 0.85; transform: translateY(-1px); }
+        .cred-modal-btn-dismiss { background: transparent; color: var(--text-muted); }
+        .cred-modal-btn-dismiss:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .cred-modal-status { font-size: 0.78rem; color: var(--text-muted); margin-top: 14px; min-height: 20px; }
         /* ===== GUIDE MODAL ===== */
         .guide-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 10000; display: flex; align-items: center; justify-content: center; animation: msg-fade-in 0.2s ease; }
         .guide-modal { width: 85vw; max-width: 700px; max-height: 85vh; background: rgba(12,12,20,0.97); border: 1px solid rgba(139,92,246,0.2); border-radius: 14px; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
@@ -21903,11 +22628,11 @@
                         </div>
                         <div class="agents-toolbar">
                             <input type="text" class="agents-search" id="agents-search-input" placeholder="Search agents..." oninput="filterAgents()">
-                            <select class="agents-sort" id="agents-sort-select" onchange="sortAgents()">
-                                <option value="activity">Activity</option>
-                                <option value="created">Created</option>
-                                <option value="name">Name</option>
-                            </select>
+                            <div class="agents-sort-toggle" id="agents-sort-toggle">
+                                <button class="sort-arrow-btn active" id="sort-btn-desc" onclick="setAgentSortDir('desc')" title="Newest first">&darr;</button>
+                                <div class="sort-divider"></div>
+                                <button class="sort-arrow-btn" id="sort-btn-asc" onclick="setAgentSortDir('asc')" title="Oldest first">&uarr;</button>
+                            </div>
                         </div>
                         <div class="agents-header-row">
                             <div class="agents-count" id="agents-count">0 running</div>
@@ -23128,8 +23853,364 @@
             </div>
         </div>
 
-        <!-- Agent Creation Modal -->
-        <div class="modal-overlay" id="agent-modal" onclick="if(event.target === this) closeAgentModal()">
+        <!-- Unified Agent Split Panel -->
+        <div class="agent-panel-overlay" id="agent-panel" onclick="if(event.target===this)closeAgentPanel()">
+            <div class="agent-panel" onclick="event.stopPropagation()">
+                <div class="agent-panel-header">
+                    <span class="agent-title" id="panel-title">Spawn New Agent</span>
+                    <span class="agent-status-badge" id="panel-status-badge" style="display:none;">RUNNING</span>
+                    <button class="modal-close-btn" onclick="closeAgentPanel()" title="Close">&times;</button>
+                </div>
+
+                <div class="agent-panel-body">
+                    <!-- ===== LEFT PANEL ===== -->
+                    <div class="agent-panel-left">
+                        <!-- Left: Create mode (builder form) -->
+                        <div class="panel-mode active" id="panel-left-create">
+                            <div class="spawn-mode-toggle">
+                                <button class="mode-btn active" data-mode="single" onclick="setSpawnMode('single')">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Single Agent
+                                </button>
+                                <button class="mode-btn" data-mode="workflow" onclick="setSpawnMode('workflow')">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Multi-Agent
+                                </button>
+                                <button class="mode-btn" data-mode="specops" onclick="setSpawnMode('specops')">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg> Special Ops
+                                </button>
+                            </div>
+
+                            <!-- Single Agent Form -->
+                            <div id="panel-single-agent-form">
+                                <div class="form-group">
+                                    <label class="form-label">Agent Role <span class="required">*</span></label>
+                                    <div class="role-selector" id="panel-role-selector">
+                                        <div class="role-option selected" data-role="worker" onclick="selectRole(this)">
+                                            <div class="role-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+                                            <div class="role-name">Worker</div>
+                                            <div class="role-desc">Execute tasks efficiently</div>
+                                        </div>
+                                        <div class="role-option" data-role="researcher" onclick="selectRole(this)">
+                                            <div class="role-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+                                            <div class="role-name">Researcher</div>
+                                            <div class="role-desc">Deep investigation</div>
+                                        </div>
+                                        <div class="role-option" data-role="coder" onclick="selectRole(this)">
+                                            <div class="role-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
+                                            <div class="role-name">Coder</div>
+                                            <div class="role-desc">Write & modify code</div>
+                                        </div>
+                                        <div class="role-option" data-role="analyst" onclick="selectRole(this)">
+                                            <div class="role-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
+                                            <div class="role-name">Analyst</div>
+                                            <div class="role-desc">Data & strategic insights</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">Task Description <span class="required">*</span></label>
+                                    <textarea class="form-input form-textarea" id="agent-task-input" placeholder="What should this agent accomplish? Be specific about the goal."></textarea>
+                                </div>
+
+                                <div class="advanced-toggle" onclick="toggleAdvancedOptions()">
+                                    <span id="advanced-arrow">&#9654;</span> Advanced Options
+                                </div>
+
+                                <div id="advanced-options" class="advanced-options hidden">
+                                    <div class="form-group">
+                                        <label class="form-label">Context / Background</label>
+                                        <textarea class="form-input form-textarea-small" id="agent-context-input" placeholder="Any background information the agent should know..."></textarea>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group form-half">
+                                            <label class="form-label">Expected Output</label>
+                                            <select class="form-input" id="agent-output-format">
+                                                <option value="">Any format</option>
+                                                <option value="summary">Brief Summary</option>
+                                                <option value="detailed">Detailed Report</option>
+                                                <option value="code">Code Only</option>
+                                                <option value="list">Bullet Points</option>
+                                                <option value="json">JSON Data</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group form-half">
+                                            <label class="form-label">Priority</label>
+                                            <select class="form-input" id="agent-priority">
+                                                <option value="normal">Normal</option>
+                                                <option value="low">Low</option>
+                                                <option value="high">High</option>
+                                                <option value="critical">Critical</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group form-half">
+                                            <label class="form-label">Model</label>
+                                            <select class="form-input" id="agent-model-select">
+                                                <option value="sonnet" selected>Sonnet 4.6 (Fast)</option>
+                                                <option value="opus">Opus 4.6 (Powerful)</option>
+                                                <option value="haiku">Haiku 4.5 (Fastest)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Resources (file paths or URLs)</label>
+                                        <input type="text" class="form-input" id="agent-resources-input" placeholder="Z:\path\to\file.py, https://example.com/docs">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Timeout</label>
+                                        <div class="timeout-selector" id="agent-timeout-selector">
+                                            <button type="button" class="timeout-btn" data-timeout="1800" onclick="selectAgentTimeout(this)">30 min</button>
+                                            <button type="button" class="timeout-btn active" data-timeout="3600" onclick="selectAgentTimeout(this)">1 hour</button>
+                                            <button type="button" class="timeout-btn" data-timeout="14400" onclick="selectAgentTimeout(this)">4 hours</button>
+                                            <button type="button" class="timeout-btn" data-timeout="0" onclick="selectAgentTimeout(this)">Unlimited</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Multi-Agent Workflow Form -->
+                            <div id="workflow-form" class="hidden">
+                                <div class="form-group">
+                                    <label class="form-label">Mission Objective <span class="required">*</span></label>
+                                    <textarea class="form-input form-textarea" id="workflow-task-input" placeholder="Describe the complex task that requires multiple agents..."></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Workflow Type</label>
+                                    <div class="workflow-type-selector">
+                                        <div class="workflow-type selected" data-type="standard" onclick="selectWorkflowType(this)">
+                                            <div class="workflow-type-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg></div>
+                                            <div class="workflow-type-name">Standard</div>
+                                            <div class="workflow-type-desc">Orchestrator decides</div>
+                                        </div>
+                                        <div class="workflow-type" data-type="parallel" onclick="selectWorkflowType(this)">
+                                            <div class="workflow-type-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg></div>
+                                            <div class="workflow-type-name">Parallel</div>
+                                            <div class="workflow-type-desc">All agents simultaneously</div>
+                                        </div>
+                                        <div class="workflow-type" data-type="sequential" onclick="selectWorkflowType(this)">
+                                            <div class="workflow-type-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>
+                                            <div class="workflow-type-name">Sequential</div>
+                                            <div class="workflow-type-desc">One after another</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Team Composition</label>
+                                    <div class="team-selector team-quantity-selector">
+                                        <div class="team-member-qty">
+                                            <span class="agent-label">Researcher</span>
+                                            <div class="qty-controls">
+                                                <button type="button" class="qty-btn qty-minus" onclick="adjustAgentQty('researcher', -1)">-</button>
+                                                <input type="number" id="qty-researcher" class="qty-input" value="1" min="0" max="5" data-agent="researcher" onchange="updateTeamPreview()">
+                                                <button type="button" class="qty-btn qty-plus" onclick="adjustAgentQty('researcher', 1)">+</button>
+                                            </div>
+                                        </div>
+                                        <div class="team-member-qty">
+                                            <span class="agent-label">Coder</span>
+                                            <div class="qty-controls">
+                                                <button type="button" class="qty-btn qty-minus" onclick="adjustAgentQty('coder', -1)">-</button>
+                                                <input type="number" id="qty-coder" class="qty-input" value="1" min="0" max="5" data-agent="coder" onchange="updateTeamPreview()">
+                                                <button type="button" class="qty-btn qty-plus" onclick="adjustAgentQty('coder', 1)">+</button>
+                                            </div>
+                                        </div>
+                                        <div class="team-member-qty">
+                                            <span class="agent-label">Worker</span>
+                                            <div class="qty-controls">
+                                                <button type="button" class="qty-btn qty-minus" onclick="adjustAgentQty('worker', -1)">-</button>
+                                                <input type="number" id="qty-worker" class="qty-input" value="1" min="0" max="5" data-agent="worker" onchange="updateTeamPreview()">
+                                                <button type="button" class="qty-btn qty-plus" onclick="adjustAgentQty('worker', 1)">+</button>
+                                            </div>
+                                        </div>
+                                        <div class="team-member-qty">
+                                            <span class="agent-label">Analyst</span>
+                                            <div class="qty-controls">
+                                                <button type="button" class="qty-btn qty-minus" onclick="adjustAgentQty('analyst', -1)">-</button>
+                                                <input type="number" id="qty-analyst" class="qty-input" value="0" min="0" max="5" data-agent="analyst" onchange="updateTeamPreview()">
+                                                <button type="button" class="qty-btn qty-plus" onclick="adjustAgentQty('analyst', 1)">+</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="workflow-preview">
+                                    <div class="workflow-preview-title">Command Structure</div>
+                                    <div class="workflow-diagram">
+                                        <div class="commander-node">
+                                            <span class="node-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg></span>
+                                            <span class="node-name">Orchestrator</span>
+                                        </div>
+                                        <div class="command-line"></div>
+                                        <div class="team-nodes" id="team-preview">
+                                            <div class="team-node">Researcher</div>
+                                            <div class="team-node">Coder</div>
+                                            <div class="team-node">Worker</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Special Ops Form -->
+                            <div id="specops-form" class="hidden">
+                                <div class="specops-form-section">
+                                    <div class="form-group">
+                                        <label class="form-label">Mission Name</label>
+                                        <input type="text" class="form-input" id="specops-mission-name" placeholder="Operation Nightfall" maxlength="60">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Mission Objective <span class="required">*</span></label>
+                                        <textarea class="form-input form-textarea" id="specops-task-input" placeholder="Describe the multi-day mission objective..."></textarea>
+                                    </div>
+                                </div>
+
+                                <div class="specops-form-section">
+                                    <div class="form-group">
+                                        <label class="form-label">Agent Sub-Role</label>
+                                        <div class="specops-selector" id="specops-role-selector">
+                                            <button type="button" class="sel-btn active" data-role="worker" onclick="selectSpecopsRole(this)">Worker</button>
+                                            <button type="button" class="sel-btn" data-role="researcher" onclick="selectSpecopsRole(this)">Researcher</button>
+                                            <button type="button" class="sel-btn" data-role="coder" onclick="selectSpecopsRole(this)">Coder</button>
+                                            <button type="button" class="sel-btn" data-role="analyst" onclick="selectSpecopsRole(this)">Analyst</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="specops-form-section">
+                                    <div class="form-group">
+                                        <label class="form-label">Work Style</label>
+                                        <div class="specops-selector" id="specops-work-style-selector">
+                                            <button type="button" class="sel-btn active" data-value="continuous" onclick="selectWorkStyle(this)">Continuous</button>
+                                            <button type="button" class="sel-btn" data-value="cycle" onclick="selectWorkStyle(this)">Cycle-Based</button>
+                                            <button type="button" class="sel-btn" data-value="hybrid" onclick="selectWorkStyle(this)">Agent Decides</button>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group" id="specops-cycle-interval-group" style="display:none;">
+                                        <label class="form-label">Cycle Interval</label>
+                                        <div class="specops-selector" id="specops-cycle-selector">
+                                            <button type="button" class="sel-btn" data-value="900" onclick="selectCycleInterval(this)">15m</button>
+                                            <button type="button" class="sel-btn" data-value="1800" onclick="selectCycleInterval(this)">30m</button>
+                                            <button type="button" class="sel-btn active" data-value="3600" onclick="selectCycleInterval(this)">1hr</button>
+                                            <button type="button" class="sel-btn" data-value="14400" onclick="selectCycleInterval(this)">4hr</button>
+                                            <button type="button" class="sel-btn" data-value="43200" onclick="selectCycleInterval(this)">12hr</button>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="form-label">Mission Duration</label>
+                                        <div class="specops-selector" id="specops-duration-selector">
+                                            <button type="button" class="sel-btn" data-value="86400" onclick="selectMissionDuration(this)">1 day</button>
+                                            <button type="button" class="sel-btn" data-value="172800" onclick="selectMissionDuration(this)">2 days</button>
+                                            <button type="button" class="sel-btn active" data-value="259200" onclick="selectMissionDuration(this)">3 days</button>
+                                            <button type="button" class="sel-btn" data-value="604800" onclick="selectMissionDuration(this)">1 week</button>
+                                            <button type="button" class="sel-btn" data-value="0" onclick="selectMissionDuration(this)">Unlimited</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div style="margin-top:8px;">
+                                    <button type="button" class="btn btn-ghost" onclick="toggleSpecopsAdvanced()" style="font-size:0.8rem;">Advanced Options</button>
+                                    <div id="specops-advanced" class="hidden" style="margin-top:10px;">
+                                        <div class="form-group">
+                                            <label class="form-label">Model</label>
+                                            <select class="form-input" id="specops-model-select" style="padding:8px;">
+                                                <option value="sonnet">Sonnet (Recommended)</option>
+                                                <option value="opus">Opus</option>
+                                                <option value="haiku">Haiku</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Additional Context</label>
+                                            <textarea class="form-input form-textarea" id="specops-context-input" placeholder="Background information for the mission..." style="min-height:60px;"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <!-- Left: Detail mode (agent info + follow-up) -->
+                        <div class="panel-mode" id="panel-left-detail">
+                            <div id="panel-detail-info">
+                                <!-- Populated by populateLeftDetailPanel() -->
+                            </div>
+                            <div class="panel-left-actions" id="panel-left-actions">
+                                <div class="followup-row">
+                                    <textarea id="panel-followup-instructions"
+                                        placeholder="Add specific instructions for the follow-up agent..."
+                                        rows="2"></textarea>
+                                    <button class="agent-action-btn primary" id="panel-followup-btn" onclick="panelSpawnFollowUp()">
+                                        Follow-up Command
+                                    </button>
+                                    <div class="rerun-link" id="panel-rerun-link" onclick="panelRerunAgent()">Re-run same agent</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ===== RIGHT PANEL ===== -->
+                    <div class="agent-panel-right">
+                        <!-- Right: Empty / Tips (create mode) -->
+                        <div class="panel-mode active" id="panel-right-empty">
+                            <div class="tips-section">
+                                <div class="tips-section-title">Tips for Better Agents</div>
+                                <div class="tip-card">
+                                    <div class="tip-title">Be Specific</div>
+                                    Write clear, detailed task descriptions. Instead of "research AI", try "Research the top 5 LLM frameworks for production deployment, compare latency and cost."
+                                </div>
+                                <div class="tip-card">
+                                    <div class="tip-title">Provide Context</div>
+                                    Use the context field to give background. The agent performs better when it understands why the task matters.
+                                </div>
+                                <div class="tip-card">
+                                    <div class="tip-title">Chain Agents</div>
+                                    Use Follow-up Commands to chain agents together. The output of one becomes context for the next.
+                                </div>
+                            </div>
+
+                            <div class="template-gallery" id="template-gallery">
+                                <div class="template-gallery-header">
+                                    <div class="tips-section-title">Prompt Templates</div>
+                                    <button class="template-save-btn" onclick="openTemplateEditor()">+ Create Template</button>
+                                </div>
+                                <div id="template-list">
+                                    <!-- Populated by renderTemplateGallery() -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right: Running (spinner) -->
+                        <div class="panel-mode" id="panel-right-running">
+                            <div class="agent-running-indicator">
+                                <div class="agent-spinner"></div>
+                                <div class="running-text">Agent is working...</div>
+                                <div class="running-task" id="panel-running-task"></div>
+                                <div class="running-elapsed" id="panel-running-elapsed">0:00</div>
+                            </div>
+                        </div>
+
+                        <!-- Right: Output (completed/failed) -->
+                        <div class="panel-mode" id="panel-right-output">
+                            <div id="panel-output-area">
+                                <!-- Populated by populateRightOutputPanel() -->
+                            </div>
+                            <div class="panel-ask-area">
+                                <input type="text" id="panel-ask-input" placeholder="Ask about this output..."
+                                    onkeydown="if(event.key==='Enter')panelSubmitAsk()">
+                                <button onclick="panelSubmitAsk()">Ask</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="agent-panel-footer" id="agent-panel-footer">
+                    <button class="btn btn-secondary" onclick="closeAgentPanel()">Cancel</button>
+                    <button class="btn btn-primary" id="panel-launch-btn" onclick="submitAgent()">Launch Agent</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Agent Creation Modal (LEGACY - hidden, kept for compatibility) -->
+        <div class="modal-overlay" id="agent-modal" onclick="if(event.target === this) closeAgentModal()" style="display:none !important">
             <div class="modal modal-large">
                 <div class="modal-header">
                     <span class="modal-title"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 8px;"><circle cx="12" cy="8" r="5"/><path d="M3 21v-2a7 7 0 0 1 7-7h4a7 7 0 0 1 7 7v2"/></svg>Spawn New Agent</span>
@@ -23143,6 +24224,9 @@
                         </button>
                         <button class="mode-btn" data-mode="workflow" onclick="setSpawnMode('workflow')">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Multi-Agent Workflow
+                        </button>
+                        <button class="mode-btn" data-mode="specops" onclick="setSpawnMode('specops')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg> Special Ops
                         </button>
                     </div>
 
@@ -23935,7 +25019,7 @@
         </div>
 
         <!-- Agent Detail Modal (Centered with blur backdrop) -->
-        <div class="agent-detail-page" id="agent-detail-page" onclick="if(event.target===this)closeAgentDetailPage()">
+        <div class="agent-detail-page" id="agent-detail-page" onclick="if(event.target===this)closeAgentDetailPage()" style="display:none !important">
             <div class="agent-detail-modal" onclick="event.stopPropagation()">
                 <div class="agent-detail-modal-header">
                     <span class="agent-title" id="agent-page-title">Agent Details</span>
@@ -24076,7 +25160,7 @@
         // ==================== CONFIGURATION ====================
         const CEREBRO_CONFIG = window.CEREBRO_CONFIG || {};
         const currentHost = window.location.hostname;
-        const currentPort = window.location.port || '59000';
+        const currentPort = window.location.port || '61000';
         const API_URL = CEREBRO_CONFIG.apiUrl || `http://${currentHost}:${currentPort}`;
         const CEREBRO_TTS_URL = CEREBRO_CONFIG.ttsUrl || '';
         const CEREBRO_DGX_HOST = CEREBRO_CONFIG.dgxHost || '';
@@ -24166,6 +25250,7 @@
             loadHomepage(); // Non-blocking parallel homepage load
             await loadSmartSuggestions();
             await loadAgents();
+            loadTemplatesFromBackend(); // Sync prompt templates
             await loadRecentAgents();
             await loadNotifications();
             await loadDirectives();
@@ -24202,6 +25287,134 @@
             if (!window.__STANDALONE && 'Notification' in window && Notification.permission === 'default') {
                 Notification.requestPermission();
             }
+
+            // Wire up credential expiry listeners (Electron desktop only)
+            initCredentialWatcher();
+        }
+
+        // ==================== CREDENTIAL EXPIRY DETECTION ====================
+        var _credModalShowing = false;
+
+        function initCredentialWatcher() {
+            if (!window.cerebroDesktop) return;
+
+            window.cerebroDesktop.onCredentialsExpired(function(data) {
+                console.warn('[Creds] Credentials expired, silent refresh was already attempted by watcher.');
+                showCredentialModal(data.message || 'Your Claude session has expired.');
+            });
+
+            window.cerebroDesktop.onCredentialsRefreshed(function(data) {
+                console.log('[Creds] Credentials refreshed, expires in', data.expiresIn, 'min');
+                hideCredentialModal();
+                if (data.silent) {
+                    console.log('[Creds] Silent auto-refresh succeeded — no user action needed');
+                } else {
+                    showToast('Claude credentials refreshed (' + data.expiresIn + 'm remaining)', 'success');
+                }
+            });
+
+            // Initial startup check — try silent refresh if needed
+            window.cerebroDesktop.checkClaudeCredentials().then(function(status) {
+                if (status && !status.valid && status.needsLogin) {
+                    // Try silent refresh before showing modal
+                    console.log('[Creds] Startup: credentials invalid, attempting silent refresh...');
+                    window.cerebroDesktop.silentRefreshOAuth().then(function(result) {
+                        if (result && result.success) {
+                            console.log('[Creds] Startup silent refresh succeeded (' + result.expiresIn + 'm)');
+                        } else {
+                            console.warn('[Creds] Startup silent refresh failed:', result && result.error);
+                            showCredentialModal(status.error || 'Claude credentials are missing or expired.');
+                        }
+                    }).catch(function() {
+                        showCredentialModal(status.error || 'Claude credentials are missing or expired.');
+                    });
+                } else if (status && status.warning) {
+                    // Expiring soon — try silent refresh proactively
+                    window.cerebroDesktop.silentRefreshOAuth().then(function(result) {
+                        if (result && result.success) {
+                            console.log('[Creds] Proactive refresh succeeded (' + result.expiresIn + 'm)');
+                        }
+                    }).catch(function() {});
+                }
+            }).catch(function() {});
+        }
+
+        function showCredentialModal(message) {
+            if (_credModalShowing) return;
+            _credModalShowing = true;
+
+            var overlay = document.createElement('div');
+            overlay.className = 'cred-modal-overlay';
+            overlay.id = 'cred-expiry-modal';
+
+            var modal = document.createElement('div');
+            modal.className = 'cred-modal';
+
+            var icon = document.createElement('div');
+            icon.className = 'cred-modal-icon';
+            icon.textContent = '\uD83D\uDD12';
+
+            var title = document.createElement('div');
+            title.className = 'cred-modal-title';
+            title.textContent = 'Authentication Required';
+
+            var desc = document.createElement('div');
+            desc.className = 'cred-modal-desc';
+            desc.textContent = message || 'Your Claude session has expired. Please re-authenticate to continue using agents.';
+
+            var actions = document.createElement('div');
+            actions.className = 'cred-modal-actions';
+
+            var dismissBtn = document.createElement('button');
+            dismissBtn.className = 'cred-modal-btn-dismiss';
+            dismissBtn.textContent = 'Later';
+            dismissBtn.onclick = function() { hideCredentialModal(); };
+
+            var loginBtn = document.createElement('button');
+            loginBtn.className = 'cred-modal-btn-login';
+            loginBtn.textContent = 'Re-authenticate';
+            loginBtn.onclick = function() { launchClaudeLogin(); };
+
+            actions.appendChild(dismissBtn);
+            actions.appendChild(loginBtn);
+
+            var status = document.createElement('div');
+            status.className = 'cred-modal-status';
+            status.id = 'cred-modal-status';
+
+            modal.appendChild(icon);
+            modal.appendChild(title);
+            modal.appendChild(desc);
+            modal.appendChild(actions);
+            modal.appendChild(status);
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+        }
+
+        function hideCredentialModal() {
+            _credModalShowing = false;
+            var el = document.getElementById('cred-expiry-modal');
+            if (el) el.remove();
+        }
+
+        function launchClaudeLogin() {
+            if (!window.cerebroDesktop) {
+                showToast('Run "claude auth login" in your terminal to re-authenticate.', 'info');
+                return;
+            }
+
+            var statusEl = document.getElementById('cred-modal-status');
+            if (statusEl) statusEl.textContent = 'Opening login...';
+
+            window.cerebroDesktop.launchClaudeLogin().then(function(result) {
+                if (result && result.success) {
+                    if (statusEl) statusEl.textContent = 'Complete the login in the popup window. This will close automatically.';
+                } else {
+                    if (statusEl) statusEl.textContent = result.error || 'Could not start login. Run "claude auth login" in a terminal.';
+                }
+            }).catch(function(err) {
+                if (statusEl) statusEl.textContent = 'Error: ' + (err.message || 'Unknown error');
+            });
         }
 
         // ==================== HOMEPAGE DASHBOARD ====================
@@ -27612,6 +28825,22 @@
                 }
             });
 
+            // Listen for specops mission updates
+            socket.on('specops_mission_update', (data) => {
+                console.log('SpecOps update:', data);
+                var agent = agents[data.agent_id];
+                if (agent) {
+                    if (data.cycle_count !== undefined) agent.cycle_count = data.cycle_count;
+                    if (data.mission_journal) agent.mission_journal = data.mission_journal;
+                    if (data.next_checkin !== undefined) agent.next_checkin = data.next_checkin;
+                    if (data.mission_elapsed !== undefined) agent.mission_elapsed = data.mission_elapsed;
+                    if (data.work_style) agent.work_style = data.work_style;
+                    if (data.auto_continue !== undefined) agent.auto_continue = data.auto_continue;
+                    if (data.status) agent.status = data.status;
+                    renderAgents();
+                }
+            });
+
             // Listen for agent project assignment
             socket.on('agent_project_assigned', (data) => {
                 console.log('Agent project assigned:', data);
@@ -30017,23 +31246,17 @@
             const container = document.getElementById('agents-container');
             const archivedContainer = document.getElementById('archived-agents-container');
 
-            // Sort based on agentsSortMode
+            // Sort by created time — running agents always pinned to top
             let allAgents = Object.values(agents);
-            if (agentsSortMode === 'name') {
-                allAgents.sort((a, b) => (a.call_sign || a.id).localeCompare(b.call_sign || b.id));
-            } else if (agentsSortMode === 'created') {
-                allAgents.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-            } else {
-                // activity: running first, then by most recent activity
-                allAgents.sort((a, b) => {
-                    const aRunning = a.status === 'running' || a.status === 'queued' ? 1 : 0;
-                    const bRunning = b.status === 'running' || b.status === 'queued' ? 1 : 0;
-                    if (bRunning !== aRunning) return bRunning - aRunning;
-                    const aTime = a.completed_at || a.updated_at || a.created_at;
-                    const bTime = b.completed_at || b.updated_at || b.created_at;
-                    return new Date(bTime) - new Date(aTime);
-                });
-            }
+            const dirMul = agentsSortDir === 'asc' ? 1 : -1;
+            allAgents.sort((a, b) => {
+                const aRunning = a.status === 'running' || a.status === 'queued' ? 1 : 0;
+                const bRunning = b.status === 'running' || b.status === 'queued' ? 1 : 0;
+                if (bRunning !== aRunning) return bRunning - aRunning;
+                const aTime = a.created_at || a.updated_at;
+                const bTime = b.created_at || b.updated_at;
+                return dirMul * (new Date(bTime) - new Date(aTime));
+            });
 
             // Search filtering
             if (agentsSearchQuery) {
@@ -30217,6 +31440,14 @@
         });
 
         function renderAgentCard(agent, isArchived, childAgents = []) {
+            // Special Ops agents get their own renderer
+            if (agent.is_specops || (agent.type && agent.type.startsWith('specops_'))) {
+                if (agentsViewMode === 'grid') {
+                    return renderCompactSpecopsCard(agent, isArchived);
+                }
+                return renderSpecopsCard(agent, isArchived);
+            }
+
             // Use compact cards in grid view
             if (agentsViewMode === 'grid') {
                 return renderCompactAgentCard(agent, isArchived);
@@ -30368,7 +31599,8 @@
         // ===== VIEW MODE, SEARCH, SORT, PROJECT VIEW =====
         let agentsViewMode = localStorage.getItem('agentsViewMode') || 'grid';
         let agentsSearchQuery = '';
-        let agentsSortMode = localStorage.getItem('agentsSortMode') || 'activity';
+        let agentsSortDir = localStorage.getItem('agentsSortDir') || 'desc';
+        let agentsSortMode = 'activity'; // kept for compat, always 'activity' now
         let agentProjects = {};
         let expandedProjects = new Set(['uncategorized']);
 
@@ -30378,8 +31610,7 @@
             document.querySelectorAll('.view-mode-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.view === mode);
             });
-            const sortSelect = document.getElementById('agents-sort-select');
-            if (sortSelect) sortSelect.value = agentsSortMode;
+            syncSortToggleUI();
             renderAgents();
         }
 
@@ -30389,10 +31620,22 @@
             renderAgents();
         }
 
+        function setAgentSortDir(dir) {
+            agentsSortDir = dir;
+            localStorage.setItem('agentsSortDir', dir);
+            syncSortToggleUI();
+            renderAgents();
+        }
+
+        function syncSortToggleUI() {
+            var descBtn = document.getElementById('sort-btn-desc');
+            var ascBtn = document.getElementById('sort-btn-asc');
+            if (descBtn) descBtn.classList.toggle('active', agentsSortDir === 'desc');
+            if (ascBtn) ascBtn.classList.toggle('active', agentsSortDir === 'asc');
+        }
+
         function sortAgents() {
-            const select = document.getElementById('agents-sort-select');
-            agentsSortMode = select ? select.value : 'activity';
-            localStorage.setItem('agentsSortMode', agentsSortMode);
+            // Legacy compat — just re-render
             renderAgents();
         }
 
@@ -30929,6 +32172,12 @@
         let currentSpawnMode = 'single';
         let agentTimeout = 3600; // default 1 hour
 
+        // Special Ops state
+        let selectedSpecopsRole = 'worker';
+        let specopsWorkStyle = 'continuous';
+        let specopsCycleInterval = 3600;
+        let specopsMissionDuration = 259200; // 3 days
+
         // Agent select mode (context fusion)
         // NOTE: Using var so inline onclick handlers can access these from window scope
         var agentSelectMode = false;
@@ -30942,26 +32191,726 @@
             agentTimeout = parseInt(btn.dataset.timeout);
         }
 
-        function showSpawnAgentDialog() {
+        // ==================== UNIFIED AGENT PANEL STATE MACHINE ====================
+        let agentPanelState = null;   // 'create' | 'running' | 'detail'
+        let agentPanelAgentId = null;
+        let _panelElapsedTimer = null;
+        let _panelElapsedStart = null;
+
+        function setAgentPanelState(state, agentId) {
+            agentPanelState = state;
+            agentPanelAgentId = agentId || null;
+
+            const leftCreate = document.getElementById('panel-left-create');
+            const leftDetail = document.getElementById('panel-left-detail');
+            const rightEmpty = document.getElementById('panel-right-empty');
+            const rightRunning = document.getElementById('panel-right-running');
+            const rightOutput = document.getElementById('panel-right-output');
+            const footer = document.getElementById('agent-panel-footer');
+            const statusBadge = document.getElementById('panel-status-badge');
+            const titleEl = document.getElementById('panel-title');
+
+            // Deactivate all modes
+            [leftCreate, leftDetail, rightEmpty, rightRunning, rightOutput].forEach(function(el) { el.classList.remove('active'); });
+
+            // Clear elapsed timer
+            if (_panelElapsedTimer) { clearInterval(_panelElapsedTimer); _panelElapsedTimer = null; }
+
+            if (state === 'create') {
+                leftCreate.classList.add('active');
+                rightEmpty.classList.add('active');
+                footer.style.display = 'flex';
+                statusBadge.style.display = 'none';
+                titleEl.textContent = 'Spawn New Agent';
+                renderTemplateGallery();
+            } else if (state === 'running') {
+                leftDetail.classList.add('active');
+                rightRunning.classList.add('active');
+                footer.style.display = 'none';
+                statusBadge.style.display = '';
+                statusBadge.textContent = 'RUNNING';
+                statusBadge.className = 'agent-status-badge running';
+                if (agentId) {
+                    var agent = agents[agentId];
+                    if (agent) {
+                        populateLeftDetailPanel(agentId);
+                        document.getElementById('panel-running-task').textContent = agent.task.slice(0, 120) + (agent.task.length > 120 ? '...' : '');
+                        var typeEmoji = (agent.type || 'worker') === 'researcher' ? '\uD83D\uDD0D' : (agent.type || 'worker') === 'coder' ? '\uD83D\uDCBB' : (agent.type || 'worker') === 'analyst' ? '\uD83D\uDCCA' : '\u26A1';
+                        titleEl.textContent = typeEmoji + ' Agent ' + (agent.call_sign || agent.id);
+                    }
+                    // Start elapsed timer
+                    _panelElapsedStart = Date.now();
+                    var elapsedEl = document.getElementById('panel-running-elapsed');
+                    _panelElapsedTimer = setInterval(function() {
+                        var secs = Math.floor((Date.now() - _panelElapsedStart) / 1000);
+                        var m = Math.floor(secs / 60);
+                        var s = secs % 60;
+                        elapsedEl.textContent = m + ':' + s.toString().padStart(2, '0');
+                    }, 1000);
+                }
+                // Hide left actions when running
+                document.getElementById('panel-left-actions').style.display = 'none';
+            } else if (state === 'detail') {
+                leftDetail.classList.add('active');
+                rightOutput.classList.add('active');
+                footer.style.display = 'none';
+                if (agentId) {
+                    var agent = agents[agentId];
+                    if (agent) {
+                        var statusText = (agent.status || 'completed').toUpperCase();
+                        statusBadge.style.display = '';
+                        statusBadge.textContent = statusText;
+                        statusBadge.className = 'agent-status-badge ' + agent.status;
+                        var typeEmoji = (agent.type || 'worker') === 'researcher' ? '\uD83D\uDD0D' : (agent.type || 'worker') === 'coder' ? '\uD83D\uDCBB' : (agent.type || 'worker') === 'analyst' ? '\uD83D\uDCCA' : '\u26A1';
+                        titleEl.textContent = typeEmoji + ' Agent ' + (agent.call_sign || agent.id);
+                        populateLeftDetailPanel(agentId);
+                        populateRightOutputPanel(agentId);
+
+                        // Show/hide left actions based on status
+                        var actionsEl = document.getElementById('panel-left-actions');
+                        actionsEl.style.display = '';
+                        var followupBtn = document.getElementById('panel-followup-btn');
+                        var rerunLink = document.getElementById('panel-rerun-link');
+                        if (agent.status === 'completed' && !agent.error) {
+                            followupBtn.textContent = 'Follow-up Command';
+                            rerunLink.style.display = 'block';
+                        } else if (agent.status === 'running') {
+                            actionsEl.style.display = 'none';
+                        } else {
+                            followupBtn.textContent = 'Retry Task';
+                            rerunLink.style.display = 'none';
+                        }
+                    }
+                }
+            }
+        }
+
+        function openAgentPanel(mode, agentId) {
             document.body.classList.add('modal-open');
-            document.getElementById('agent-modal').classList.add('active');
-            document.getElementById('agent-task-input').value = '';
-            document.getElementById('agent-task-input').focus();
-            // Reset to single mode
-            setSpawnMode('single');
-            // Reset timeout to default
-            agentTimeout = 3600;
-            document.querySelectorAll('#agent-timeout-selector .timeout-btn').forEach(btn => {
-                btn.classList.toggle('active', parseInt(btn.dataset.timeout) === 3600);
+            document.getElementById('agent-panel').classList.add('active');
+            document.addEventListener('keydown', _panelEscHandler);
+
+            if (mode === 'create') {
+                // Reset form fields
+                var taskInput = document.getElementById('agent-task-input');
+                if (taskInput) { taskInput.value = ''; }
+                var contextInput = document.getElementById('agent-context-input');
+                if (contextInput) { contextInput.value = ''; }
+                // Reset role selector
+                document.querySelectorAll('#panel-role-selector .role-option').forEach(function(el) { el.classList.remove('selected'); });
+                var defaultRole = document.querySelector('#panel-role-selector .role-option[data-role="worker"]');
+                if (defaultRole) defaultRole.classList.add('selected');
+                selectedAgentRole = 'worker';
+                // Reset to single mode
+                setSpawnMode('single');
+                // Reset timeout
+                agentTimeout = 3600;
+                document.querySelectorAll('#agent-timeout-selector .timeout-btn').forEach(function(btn) {
+                    btn.classList.toggle('active', parseInt(btn.dataset.timeout) === 3600);
+                });
+                // Reset advanced
+                var advOpts = document.getElementById('advanced-options');
+                if (advOpts) advOpts.classList.add('hidden');
+                var advArrow = document.getElementById('advanced-arrow');
+                if (advArrow) advArrow.textContent = '\u25B6';
+
+                setAgentPanelState('create');
+                setTimeout(function() { var ti = document.getElementById('agent-task-input'); if (ti) ti.focus(); }, 100);
+            } else if (mode === 'detail') {
+                currentDetailAgentId = agentId;
+                _lastStreamedOutputLen = 0;
+                // Mark as viewed
+                fetch(API_URL + '/agents/' + agentId + '/view', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                }).catch(console.error);
+
+                var agent = agents[agentId];
+                if (agent && agent.status === 'running') {
+                    setAgentPanelState('running', agentId);
+                } else {
+                    setAgentPanelState('detail', agentId);
+                }
+            }
+        }
+
+        function closeAgentPanel() {
+            document.body.classList.remove('modal-open');
+            document.getElementById('agent-panel').classList.remove('active');
+            if (_panelElapsedTimer) { clearInterval(_panelElapsedTimer); _panelElapsedTimer = null; }
+            agentPanelState = null;
+            agentPanelAgentId = null;
+            currentDetailAgentId = null;
+            document.removeEventListener('keydown', _panelEscHandler);
+        }
+
+        function _panelEscHandler(e) {
+            if (e.key === 'Escape' && agentPanelState) closeAgentPanel();
+        }
+
+        function populateLeftDetailPanel(agentId) {
+            var agent = agents[agentId];
+            if (!agent) return;
+            var agentType = agent.type || 'worker';
+            var duration = agent.completed_at && agent.started_at ?
+                formatDuration(new Date(agent.completed_at) - new Date(agent.started_at)) :
+                (agent.started_at ? 'Running...' : 'Queued');
+            var toolsHtml = agent.tools_used && agent.tools_used.length > 0 ?
+                agent.tools_used.map(function(t) { return '<span class="agent-tool-badge">' + t + '</span>'; }).join('') :
+                '<span style="color: var(--text-muted);">No tools used yet</span>';
+
+            // Build project dropdown
+            var projectOptions = Object.keys(agentProjects).map(function(pid) {
+                var pName = agentProjects[pid].name || pid;
+                var selected = agent.project_id === pid ? 'selected' : '';
+                return '<option value="' + escapeHtml(pid) + '" ' + selected + '>' + escapeHtml(pName) + '</option>';
+            }).join('');
+
+            var infoHtml = '<div class="agent-info-card">'
+                + '<div class="agent-info-row">'
+                + '<div class="agent-info-item"><span class="label">Type:</span><span class="value">' + agentType + '</span></div>'
+                + '<div class="agent-info-item"><span class="label">Duration:</span><span class="value">' + duration + '</span></div>'
+                + '<div class="agent-info-item"><span class="label">Model:</span><span class="value">' + ((agent.model || 'sonnet').charAt(0).toUpperCase() + (agent.model || 'sonnet').slice(1)) + '</span></div>'
+                + '<div class="agent-info-item"><span class="label">Created:</span><span class="value">' + new Date(agent.created_at).toLocaleString() + '</span></div>'
+                + '<div class="agent-info-item"><span class="label">Project:</span>'
+                + '<select class="agent-project-select" onchange="assignAgentProject(\'' + agent.id + '\', this.value)">'
+                + '<option value=""' + (!agent.project_id ? ' selected' : '') + '>None</option>'
+                + projectOptions
+                + '</select></div>'
+                + '</div>'
+                + '<div class="agent-task-box">' + escapeHtml(agent.task) + '</div>'
+                + '</div>'
+                + '<div class="agent-section">'
+                + '<div class="agent-section-title">Tools Used (' + (agent.tools_used ? agent.tools_used.length : 0) + ')</div>'
+                + '<div class="agent-tools-list">' + toolsHtml + '</div>'
+                + '</div>';
+
+            // Add specops controls if applicable
+            if (agent.is_specops || (agent.type && agent.type.startsWith('specops_'))) {
+                var autoContinueOn = agent.auto_continue !== false;
+                var specopsHtml = '<div class="specops-controls">'
+                    + '<label style="font-size:0.75rem;color:var(--specops-pink-light);font-weight:600;">Work Style:</label>'
+                    + '<select onchange="updateSpecopsField(\'' + agent.id + '\',\'work_style\',this.value)">'
+                    + '<option value="continuous"' + (agent.work_style === 'continuous' ? ' selected' : '') + '>Continuous</option>'
+                    + '<option value="cycle"' + (agent.work_style === 'cycle' ? ' selected' : '') + '>Cycle-Based</option>'
+                    + '<option value="hybrid"' + (agent.work_style === 'hybrid' ? ' selected' : '') + '>Agent Decides</option>'
+                    + '</select>'
+                    + '<label style="font-size:0.75rem;color:var(--specops-pink-light);font-weight:600;">Cycle:</label>'
+                    + '<select onchange="updateSpecopsField(\'' + agent.id + '\',\'cycle_interval\',parseInt(this.value))">'
+                    + '<option value="900"' + (agent.cycle_interval === 900 ? ' selected' : '') + '>15m</option>'
+                    + '<option value="1800"' + (agent.cycle_interval === 1800 ? ' selected' : '') + '>30m</option>'
+                    + '<option value="3600"' + (agent.cycle_interval === 3600 ? ' selected' : '') + '>1hr</option>'
+                    + '<option value="14400"' + (agent.cycle_interval === 14400 ? ' selected' : '') + '>4hr</option>'
+                    + '<option value="43200"' + (agent.cycle_interval === 43200 ? ' selected' : '') + '>12hr</option>'
+                    + '</select>'
+                    + '<button class="toggle-btn ' + (autoContinueOn ? 'on' : 'off') + '" onclick="toggleSpecopsAutoContinue(\'' + agent.id + '\')">'
+                    + 'Auto-Continue: ' + (autoContinueOn ? 'ON' : 'OFF')
+                    + '</button>'
+                    + '</div>';
+
+                // Mission journal
+                var journalEntries = agent.mission_journal || [];
+                if (journalEntries.length > 0) {
+                    specopsHtml += '<div class="specops-journal"><div class="agent-section-title" style="color:var(--specops-pink-light);">Mission Journal (' + journalEntries.length + ' cycles)</div>';
+                    journalEntries.slice().reverse().forEach(function(entry) {
+                        specopsHtml += '<div class="specops-journal-entry">'
+                            + '<div class="specops-journal-entry-header"><span>Cycle #' + (entry.cycle || '?') + '</span><span>' + (entry.timestamp ? new Date(entry.timestamp).toLocaleString() : '') + '</span></div>'
+                            + '<div class="specops-journal-entry-body">'
+                            + '<div><strong>Progress:</strong> ' + escapeHtml(entry.progress || 'N/A') + '</div>'
+                            + '<div><strong>Completed:</strong> ' + escapeHtml(entry.completed || 'N/A') + '</div>'
+                            + '<div><strong>Next:</strong> ' + escapeHtml(entry.next || 'N/A') + '</div>'
+                            + '<div><strong>Blockers:</strong> ' + escapeHtml(entry.blockers || 'None') + '</div>'
+                            + '</div></div>';
+                    });
+                    specopsHtml += '</div>';
+                }
+
+                infoHtml += specopsHtml;
+            }
+
+            document.getElementById('panel-detail-info').innerHTML = infoHtml;
+        }
+
+        function populateRightOutputPanel(agentId) {
+            var agent = agents[agentId];
+            if (!agent) return;
+
+            var outputText = agent.output || 'No output captured yet.';
+            var renderedOutput = '';
+            try {
+                if (typeof marked !== 'undefined') {
+                    marked.setOptions({ breaks: true, gfm: true });
+                    renderedOutput = marked.parse(outputText);
+                } else {
+                    renderedOutput = '<pre>' + escapeHtml(outputText) + '</pre>';
+                }
+            } catch (e) {
+                renderedOutput = '<pre>' + escapeHtml(outputText) + '</pre>';
+            }
+
+            // Extract recommendations
+            var recommendations = extractRecommendations(outputText);
+            var recommendationsHtml = '';
+            if (recommendations.length > 0) {
+                var recsItems = recommendations.map(function(rec, i) {
+                    return '<div class="recommendation-item">'
+                        + '<div class="recommendation-text">' + escapeHtml(rec) + '</div>'
+                        + '<button class="recommendation-btn" onclick="executeRecommendation(' + i + ')">Execute</button>'
+                        + '</div>';
+                }).join('');
+                recommendationsHtml = '<div class="recommendations-section">'
+                    + '<div class="recommendations-title">Recommended Actions</div>'
+                    + recsItems + '</div>';
+            }
+
+            // Sub-agents
+            var subAgentsHtml = '';
+            var childAgents = Object.values(agents).filter(function(a) {
+                return a.parent_agent_id === agentId && isCurrentRunSubAgent(a, agent);
+            });
+            if (childAgents.length > 0) {
+                childAgents.sort(function(a, b) { return new Date(a.created_at) - new Date(b.created_at); });
+                var subAgentCards = childAgents.map(function(child) {
+                    var childStatusIcon = child.status === 'running' ? '...' : child.status === 'completed' ? 'OK' : child.status === 'failed' ? 'ERR' : '...';
+                    var childName = child.call_sign || child.id;
+                    return '<div class="sub-agent-nav-card ' + child.status + '" onclick="openAgentPanel(\'detail\',\'' + child.id + '\')">'
+                        + '<div class="sub-agent-nav-name">' + escapeHtml(childName) + '</div>'
+                        + '<div class="sub-agent-nav-task">' + escapeHtml(child.task.slice(0, 80)) + (child.task.length > 80 ? '...' : '') + '</div>'
+                        + '<span class="sub-agent-nav-status ' + child.status + '">' + childStatusIcon + ' ' + child.status.toUpperCase() + '</span>'
+                        + '</div>';
+                }).join('');
+                subAgentsHtml = '<div class="agent-section">'
+                    + '<div class="agent-section-title">Sub-Agents (' + childAgents.length + ')</div>'
+                    + '<div class="sub-agents-nav">' + subAgentCards + '</div></div>';
+            }
+
+            // Error section
+            var errorHtml = agent.error ? '<div class="agent-section">'
+                + '<div class="agent-section-title" style="color: var(--red);">Error</div>'
+                + '<div style="background: rgba(239,68,68,0.1); border: 1px solid var(--red); border-radius: 12px; padding: 14px; color: var(--red);">'
+                + escapeHtml(agent.error) + '</div></div>' : '';
+
+            // Threads
+            var threadsHtml = '';
+            var threadTree = buildThreadTree(agent.conversation || []);
+            if (threadTree.length > 0) {
+                threadsHtml = '<div class="agent-section" style="margin-top: 24px;">'
+                    + '<div class="agent-section-title">Conversations (' + threadTree.length + ')</div>'
+                    + '<div id="panel-threads-list">' + renderThreadCards(threadTree) + '</div></div>';
+            }
+
+            document.getElementById('panel-output-area').innerHTML =
+                recommendationsHtml + subAgentsHtml + errorHtml
+                + '<div class="agent-section"><div class="agent-section-title">Output</div>'
+                + '<div class="agent-output-rendered">' + renderedOutput + '</div></div>'
+                + threadsHtml;
+        }
+
+        function panelSpawnFollowUp() {
+            if (!agentPanelAgentId) return;
+            var agent = agents[agentPanelAgentId];
+            if (!agent) return;
+            var instructions = (document.getElementById('panel-followup-instructions') || {}).value;
+            instructions = instructions ? instructions.trim() : '';
+            var task = instructions || ('Continue the work of agent ' + (agent.call_sign || agent.id));
+            spawnAgentEnhanced(task, agent.type || 'worker', 'Previous agent output:\n' + (agent.output || '').slice(0, 3000), null, 'normal', null, 3600, agent.model || 'sonnet');
+            closeAgentPanel();
+        }
+
+        function panelRerunAgent() {
+            if (!agentPanelAgentId) return;
+            var agent = agents[agentPanelAgentId];
+            if (!agent) return;
+            spawnAgentEnhanced(agent.task, agent.type || 'worker', null, null, 'normal', null, 3600, agent.model || 'sonnet');
+            closeAgentPanel();
+        }
+
+        function panelSubmitAsk() {
+            if (!agentPanelAgentId) return;
+            var input = document.getElementById('panel-ask-input');
+            var question = input.value.trim();
+            if (!question) return;
+            input.value = '';
+            // Direct API call for asking
+            fetch(API_URL + '/agents/' + agentPanelAgentId + '/ask', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ question: question, background: true })
+            }).then(function(resp) { return resp.json(); }).then(function(data) {
+                // Append question to output area
+                var outputArea = document.getElementById('panel-output-area');
+                if (outputArea) {
+                    var qDiv = document.createElement('div');
+                    qDiv.className = 'agent-section';
+                    qDiv.style.marginTop = '16px';
+                    qDiv.innerHTML = '<div class="agent-section-title">Question</div>'
+                        + '<div class="agent-task-box">' + escapeHtml(question) + '</div>'
+                        + '<div style="color: var(--text-muted); font-size: 0.8rem; margin-top: 8px;">Processing in background...</div>';
+                    outputArea.appendChild(qDiv);
+                }
+            }).catch(console.error);
+        }
+
+        // ==================== PROMPT TEMPLATES ====================
+        var DEFAULT_TEMPLATES = [
+            { id: 'default-code-review', name: 'Code Review', desc: 'Thorough code review with suggestions', role: 'coder', task: 'Review the following code for bugs, security issues, performance problems, and code quality. Provide specific suggestions for improvement with code examples.', context: '', outputFormat: 'detailed' },
+            { id: 'default-research', name: 'Research Task', desc: 'Deep research on any topic', role: 'researcher', task: 'Research the following topic thoroughly. Provide a comprehensive summary with key findings, sources, and actionable recommendations.', context: '', outputFormat: 'detailed' },
+            { id: 'default-data-analysis', name: 'Data Analysis', desc: 'Analyze data and extract insights', role: 'analyst', task: 'Analyze the provided data. Identify key patterns, trends, outliers, and actionable insights. Present findings with clear visualizations described in text.', context: '', outputFormat: 'list' }
+        ];
+
+        function getPromptTemplates() {
+            try {
+                var stored = localStorage.getItem('cerebro_agent_templates');
+                if (stored) return JSON.parse(stored);
+            } catch (e) {}
+            // Seed defaults on first load
+            savePromptTemplates(DEFAULT_TEMPLATES);
+            return DEFAULT_TEMPLATES;
+        }
+
+        function savePromptTemplates(templates) {
+            localStorage.setItem('cerebro_agent_templates', JSON.stringify(templates));
+            syncTemplatesToBackend(templates);
+        }
+
+        var _activeTemplateMenu = null;
+
+        function renderTemplateGallery() {
+            var templates = getPromptTemplates();
+            var listEl = document.getElementById('template-list');
+            if (!listEl) return;
+
+            if (templates.length === 0) {
+                listEl.textContent = '';
+                var empty = document.createElement('div');
+                empty.className = 'template-empty';
+                empty.textContent = 'No templates yet. Click "+ Create Template" to get started!';
+                listEl.appendChild(empty);
+                return;
+            }
+
+            listEl.textContent = '';
+            templates.forEach(function(t) {
+                var card = document.createElement('div');
+                card.className = 'template-card';
+                card.onclick = function() { applyTemplate(t.id); };
+                card.oncontextmenu = function(e) { showTemplateContextMenu(e, t.id, card); };
+
+                var nameDiv = document.createElement('div');
+                nameDiv.className = 'template-name';
+                nameDiv.textContent = t.name;
+
+                var descDiv = document.createElement('div');
+                descDiv.className = 'template-desc';
+                descDiv.textContent = t.desc;
+
+                card.appendChild(nameDiv);
+                card.appendChild(descDiv);
+                listEl.appendChild(card);
             });
         }
 
+        function applyTemplate(id) {
+            var templates = getPromptTemplates();
+            var tmpl = templates.find(function(t) { return t.id === id; });
+            if (!tmpl) return;
+
+            var taskInput = document.getElementById('agent-task-input');
+            if (taskInput) taskInput.value = tmpl.task || '';
+
+            var contextInput = document.getElementById('agent-context-input');
+            if (contextInput) contextInput.value = tmpl.context || '';
+
+            var outputFormat = document.getElementById('agent-output-format');
+            if (outputFormat) outputFormat.value = tmpl.outputFormat || '';
+
+            // Select role
+            if (tmpl.role) {
+                document.querySelectorAll('#panel-role-selector .role-option').forEach(function(el) {
+                    el.classList.toggle('selected', el.dataset.role === tmpl.role);
+                });
+                selectedAgentRole = tmpl.role;
+            }
+
+            // Show advanced if context or output format set
+            if (tmpl.context || tmpl.outputFormat) {
+                var advOpts = document.getElementById('advanced-options');
+                if (advOpts) advOpts.classList.remove('hidden');
+                var advArrow = document.getElementById('advanced-arrow');
+                if (advArrow) advArrow.textContent = '\u25BC';
+            }
+        }
+
+        function showTemplateContextMenu(event, templateId, card) {
+            event.preventDefault();
+            event.stopPropagation();
+            hideTemplateContextMenu();
+
+            var menu = document.createElement('div');
+            menu.className = 'template-context-menu';
+
+            var items = [
+                { icon: '\u270F\uFE0F', label: 'Edit', action: function() { hideTemplateContextMenu(); openTemplateEditor(templateId); } },
+                { icon: '\uD83D\uDDD1\uFE0F', label: 'Delete', action: function() { hideTemplateContextMenu(); deleteTemplate(templateId); } }
+            ];
+
+            items.forEach(function(item) {
+                var row = document.createElement('div');
+                row.className = 'template-context-menu-item';
+                var iconSpan = document.createElement('span');
+                iconSpan.className = 'popup-icon';
+                iconSpan.textContent = item.icon;
+                var labelSpan = document.createElement('span');
+                labelSpan.textContent = item.label;
+                row.appendChild(iconSpan);
+                row.appendChild(labelSpan);
+                row.onclick = function(e) { e.stopPropagation(); item.action(); };
+                menu.appendChild(row);
+            });
+
+            card.style.position = 'relative';
+            menu.style.position = 'absolute';
+            menu.style.top = '8px';
+            menu.style.right = '8px';
+            card.appendChild(menu);
+            _activeTemplateMenu = menu;
+
+            var dismissHandler = function(e) {
+                if (!menu.contains(e.target)) {
+                    hideTemplateContextMenu();
+                    document.removeEventListener('click', dismissHandler);
+                }
+            };
+            var escHandler = function(e) {
+                if (e.key === 'Escape') {
+                    hideTemplateContextMenu();
+                    document.removeEventListener('keydown', escHandler);
+                }
+            };
+            setTimeout(function() {
+                document.addEventListener('click', dismissHandler);
+                document.addEventListener('keydown', escHandler);
+            }, 0);
+        }
+
+        function hideTemplateContextMenu() {
+            if (_activeTemplateMenu) {
+                _activeTemplateMenu.remove();
+                _activeTemplateMenu = null;
+            }
+        }
+
+        function openTemplateEditor(templateId) {
+            var listEl = document.getElementById('template-list');
+            if (!listEl) return;
+
+            var tmpl = null;
+            if (templateId) {
+                var templates = getPromptTemplates();
+                tmpl = templates.find(function(t) { return t.id === templateId; });
+            }
+
+            var isEdit = !!tmpl;
+
+            // Build form with safe DOM methods
+            listEl.textContent = '';
+
+            var editor = document.createElement('div');
+            editor.className = 'template-editor';
+
+            var titleDiv = document.createElement('div');
+            titleDiv.className = 'editor-title';
+            titleDiv.textContent = isEdit ? 'Edit Template' : 'Create Template';
+            editor.appendChild(titleDiv);
+
+            // Name
+            var nameLabel = document.createElement('label');
+            nameLabel.textContent = 'Template Name';
+            editor.appendChild(nameLabel);
+            var nameInput = document.createElement('input');
+            nameInput.type = 'text';
+            nameInput.id = 'tmpl-edit-name';
+            nameInput.placeholder = 'My Template';
+            nameInput.value = tmpl ? tmpl.name : '';
+            editor.appendChild(nameInput);
+
+            // Role
+            var roleLabel = document.createElement('label');
+            roleLabel.textContent = 'Role';
+            editor.appendChild(roleLabel);
+            var roleSelect = document.createElement('select');
+            roleSelect.id = 'tmpl-edit-role';
+            [['worker','Worker'],['researcher','Researcher'],['coder','Coder'],['analyst','Analyst']].forEach(function(r) {
+                var opt = document.createElement('option');
+                opt.value = r[0];
+                opt.textContent = r[1];
+                if (tmpl && tmpl.role === r[0]) opt.selected = true;
+                roleSelect.appendChild(opt);
+            });
+            editor.appendChild(roleSelect);
+
+            // Task
+            var taskLabel = document.createElement('label');
+            taskLabel.textContent = 'Task Description';
+            editor.appendChild(taskLabel);
+            var taskArea = document.createElement('textarea');
+            taskArea.id = 'tmpl-edit-task';
+            taskArea.rows = 3;
+            taskArea.placeholder = 'Describe what this template does...';
+            taskArea.value = tmpl ? (tmpl.task || '') : '';
+            editor.appendChild(taskArea);
+
+            // Context
+            var ctxLabel = document.createElement('label');
+            ctxLabel.textContent = 'Context';
+            editor.appendChild(ctxLabel);
+            var ctxArea = document.createElement('textarea');
+            ctxArea.id = 'tmpl-edit-context';
+            ctxArea.rows = 2;
+            ctxArea.placeholder = 'Optional context...';
+            ctxArea.value = tmpl ? (tmpl.context || '') : '';
+            editor.appendChild(ctxArea);
+
+            // Output format
+            var outLabel = document.createElement('label');
+            outLabel.textContent = 'Output Format';
+            editor.appendChild(outLabel);
+            var outSelect = document.createElement('select');
+            outSelect.id = 'tmpl-edit-output';
+            [['','Any format'],['summary','Brief Summary'],['detailed','Detailed Report'],['code','Code Only'],['list','Bullet Points'],['json','JSON Data']].forEach(function(o) {
+                var opt = document.createElement('option');
+                opt.value = o[0];
+                opt.textContent = o[1];
+                if (tmpl && tmpl.outputFormat === o[0]) opt.selected = true;
+                outSelect.appendChild(opt);
+            });
+            editor.appendChild(outSelect);
+
+            // Hidden ID
+            var hiddenId = document.createElement('input');
+            hiddenId.type = 'hidden';
+            hiddenId.id = 'tmpl-edit-id';
+            hiddenId.value = tmpl ? tmpl.id : '';
+            editor.appendChild(hiddenId);
+
+            // Actions
+            var actions = document.createElement('div');
+            actions.className = 'template-editor-actions';
+            var cancelBtn = document.createElement('button');
+            cancelBtn.className = 'editor-cancel';
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.onclick = function() { closeTemplateEditor(); };
+            var saveBtn = document.createElement('button');
+            saveBtn.className = 'editor-save';
+            saveBtn.textContent = 'Save';
+            saveBtn.onclick = function() { saveTemplateFromEditor(); };
+            actions.appendChild(cancelBtn);
+            actions.appendChild(saveBtn);
+            editor.appendChild(actions);
+
+            listEl.appendChild(editor);
+            nameInput.focus();
+        }
+
+        function closeTemplateEditor() {
+            renderTemplateGallery();
+        }
+
+        function saveTemplateFromEditor() {
+            var name = (document.getElementById('tmpl-edit-name') || {}).value;
+            var task = (document.getElementById('tmpl-edit-task') || {}).value;
+            name = name ? name.trim() : '';
+            task = task ? task.trim() : '';
+
+            if (!name) { alert('Template name is required.'); return; }
+            if (!task) { alert('Task description is required.'); return; }
+
+            var role = (document.getElementById('tmpl-edit-role') || {}).value || 'worker';
+            var context = ((document.getElementById('tmpl-edit-context') || {}).value || '').trim();
+            var outputFormat = (document.getElementById('tmpl-edit-output') || {}).value || '';
+            var editId = (document.getElementById('tmpl-edit-id') || {}).value;
+
+            var templates = getPromptTemplates();
+
+            if (editId) {
+                for (var i = 0; i < templates.length; i++) {
+                    if (templates[i].id === editId) {
+                        templates[i].name = name;
+                        templates[i].desc = task.slice(0, 60) + (task.length > 60 ? '...' : '');
+                        templates[i].role = role;
+                        templates[i].task = task;
+                        templates[i].context = context;
+                        templates[i].outputFormat = outputFormat;
+                        break;
+                    }
+                }
+            } else {
+                templates.push({
+                    id: 'custom-' + Date.now(),
+                    name: name,
+                    desc: task.slice(0, 60) + (task.length > 60 ? '...' : ''),
+                    role: role,
+                    task: task,
+                    context: context,
+                    outputFormat: outputFormat
+                });
+            }
+
+            savePromptTemplates(templates);
+            closeTemplateEditor();
+        }
+
+        function deleteTemplate(id) {
+            var templates = getPromptTemplates();
+            templates = templates.filter(function(t) { return t.id !== id; });
+            savePromptTemplates(templates);
+            renderTemplateGallery();
+        }
+
+        function syncTemplatesToBackend(templates) {
+            fetch(API_URL + '/agent-templates', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ templates: templates })
+            }).catch(function() { /* silent sync */ });
+        }
+
+        function loadTemplatesFromBackend() {
+            fetch(API_URL + '/agent-templates', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            }).then(function(resp) {
+                if (resp.ok) return resp.json();
+                return null;
+            }).then(function(data) {
+                if (data && data.templates && data.templates.length > 0) {
+                    var local = getPromptTemplates();
+                    var merged = data.templates.slice();
+                    local.filter(function(t) {
+                        return t.id.startsWith('custom-') && !data.templates.find(function(bt) { return bt.id === t.id; });
+                    }).forEach(function(t) { merged.push(t); });
+                    localStorage.setItem('cerebro_agent_templates', JSON.stringify(merged));
+                }
+            }).catch(function() { /* silent */ });
+        }
+
+        // Compatibility alias - old code calls openAgentModal() with a pre-filled task
+        function openAgentModal(prefill) {
+            openAgentPanel('create');
+            if (prefill) {
+                setTimeout(function() {
+                    var taskInput = document.getElementById('agent-task-input');
+                    if (taskInput) taskInput.value = prefill;
+                }, 50);
+            }
+        }
+
+        // Legacy redirect
+        function showSpawnAgentDialog() {
+            openAgentPanel('create');
+        }
+
         function closeAgentModal() {
-            document.body.classList.remove('modal-open');
-            document.getElementById('agent-modal').classList.remove('active');
-            // Reset advanced options
-            document.getElementById('advanced-options').classList.add('hidden');
-            document.getElementById('advanced-arrow').textContent = '▶';
+            closeAgentPanel();
         }
 
         function selectRole(element) {
@@ -31612,15 +33561,20 @@
             document.querySelectorAll('.mode-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.mode === mode);
             });
-            document.getElementById('single-agent-form').classList.toggle('hidden', mode !== 'single');
-            document.getElementById('workflow-form').classList.toggle('hidden', mode !== 'workflow');
+            // Toggle form visibility in unified panel
+            var singleForm = document.getElementById('panel-single-agent-form');
+            var workflowForm = document.getElementById('workflow-form');
+            var specopsForm = document.getElementById('specops-form');
+            if (singleForm) singleForm.classList.toggle('hidden', mode !== 'single');
+            if (workflowForm) workflowForm.classList.toggle('hidden', mode !== 'workflow');
+            if (specopsForm) specopsForm.classList.toggle('hidden', mode !== 'specops');
 
             // Update launch button text
-            const launchBtn = document.getElementById('launch-btn');
-            if (mode === 'workflow') {
-                launchBtn.textContent = '🎖️ Deploy Workflow';
-            } else {
-                launchBtn.textContent = '🚀 Launch Agent';
+            var launchBtn = document.getElementById('panel-launch-btn');
+            if (launchBtn) {
+                if (mode === 'specops') launchBtn.textContent = 'Deploy Mission';
+                else if (mode === 'workflow') launchBtn.textContent = 'Deploy Workflow';
+                else launchBtn.textContent = 'Launch Agent';
             }
         }
 
@@ -31628,6 +33582,267 @@
             document.querySelectorAll('.workflow-type').forEach(el => el.classList.remove('selected'));
             element.classList.add('selected');
             selectedWorkflowType = element.dataset.type;
+        }
+
+        // =====================================================
+        // SPECIAL OPS FUNCTIONS
+        // =====================================================
+
+        function selectSpecopsRole(btn) {
+            document.querySelectorAll('#specops-role-selector .sel-btn').forEach(function(b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            selectedSpecopsRole = btn.dataset.role;
+        }
+
+        function selectWorkStyle(btn) {
+            document.querySelectorAll('#specops-work-style-selector .sel-btn').forEach(function(b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            specopsWorkStyle = btn.dataset.value;
+            var cycleGroup = document.getElementById('specops-cycle-interval-group');
+            if (cycleGroup) {
+                cycleGroup.style.display = (specopsWorkStyle === 'continuous') ? 'none' : 'block';
+            }
+        }
+
+        function selectCycleInterval(btn) {
+            document.querySelectorAll('#specops-cycle-selector .sel-btn').forEach(function(b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            specopsCycleInterval = parseInt(btn.dataset.value) || 3600;
+        }
+
+        function selectMissionDuration(btn) {
+            document.querySelectorAll('#specops-duration-selector .sel-btn').forEach(function(b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            specopsMissionDuration = parseInt(btn.dataset.value) || 0;
+        }
+
+        function toggleSpecopsAdvanced() {
+            var adv = document.getElementById('specops-advanced');
+            if (adv) adv.classList.toggle('hidden');
+        }
+
+        async function submitSpecopsMission() {
+            var taskEl = document.getElementById('specops-task-input');
+            var task = taskEl ? taskEl.value.trim() : '';
+            if (!task) {
+                if (taskEl) taskEl.focus();
+                return;
+            }
+            var missionName = (document.getElementById('specops-mission-name')?.value || '').trim() || 'Unnamed Mission';
+            var model = document.getElementById('specops-model-select')?.value || 'sonnet';
+            var context = document.getElementById('specops-context-input')?.value?.trim() || null;
+
+            var body = {
+                task: task,
+                agent_type: 'specops_' + selectedSpecopsRole,
+                timeout: 0,
+                model: model,
+                context: context,
+                specops_config: {
+                    mission_name: missionName,
+                    work_style: specopsWorkStyle,
+                    cycle_interval: specopsCycleInterval,
+                    mission_duration: specopsMissionDuration,
+                    sub_role: selectedSpecopsRole
+                }
+            };
+
+            try {
+                var token = localStorage.getItem('cerebro_token');
+                var resp = await fetch(API_URL + '/agents', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                var data = await resp.json();
+                console.log('[SpecOps] Mission deployed:', data);
+                closeAgentPanel();
+                if (taskEl) taskEl.value = '';
+                var nameEl = document.getElementById('specops-mission-name');
+                if (nameEl) nameEl.value = '';
+            } catch (e) {
+                console.error('[SpecOps] Deploy failed:', e);
+            }
+        }
+
+        function formatDurationShort(seconds) {
+            if (!seconds || seconds <= 0) return '0s';
+            var d = Math.floor(seconds / 86400);
+            var h = Math.floor((seconds % 86400) / 3600);
+            var m = Math.floor((seconds % 3600) / 60);
+            if (d > 0) return d + 'd ' + (h > 0 ? h + 'h' : '');
+            if (h > 0) return h + 'h ' + (m > 0 ? m + 'm' : '');
+            return m + 'm';
+        }
+
+        function getTimeUntil(isoString) {
+            if (!isoString) return '--';
+            try {
+                var target = new Date(isoString).getTime();
+                var now = Date.now();
+                var diff = Math.max(0, Math.floor((target - now) / 1000));
+                if (diff <= 0) return 'now';
+                if (diff < 60) return diff + 's';
+                if (diff < 3600) return Math.floor(diff / 60) + 'm';
+                return Math.floor(diff / 3600) + 'h ' + Math.floor((diff % 3600) / 60) + 'm';
+            } catch(e) { return '--'; }
+        }
+
+        function renderSpecopsCard(agent, isArchived) {
+            var displayName = escapeHtml(agent.call_sign || agent.id);
+            var missionName = escapeHtml(agent.mission_name || 'Unnamed Mission');
+            var status = agent.status || 'queued';
+            var statusLabel = status === 'cycling' ? 'STANDBY' : status.toUpperCase();
+            var cycleCount = agent.cycle_count || 0;
+            var elapsed = formatDurationShort(agent.mission_elapsed || 0);
+            var nextCheckin = agent.next_checkin ? getTimeUntil(agent.next_checkin) : '--';
+            var workStyle = agent.work_style || 'continuous';
+
+            var card = document.createElement('div');
+            card.className = 'agent-card specops ' + status + (isArchived ? ' archived' : '');
+            card.setAttribute('data-agent-id', agent.id);
+            card.setAttribute('onclick', "handleAgentCardClick('" + agent.id + "', event)");
+
+            // Header
+            var header = document.createElement('div');
+            header.className = 'agent-header';
+            var headerLeft = document.createElement('div');
+            headerLeft.style.cssText = 'display:flex;align-items:center;gap:8px;';
+            var badge = document.createElement('span');
+            badge.className = 'specops-badge';
+            badge.textContent = 'SPEC OPS';
+            var nameEl = document.createElement('span');
+            nameEl.style.cssText = 'font-weight:600;color:var(--text-primary);';
+            nameEl.textContent = agent.call_sign || agent.id;
+            var statusEl = document.createElement('span');
+            statusEl.className = 'agent-status ' + status;
+            statusEl.textContent = statusLabel;
+            headerLeft.appendChild(badge);
+            headerLeft.appendChild(nameEl);
+            headerLeft.appendChild(statusEl);
+            var timeEl = document.createElement('span');
+            timeEl.className = 'agent-time';
+            timeEl.textContent = getTimeAgo(agent.created_at);
+            header.appendChild(headerLeft);
+            header.appendChild(timeEl);
+            card.appendChild(header);
+
+            // Mission name
+            var missionEl = document.createElement('div');
+            missionEl.className = 'specops-mission-name';
+            missionEl.textContent = agent.mission_name || 'Unnamed Mission';
+            card.appendChild(missionEl);
+
+            // Task
+            var taskEl = document.createElement('div');
+            taskEl.className = 'agent-task';
+            taskEl.textContent = (agent.task || '').slice(0, 150);
+            card.appendChild(taskEl);
+
+            // Metrics row
+            var metrics = document.createElement('div');
+            metrics.className = 'specops-metrics';
+            var metricData = [
+                { value: String(cycleCount), label: 'Cycles' },
+                { value: elapsed, label: 'Elapsed' },
+                { value: nextCheckin, label: 'Next Check-in' },
+                { value: workStyle, label: 'Work Style' }
+            ];
+            metricData.forEach(function(m) {
+                var metric = document.createElement('div');
+                metric.className = 'specops-metric';
+                var val = document.createElement('span');
+                val.className = 'specops-metric-value';
+                val.textContent = m.value;
+                var lbl = document.createElement('span');
+                lbl.className = 'specops-metric-label';
+                lbl.textContent = m.label;
+                metric.appendChild(val);
+                metric.appendChild(lbl);
+                metrics.appendChild(metric);
+            });
+            card.appendChild(metrics);
+
+            // Journal preview (last entry)
+            var journal = agent.mission_journal || [];
+            if (journal.length > 0) {
+                var last = journal[journal.length - 1];
+                var preview = document.createElement('div');
+                preview.className = 'specops-journal-preview';
+                var strong = document.createElement('strong');
+                strong.textContent = 'Cycle ' + (last.cycle || '?') + ': ';
+                preview.appendChild(strong);
+                preview.appendChild(document.createTextNode((last.completed || last.progress || 'No data').substring(0, 150)));
+                card.appendChild(preview);
+            }
+
+            return card;
+        }
+
+        function renderCompactSpecopsCard(agent, isArchived) {
+            var status = agent.status || 'queued';
+            var statusLabel = status === 'cycling' ? 'STANDBY' : status.toUpperCase();
+            var cycleCount = agent.cycle_count || 0;
+
+            var card = document.createElement('div');
+            card.className = 'agent-card-compact specops ' + status + (isArchived ? ' archived' : '') + (selectedAgentIds.has(agent.id) ? ' selected' : '');
+            card.setAttribute('data-agent-id', agent.id);
+            card.setAttribute('onclick', "handleAgentCardClick('" + agent.id + "', event)");
+
+            var header = document.createElement('div');
+            header.className = 'compact-header';
+            var nameSpan = document.createElement('span');
+            nameSpan.className = 'compact-name';
+            nameSpan.textContent = agent.call_sign || agent.id;
+            var badgeSpan = document.createElement('span');
+            badgeSpan.className = 'compact-specops-badge';
+            badgeSpan.textContent = 'SPEC OPS';
+            nameSpan.appendChild(badgeSpan);
+            var statusSpan = document.createElement('span');
+            statusSpan.className = 'compact-status ' + status;
+            statusSpan.textContent = statusLabel;
+            header.appendChild(nameSpan);
+            header.appendChild(statusSpan);
+
+            var taskDiv = document.createElement('div');
+            taskDiv.className = 'compact-task';
+            taskDiv.textContent = (agent.mission_name || agent.task || '').slice(0, 80);
+
+            var footer = document.createElement('div');
+            footer.className = 'compact-footer';
+            var timeSpan = document.createElement('span');
+            timeSpan.className = 'compact-time';
+            timeSpan.textContent = cycleCount > 0 ? cycleCount + ' cycles' : getTimeAgo(agent.created_at);
+            footer.appendChild(timeSpan);
+
+            card.appendChild(header);
+            card.appendChild(taskDiv);
+            card.appendChild(footer);
+            return card;
+        }
+
+        async function updateSpecopsField(agentId, field, value) {
+            try {
+                var token = localStorage.getItem('cerebro_token');
+                var body = {};
+                body[field] = value;
+                await fetch(API_URL + '/agents/' + agentId + '/specops', {
+                    method: 'PATCH',
+                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+            } catch(e) {
+                console.error('[SpecOps] Update failed:', e);
+            }
+        }
+
+        function toggleSpecopsAutoContinue(agentId) {
+            var agent = agents[agentId];
+            if (!agent) return;
+            var newVal = !agent.auto_continue;
+            agent.auto_continue = newVal;
+            updateSpecopsField(agentId, 'auto_continue', newVal);
+            renderAgents();
         }
 
         function toggleAdvancedOptions() {
@@ -31697,6 +33912,10 @@
                 submitWorkflow();
                 return;
             }
+            if (currentSpawnMode === 'specops') {
+                submitSpecopsMission();
+                return;
+            }
 
             const task = document.getElementById('agent-task-input').value.trim();
             if (!task) {
@@ -31726,7 +33945,7 @@
 
             const model = document.getElementById('agent-model-select')?.value || 'sonnet';
             spawnAgentEnhanced(task, selectedAgentRole, context, expectedOutput, priority, resources, agentTimeout, model);
-            closeAgentModal();
+            closeAgentPanel();
         }
 
         async function spawnAgentEnhanced(task, agentType, context, expectedOutput, priority, resources, timeout = 3600, model = 'sonnet') {
@@ -31789,7 +34008,7 @@
 
                 const data = await response.json();
                 console.log('Workflow deployed:', data);
-                closeAgentModal();
+                closeAgentPanel();
                 switchView('agents');
             } catch (e) {
                 console.error('Failed to deploy workflow:', e);
@@ -31847,6 +34066,13 @@
             // Live-stream to detail view if open for this agent
             if (currentDetailAgentId === agent.id) {
                 updateAgentDetailStreaming(agent);
+            }
+
+            // Update unified panel if it's open for this agent
+            if (agentPanelAgentId === agent.id && agentPanelState === 'running') {
+                // Update running task text
+                var runTaskEl = document.getElementById('panel-running-task');
+                if (runTaskEl) runTaskEl.textContent = agent.task.slice(0, 120) + (agent.task.length > 120 ? '...' : '');
             }
 
             // Start polling fallback when agents are running (catches missed WebSocket events)
@@ -31939,8 +34165,11 @@
             if (_currentMindTab === 'agents') renderMindAgents();
             updateAgentsTabBadge();
 
-            // Also update detail modal if it's open for this agent
-            if (currentDetailAgentId === agent.id) {
+            // Transition unified panel from running to detail if open for this agent
+            if (agentPanelAgentId === agent.id && (agentPanelState === 'running' || agentPanelState === 'detail')) {
+                setAgentPanelState('detail', agent.id);
+            } else if (currentDetailAgentId === agent.id) {
+                // Legacy detail page fallback
                 showAgentDetail(agent.id);
             }
 
@@ -32024,6 +34253,11 @@
                 return;
             }
 
+            // Redirect to unified panel
+            openAgentPanel('detail', agentId);
+            return;
+
+            // --- Legacy code below (kept for reference, unreachable) ---
             currentDetailAgentId = agentId;
             _lastStreamedOutputLen = 0;  // Reset streaming tracker for new agent
 
@@ -32317,6 +34551,8 @@
         }
 
         function closeAgentDetailPage() {
+            // Close unified panel (also closes old modal for safety)
+            closeAgentPanel();
             document.getElementById('agent-detail-page').classList.remove('active');
             document.removeEventListener('keydown', _agentModalEscHandler);
             currentDetailAgentId = null;
@@ -43133,7 +45369,7 @@ Please proceed with implementing this recommendation. You have full permissions.
 
         // ==================== STANDALONE / ELECTRON DETECTION ====================
         // Standalone mode: running inside Electron or Docker (not the ASUS server)
-        const _IS_STANDALONE = !!(window.cerebroDesktop) || (window.location.port === '59000' && window.location.hostname === 'localhost');
+        const _IS_STANDALONE = !!(window.cerebroDesktop) || (window.location.port === '61000' && window.location.hostname === 'localhost');
 
         // ==================== PARTICLE BACKGROUND ====================
         function initParticleBackground() {

@@ -208,7 +208,6 @@ class DockerManager extends EventEmitter {
 
   /**
    * Write docker-compose.yml to ~/.cerebro/
-   * Strips Claude CLI volume mount if the binary doesn't exist on this host.
    */
   async writeComposeFile() {
     const composeSrc = path.join(__dirname, '..', 'docker', 'docker-compose.yml');
@@ -218,26 +217,6 @@ class DockerManager extends EventEmitter {
       content = fs.readFileSync(composeSrc, 'utf-8');
     } else {
       content = this._getDefaultComposeContent();
-    }
-
-    // Remove Claude CLI volume mount if binary doesn't exist on host
-    const cliPath = await this.getClaudeCliPath();
-    if (!cliPath) {
-      console.log('[Docker] Claude CLI not found, removing bind mount from compose file');
-      content = content.split('\n').filter(line => {
-        const trimmed = line.trim();
-        return !trimmed.includes('CLAUDE_CLI_PATH') && !trimmed.includes('claude:ro');
-      }).join('\n');
-    }
-
-    // Remove Claude config volume mount if config dir doesn't exist
-    const claudeConfigDir = path.join(os.homedir(), '.claude');
-    if (!fs.existsSync(claudeConfigDir)) {
-      console.log('[Docker] Claude config dir not found, removing bind mount from compose file');
-      content = content.split('\n').filter(line => {
-        const trimmed = line.trim();
-        return !trimmed.includes('claude-config:/home/cerebro/.claude');
-      }).join('\n');
     }
 
     fs.writeFileSync(COMPOSE_FILE, content);
@@ -262,11 +241,18 @@ class DockerManager extends EventEmitter {
     }
 
     const claudeConfigPath = path.join(os.homedir(), '.claude');
-    existingEnv.CLAUDE_CONFIG_PATH = claudeConfigPath;
     existingEnv.CEREBRO_DIR = CEREBRO_DIR;
 
     // Create a clean Claude config for the container (no hooks from host)
     this._createClaudeConfig(claudeConfigPath);
+
+    // Remove legacy env vars that are no longer used (CLI is baked into Docker image)
+    delete existingEnv.CLAUDE_CLI_PATH;
+    delete existingEnv.CLAUDE_CONFIG_PATH;
+
+    // Point CLAUDE_CONFIG_DIR to the clean copy so compose mounts it
+    const cleanConfigDir = path.join(CEREBRO_DIR, 'claude-config');
+    existingEnv.CLAUDE_CONFIG_DIR = cleanConfigDir;
 
     const envContent = Object.entries(existingEnv)
       .map(([k, v]) => `${k}=${v}`)
@@ -525,7 +511,7 @@ class DockerManager extends EventEmitter {
   }
 
   /**
-   * Wait for the backend to respond on port 59000.
+   * Wait for the backend to respond on port 61000.
    */
   _waitForBackend(maxAttempts = 240) {
     const timeoutSec = Math.round(maxAttempts * 0.5);
@@ -539,7 +525,7 @@ class DockerManager extends EventEmitter {
         }
         attempts++;
 
-        const req = http.get('http://127.0.0.1:59000/health', (res) => {
+        const req = http.get('http://127.0.0.1:61000/health', (res) => {
           let data = '';
           res.on('data', (chunk) => { data += chunk; });
           res.on('end', () => {
@@ -1082,16 +1068,175 @@ class DockerManager extends EventEmitter {
   }
 
   /**
+   * Silently refresh OAuth tokens using the refresh token.
+   * No user interaction required. Returns a promise.
+   */
+  silentRefreshOAuthToken() {
+    const OAUTH_TOKEN_URL = 'https://console.anthropic.com/v1/oauth/token';
+    const CLAUDE_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
+
+    const hostCreds = path.join(os.homedir(), '.claude', '.credentials.json');
+    if (!fs.existsSync(hostCreds)) {
+      return Promise.resolve({ success: false, error: 'No credentials file found' });
+    }
+
+    let data;
+    try {
+      data = JSON.parse(fs.readFileSync(hostCreds, 'utf-8'));
+    } catch (err) {
+      return Promise.resolve({ success: false, error: `Failed to read credentials: ${err.message}` });
+    }
+
+    const oauth = data.claudeAiOauth;
+    if (!oauth || !oauth.refreshToken) {
+      return Promise.resolve({ success: false, error: 'No refresh token available' });
+    }
+
+    const body = JSON.stringify({
+      grant_type: 'refresh_token',
+      refresh_token: oauth.refreshToken,
+      client_id: CLAUDE_CLIENT_ID,
+    });
+
+    return new Promise((resolve) => {
+      const url = new URL(OAUTH_TOKEN_URL);
+      const req = https.request({
+        hostname: url.hostname,
+        path: url.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+        },
+        timeout: 15000,
+      }, (res) => {
+        let responseData = '';
+        res.on('data', (chunk) => { responseData += chunk; });
+        res.on('end', () => {
+          try {
+            if (res.statusCode !== 200) {
+              console.error(`[Docker] OAuth refresh failed (${res.statusCode}):`, responseData);
+              resolve({ success: false, error: `OAuth refresh returned ${res.statusCode}` });
+              return;
+            }
+
+            const tokens = JSON.parse(responseData);
+            if (!tokens.access_token) {
+              resolve({ success: false, error: 'No access_token in response' });
+              return;
+            }
+
+            // Update credentials file — preserve all other fields (mcpOAuth, etc.)
+            const expiresAt = tokens.expires_in
+              ? Date.now() + (tokens.expires_in * 1000)
+              : Date.now() + (3600 * 1000); // fallback 1 hour
+
+            data.claudeAiOauth.accessToken = tokens.access_token;
+            data.claudeAiOauth.expiresAt = expiresAt;
+            if (tokens.refresh_token) {
+              data.claudeAiOauth.refreshToken = tokens.refresh_token;
+            }
+
+            fs.writeFileSync(hostCreds, JSON.stringify(data, null, 2), 'utf-8');
+            const expiresInMin = Math.round((expiresAt - Date.now()) / 60000);
+            console.log(`[Docker] Silent OAuth refresh successful (expires in ${expiresInMin}m)`);
+
+            // Also copy to container
+            this.refreshClaudeCredentials();
+
+            resolve({ success: true, expiresIn: expiresInMin });
+          } catch (err) {
+            console.error('[Docker] OAuth refresh parse error:', err.message);
+            resolve({ success: false, error: `Parse error: ${err.message}` });
+          }
+        });
+      });
+
+      req.on('error', (err) => {
+        console.error('[Docker] OAuth refresh network error:', err.message);
+        resolve({ success: false, error: `Network error: ${err.message}` });
+      });
+
+      req.on('timeout', () => {
+        req.destroy();
+        resolve({ success: false, error: 'Request timed out' });
+      });
+
+      req.write(body);
+      req.end();
+    });
+  }
+
+  /**
+   * Check if any agents are currently running via the backend API.
+   * Returns a promise that resolves to true if agents are active.
+   */
+  _hasRunningAgents() {
+    return new Promise((resolve) => {
+      const req = http.get('http://localhost:61000/agents', { timeout: 3000 }, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          try {
+            const parsed = JSON.parse(data);
+            const agents = parsed.agents || [];
+            const running = agents.some(a => a.status === 'running' || a.status === 'queued');
+            resolve(running);
+          } catch (_) { resolve(false); }
+        });
+      });
+      req.on('error', () => resolve(false));
+      req.on('timeout', () => { req.destroy(); resolve(false); });
+    });
+  }
+
+  /**
    * Start a periodic credential refresh timer.
-   * Checks every 15 minutes, refreshes from host if container creds are stale.
+   * Checks every 15 minutes, attempts silent OAuth refresh before prompting user.
+   * Skips silent refresh when agents are running to avoid invalidating their tokens.
    */
   startCredentialWatch() {
     if (this._credWatchInterval) return;
 
-    this._credWatchInterval = setInterval(() => {
+    this._credWatchInterval = setInterval(async () => {
       const status = this.checkClaudeCredentials();
       if (!status.valid || (status.expiresIn && status.expiresIn < 30)) {
-        console.log(`[Docker] Credentials ${status.valid ? 'expiring soon' : 'expired'}, refreshing...`);
+        // Check if agents are running — if so, let the CLI handle its own refresh
+        const agentsRunning = await this._hasRunningAgents();
+        if (agentsRunning && status.valid) {
+          // Token is expiring soon but still valid, and agents are running.
+          // The CLI processes will refresh their own tokens. Don't compete.
+          console.log('[Docker] Credentials expiring soon but agents are running — skipping silent refresh to avoid race condition');
+          return;
+        }
+
+        if (agentsRunning && !status.valid) {
+          // Token is fully expired AND agents are running — they're likely already failing.
+          // Still skip silent refresh to not make it worse. Emit expired event so user knows.
+          console.log('[Docker] Credentials expired with agents running — notifying user');
+          this.emit('credentials-expired', {
+            message: 'Token expired while agents were running. Agents may need to be restarted after re-authentication.',
+            needsLogin: true,
+          });
+          return;
+        }
+
+        // No agents running — safe to do silent refresh
+        console.log('[Docker] Credentials ' + (status.valid ? 'expiring soon' : 'expired') + ', attempting silent refresh...');
+
+        const silentResult = await this.silentRefreshOAuthToken();
+        if (silentResult.success) {
+          this.emit('credentials-refreshed', {
+            expiresIn: silentResult.expiresIn,
+            message: 'Tokens refreshed automatically',
+            silent: true,
+          });
+          return;
+        }
+
+        console.log(`[Docker] Silent refresh failed: ${silentResult.error}, trying host copy...`);
+
+        // Fallback: try copying from host
         const result = this.refreshClaudeCredentials();
         if (!result.valid) {
           this.emit('credentials-expired', {
@@ -1203,11 +1348,11 @@ class DockerManager extends EventEmitter {
   backend:
     image: ghcr.io/professor-low/cerebro-backend:latest
     ports:
-      - "59000:59000"
+      - "61000:59000"
     environment:
       REDIS_URL: redis://redis:6379/0
       AI_MEMORY_PATH: /data/memory
-      CEREBRO_CORS_ORIGINS: "http://localhost:59000"
+      CEREBRO_CORS_ORIGINS: "http://localhost:61000"
       CEREBRO_HOST: "0.0.0.0"
       CEREBRO_PORT: "59000"
       CEREBRO_STANDALONE: "1"
@@ -1220,8 +1365,7 @@ class DockerManager extends EventEmitter {
       - /home/cerebro:uid=1000,gid=1000
     volumes:
       - cerebro-data:/data/memory
-      - "\${CLAUDE_CLI_PATH:-/usr/local/bin/claude}:/usr/local/bin/claude:ro"
-      - "\${CEREBRO_DIR:-~/.cerebro}/claude-config:/home/cerebro/.claude"
+      - "\${CLAUDE_CONFIG_DIR:-~/.claude}:/home/cerebro/.claude"
     depends_on:
       redis:
         condition: service_healthy

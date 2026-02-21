@@ -52,6 +52,8 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
   // Claude credentials
   checkClaudeCredentials: () => ipcRenderer.invoke('check-claude-credentials'),
   refreshClaudeCredentials: () => ipcRenderer.invoke('refresh-claude-credentials'),
+  launchClaudeLogin: () => ipcRenderer.invoke('launch-claude-login'),
+  silentRefreshOAuth: () => ipcRenderer.invoke('silent-refresh-oauth'),
 
   // Event listeners for progress
   onPullProgress: (callback) => {

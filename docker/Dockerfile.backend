@@ -2,10 +2,15 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies + Node.js (for Claude CLI)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl gosu && \
+    apt-get install -y --no-install-recommends curl gosu gnupg && \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
     rm -rf /var/lib/apt/lists/*
+
+# Install Claude CLI globally
+RUN npm install -g @anthropic-ai/claude-code
 
 # Install Python dependencies
 COPY backend-src/requirements.txt .

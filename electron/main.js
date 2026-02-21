@@ -1,6 +1,7 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { spawn } = require('child_process');
 const { DockerManager } = require('./docker-manager');
 const { LicenseManager } = require('./license-manager');
 const { createTray, updateTrayStatus } = require('./tray');
@@ -152,7 +153,7 @@ async function loadFrontend() {
   let retries = 0;
   const maxRetries = 15;
 
-  mainWindow.loadURL('http://localhost:59000');
+  mainWindow.loadURL('http://localhost:61000');
 
   mainWindow.webContents.on('did-finish-load', () => {
     if (splashWindow) {
@@ -171,7 +172,7 @@ async function loadFrontend() {
     console.error(`[Main] Frontend failed to load (attempt ${retries}/${maxRetries}): ${errorCode} ${errorDescription}`);
     if (retries < maxRetries) {
       setTimeout(() => {
-        if (mainWindow) mainWindow.loadURL('http://localhost:59000');
+        if (mainWindow) mainWindow.loadURL('http://localhost:61000');
       }, 2000);
     } else {
       console.error('[Main] Frontend failed to load after max retries, showing wizard');
@@ -453,7 +454,7 @@ ipcMain.handle('apply-update', async () => {
       }
     });
     // Reload frontend after update
-    mainWindow.loadURL('http://localhost:59000');
+    mainWindow.loadURL('http://localhost:61000');
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -559,6 +560,155 @@ ipcMain.handle('check-claude-credentials', () => {
 ipcMain.handle('refresh-claude-credentials', () => {
   return dockerManager.refreshClaudeCredentials();
 });
+
+ipcMain.handle('silent-refresh-oauth', async () => {
+  return dockerManager.silentRefreshOAuthToken();
+});
+
+// Launch Claude CLI login — captures OAuth URL and opens in-app browser window
+let _authWindow = null;
+
+ipcMain.handle('launch-claude-login', async () => {
+  try {
+    // Close any existing auth window
+    if (_authWindow && !_authWindow.isDestroyed()) _authWindow.close();
+
+    // Spawn `claude auth login` with BROWSER env trick to capture the URL
+    // On Unix: BROWSER=echo prints the URL to stdout instead of opening a browser
+    // On Windows: we parse stdout/stderr for the URL pattern as fallback
+    const env = { ...process.env };
+    if (process.platform !== 'win32') {
+      env.BROWSER = 'echo';
+    }
+
+    return new Promise((resolve) => {
+      const proc = spawn('claude', ['auth', 'login'], {
+        env,
+        shell: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      let output = '';
+      let urlFound = false;
+      const urlRegex = /https:\/\/[^\s"'<>]+/g;
+
+      function handleOutput(chunk) {
+        const text = chunk.toString();
+        output += text;
+        console.log('[Claude Auth]', text.trim());
+
+        // Look for OAuth URL in output
+        if (!urlFound) {
+          const matches = text.match(urlRegex);
+          if (matches) {
+            // Find the auth/OAuth URL (prefer claude.ai or anthropic URLs)
+            const authUrl = matches.find(u =>
+              u.includes('claude.ai') || u.includes('anthropic.com') || u.includes('oauth')
+            ) || matches[0];
+
+            if (authUrl) {
+              urlFound = true;
+              openAuthWindow(authUrl);
+              resolve({ success: true, message: 'Login window opened inside Cerebro.' });
+            }
+          }
+        }
+      }
+
+      proc.stdout.on('data', handleOutput);
+      proc.stderr.on('data', handleOutput);
+
+      // If CLI opens browser directly (Windows), we still poll for credentials
+      setTimeout(() => {
+        if (!urlFound) {
+          // Fallback: CLI probably opened browser directly, still poll for completion
+          console.log('[Claude Auth] No URL captured, CLI may have opened browser directly');
+          resolve({ success: true, message: 'Login opened — complete authentication in the browser.' });
+        }
+      }, 8000);
+
+      proc.on('error', (err) => {
+        console.error('[Claude Auth] Process error:', err.message);
+        if (!urlFound) {
+          resolve({ success: false, error: 'Could not start claude auth login: ' + err.message });
+        }
+      });
+
+      proc.on('close', (code) => {
+        console.log('[Claude Auth] Process exited with code', code);
+        // Check if credentials were written successfully
+        setTimeout(() => {
+          const status = dockerManager.checkClaudeCredentials();
+          if (status.valid) {
+            const refreshResult = dockerManager.refreshClaudeCredentials();
+            if (mainWindow) {
+              mainWindow.webContents.send('credentials-refreshed', {
+                expiresIn: refreshResult.expiresIn || status.expiresIn,
+                message: 'Login successful — credentials refreshed',
+              });
+            }
+            if (_authWindow && !_authWindow.isDestroyed()) _authWindow.close();
+          }
+        }, 1000);
+      });
+
+      // Poll for fresh credentials while login is in progress (5s intervals, 5 min max)
+      let attempts = 0;
+      const maxAttempts = 60;
+      const watcher = setInterval(() => {
+        attempts++;
+        const status = dockerManager.checkClaudeCredentials();
+        if (status.valid && status.expiresIn > 30) {
+          clearInterval(watcher);
+          const refreshResult = dockerManager.refreshClaudeCredentials();
+          if (mainWindow) {
+            mainWindow.webContents.send('credentials-refreshed', {
+              expiresIn: refreshResult.expiresIn || status.expiresIn,
+              message: 'Login successful — credentials refreshed',
+            });
+          }
+          // Close auth window and kill CLI process
+          if (_authWindow && !_authWindow.isDestroyed()) _authWindow.close();
+          try { proc.kill(); } catch (_) {}
+        }
+        if (attempts >= maxAttempts) {
+          clearInterval(watcher);
+          try { proc.kill(); } catch (_) {}
+        }
+      }, 5000);
+    });
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+function openAuthWindow(url) {
+  _authWindow = new BrowserWindow({
+    width: 500,
+    height: 700,
+    title: 'Cerebro — Claude Authentication',
+    parent: mainWindow,
+    modal: true,
+    autoHideMenuBar: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  });
+
+  _authWindow.loadURL(url);
+
+  _authWindow.on('closed', () => {
+    _authWindow = null;
+  });
+
+  // Watch for successful redirects back to localhost (OAuth callback)
+  _authWindow.webContents.on('will-redirect', (_event, redirectUrl) => {
+    if (redirectUrl.includes('localhost') || redirectUrl.includes('127.0.0.1')) {
+      console.log('[Claude Auth] OAuth callback detected, login completing...');
+    }
+  });
+}
 
 // Restart & setup state
 ipcMain.handle('needs-restart', async () => {

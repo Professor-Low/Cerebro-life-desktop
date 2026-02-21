@@ -15,11 +15,11 @@ services:
   backend:
     image: ghcr.io/professor-low/cerebro-backend:latest
     ports:
-      - "59000:59000"
+      - "61000:59000"
     environment:
       REDIS_URL: redis://redis:6379/0
       AI_MEMORY_PATH: /data/memory
-      CEREBRO_CORS_ORIGINS: "http://localhost:59000"
+      CEREBRO_CORS_ORIGINS: "http://localhost:61000"
       CEREBRO_HOST: "0.0.0.0"
       CEREBRO_PORT: "59000"
       CEREBRO_STANDALONE: "1"
@@ -32,8 +32,9 @@ services:
       - /home/cerebro:uid=1000,gid=1000
     volumes:
       - cerebro-data:/data/memory
-      - "${CLAUDE_CLI_PATH:-/usr/local/bin/claude}:/usr/local/bin/claude:ro"
-      - "${CEREBRO_DIR:-~/.cerebro}/claude-config:/home/cerebro/.claude"
+      - "${CLAUDE_CONFIG_DIR:-~/.claude}:/home/cerebro/.claude"
+      - "C:/Users/marke/Desktop/Cerebro-life-desktop/frontend:/app/frontend"
+      - "C:/Users/marke/Desktop/Cerebro-life-desktop/backend-src/main.py:/app/main.py"
     depends_on:
       redis:
         condition: service_healthy
