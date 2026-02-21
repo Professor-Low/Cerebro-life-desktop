@@ -1,7 +1,7 @@
 appId: com.cerebro.desktop
 productName: Cerebro
 copyright: Copyright 2024-2026 Professor (Michael Anthony Lopez)
-artifactName: Cerebro-Setup-${version}-${arch}.${ext}
+artifactName: Cerebro-Installer.${ext}
 
 directories:
   output: dist
