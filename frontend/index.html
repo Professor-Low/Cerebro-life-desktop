@@ -4535,6 +4535,92 @@
             color: var(--yellow);
         }
 
+        .agent-status-badge.thinking {
+            background: var(--accent-glow);
+            color: var(--accent);
+            animation: badgeThinkingPulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes badgeThinkingPulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 4px rgba(139, 92, 246, 0.3); }
+            50% { opacity: 0.7; box-shadow: 0 0 12px rgba(139, 92, 246, 0.6); }
+        }
+
+        @keyframes panelContentFadeOut {
+            from { opacity: 1; transform: translateX(0); }
+            to { opacity: 0; transform: translateX(-20px); }
+        }
+
+        @keyframes panelContentFadeIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        @keyframes panelContentFadeBack {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .panel-thread-transitioning {
+            animation: panelContentFadeOut 0.2s ease forwards;
+        }
+
+        .panel-thinking-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 16px;
+            margin: 16px 0;
+            background: rgba(139, 92, 246, 0.08);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            border-radius: 12px;
+        }
+
+        .panel-thinking-indicator .thinking-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .panel-thinking-indicator .thinking-dots span {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent);
+            animation: thinkingDotBounce 1.2s ease-in-out infinite;
+        }
+
+        .panel-thinking-indicator .thinking-dots span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .panel-thinking-indicator .thinking-dots span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes thinkingDotBounce {
+            0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+            40% { transform: translateY(-6px); opacity: 1; }
+        }
+
+        .panel-thinking-indicator .thinking-text {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .panel-thinking-indicator .thinking-question {
+            font-size: 0.85rem;
+            color: rgba(255,255,255,0.9);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .panel-thinking-indicator .thinking-subtext {
+            font-size: 0.75rem;
+            color: var(--accent);
+            margin-top: 2px;
+        }
+
         /* Mind Agents Tab */
         .mind-agents-items {
             flex: 1;
@@ -10123,6 +10209,78 @@
         .settings-select option {
             background: var(--bg-secondary);
             color: var(--text-primary);
+        }
+
+        /* ==================== FILE ACCESS SETTINGS ==================== */
+        .file-mount-card {
+            display: flex;
+            align-items: center;
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+            gap: 12px;
+        }
+        .file-mount-card:last-child { border-bottom: none; }
+        .file-mount-icon {
+            width: 36px; height: 36px; border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(139,92,246,0.1); color: var(--purple); flex-shrink: 0;
+        }
+        .file-mount-info { flex: 1; min-width: 0; }
+        .file-mount-label { font-weight: 600; font-size: 0.9rem; }
+        .file-mount-path {
+            font-size: 0.75rem; color: var(--text-muted);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .file-mount-badges { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+        .file-mount-badge {
+            font-size: 0.65rem; font-weight: 600; padding: 3px 8px;
+            border-radius: 20px; white-space: nowrap;
+        }
+        .file-mount-badge.read-only {
+            background: rgba(34,197,94,0.12); color: var(--green);
+        }
+        .file-mount-badge.read-write {
+            background: rgba(234,179,8,0.12); color: var(--yellow);
+        }
+        .file-mount-remove {
+            width: 28px; height: 28px; border-radius: 8px; border: none;
+            background: rgba(239,68,68,0.08); color: var(--red);
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: background 0.2s; flex-shrink: 0;
+        }
+        .file-mount-remove:hover { background: rgba(239,68,68,0.2); }
+
+        .risk-indicator {
+            font-size: 0.7rem; font-weight: 600; padding: 3px 10px;
+            border-radius: 20px; margin-left: 8px;
+        }
+        .risk-indicator.safe { background: rgba(34,197,94,0.12); color: var(--green); }
+        .risk-indicator.standard { background: rgba(139,92,246,0.12); color: var(--purple); }
+        .risk-indicator.extended { background: rgba(234,179,8,0.12); color: var(--yellow); }
+        .risk-indicator.full { background: rgba(239,68,68,0.12); color: var(--red); }
+
+        .file-access-restart-bar {
+            position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000;
+            background: rgba(234,179,8,0.15); backdrop-filter: blur(12px);
+            border-top: 1px solid rgba(234,179,8,0.3);
+            padding: 12px 20px; display: flex; align-items: center;
+            justify-content: space-between; gap: 12px;
+        }
+        .file-access-restart-bar .restart-msg {
+            font-size: 0.85rem; font-weight: 500; color: var(--yellow);
+        }
+        .file-access-restart-bar .btn { padding: 8px 16px; font-size: 0.8rem; }
+
+        .file-access-warning {
+            background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.2);
+            border-radius: 12px; padding: 12px 16px; margin-bottom: 12px;
+            font-size: 0.8rem; color: var(--yellow); display: none;
+        }
+        .file-access-warning svg { vertical-align: middle; margin-right: 6px; }
+
+        .file-access-not-available {
+            text-align: center; padding: 40px 20px; color: var(--text-muted);
+            font-size: 0.9rem;
         }
 
         /* ==================== BUTTONS ==================== */
@@ -23582,6 +23740,34 @@
                         </div>
                     </div>
 
+                    <div class="section-title" style="display:flex;align-items:center;">File Access<span class="risk-indicator safe" id="file-access-risk">Safe</span></div>
+                    <div id="file-access-section">
+                        <div class="file-access-warning" id="file-access-warning">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                            Write access is enabled on one or more folders. Agents can modify files in those directories.
+                        </div>
+                        <div class="settings-card" id="file-access-presets-card">
+                            <div id="file-access-presets-list">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+                        <div class="section-title" style="font-size:0.85rem;margin-top:12px;">Custom Folders</div>
+                        <div class="settings-card">
+                            <div id="custom-mounts-list">
+                                <!-- Populated by JS -->
+                            </div>
+                            <div style="padding:12px 20px;">
+                                <button class="btn btn-secondary btn-block" onclick="addCustomMount()" style="font-size:0.8rem;padding:8px 16px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                    Add Folder
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="file-access-not-available" id="file-access-not-available" style="display:none;">
+                        File access settings are only available in the desktop app.
+                    </div>
+
                     <div class="section-title">Audio</div>
                     <div class="settings-card">
                         <div class="settings-row">
@@ -23699,6 +23885,12 @@
                     </button>
                 </div>
             </main>
+
+            <!-- File Access Restart Bar -->
+            <div class="file-access-restart-bar" id="file-access-restart-bar" style="display:none;">
+                <span class="restart-msg">File access changes require a container restart to take effect.</span>
+                <button class="btn btn-primary" id="file-access-restart-btn" onclick="applyFileAccessRestart()">Restart Now</button>
+            </div>
 
             <!-- Scroll to bottom button (for chat view) -->
             <!-- Floating Chat Actions Menu (hamburger) -->
@@ -24193,10 +24385,15 @@
                             <div id="panel-output-area">
                                 <!-- Populated by populateRightOutputPanel() -->
                             </div>
-                            <div class="panel-ask-area">
+                            <div class="panel-ask-area" id="panel-ask-area-main">
                                 <input type="text" id="panel-ask-input" placeholder="Ask about this output..."
                                     onkeydown="if(event.key==='Enter')panelSubmitAsk()">
                                 <button onclick="panelSubmitAsk()">Ask</button>
+                            </div>
+                            <div class="panel-ask-area" id="panel-thread-reply-area" style="display:none;">
+                                <input type="text" id="panel-thread-reply-input" placeholder="Reply to this thread..."
+                                    onkeydown="if(event.key==='Enter')panelSubmitThreadReply()">
+                                <button onclick="panelSubmitThreadReply()">Reply</button>
                             </div>
                         </div>
                     </div>
@@ -25262,6 +25459,7 @@
             initVoiceSettings();
             loadPersonality();
             loadLookStatus();
+            initFileAccess();
 
             // Init TTS orb click - conversational mode toggle
             const navOrb = document.getElementById('nav-orb-container');
@@ -28968,7 +29166,82 @@
         }
 
         function handleAskResponseReady(data) {
-            // If currently viewing this agent's chat page, add the response
+            // Update agents conversation data
+            var agent = agents[data.agent_id];
+            if (agent) {
+                if (!agent.conversation) agent.conversation = [];
+                if (data.question) {
+                    agent.conversation.push({
+                        role: 'user',
+                        content: data.question,
+                        thread_id: data.thread_id || ('ask-' + Date.now()),
+                        parent_thread_id: data.parent_thread_id || null,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+                agent.conversation.push({
+                    role: 'assistant',
+                    content: data.answer || '',
+                    thread_id: data.thread_id || ('ask-' + Date.now()),
+                    parent_thread_id: data.parent_thread_id || null,
+                    timestamp: new Date().toISOString()
+                });
+            }
+
+            // If panel is open for this agent, update the thinking indicator
+            if (agentPanelAgentId === data.agent_id) {
+                // Find thinking indicator by question_id
+                var thinkEl = null;
+                if (data.question_id) {
+                    thinkEl = document.querySelector('.panel-thinking-indicator[data-question-id="' + data.question_id + '"]');
+                }
+                // Fallback: find by agent-id if only one thinking indicator exists
+                if (!thinkEl) {
+                    var allThinking = document.querySelectorAll('.panel-thinking-indicator[data-agent-id="' + data.agent_id + '"]');
+                    if (allThinking.length === 1) thinkEl = allThinking[0];
+                }
+
+                if (thinkEl) {
+                    // Replace thinking indicator with a clickable thread card
+                    var threadId = data.thread_id || ('ask-' + Date.now());
+                    var qPreview = escapeHtml((data.question || '').slice(0, 120));
+                    var aPreview = escapeHtml((data.answer || '').slice(0, 150));
+                    var cardDiv = document.createElement('div');
+                    cardDiv.className = 'thread-card';
+                    cardDiv.onclick = function() { panelNavigateToThread(threadId); };
+                    var qDiv = document.createElement('div');
+                    qDiv.className = 'thread-question';
+                    qDiv.textContent = (data.question || '').slice(0, 120);
+                    var aDiv = document.createElement('div');
+                    aDiv.className = 'thread-preview';
+                    aDiv.textContent = (data.answer || '').slice(0, 150);
+                    var metaDiv = document.createElement('div');
+                    metaDiv.className = 'thread-meta';
+                    var timeSpan = document.createElement('span');
+                    timeSpan.textContent = 'Just now';
+                    metaDiv.appendChild(timeSpan);
+                    cardDiv.appendChild(qDiv);
+                    cardDiv.appendChild(aDiv);
+                    cardDiv.appendChild(metaDiv);
+                    thinkEl.parentNode.replaceChild(cardDiv, thinkEl);
+                }
+
+                // Restore badge to COMPLETED
+                var badge = document.getElementById('panel-status-badge');
+                if (badge) {
+                    badge.textContent = 'COMPLETED';
+                    badge.className = 'agent-status-badge completed';
+                }
+
+                // Re-render threads list if it exists
+                var threadsListEl = document.getElementById('panel-threads-list');
+                if (threadsListEl && agent) {
+                    var threadTree = buildThreadTree(agent.conversation || []);
+                    threadsListEl.innerHTML = renderPanelThreadCards(threadTree);
+                }
+            }
+
+            // Legacy chat page support
             if (currentAgentChatId === data.agent_id) {
                 addAgentChatPageMessage('assistant', data.answer);
             }
@@ -30067,6 +30340,249 @@
                 // Revert UI
                 if (toggle) toggle.classList.toggle('active', _lookRunning);
                 loadLookStatus();
+            }
+        }
+
+        // ==================== FILE ACCESS SETTINGS ====================
+        let _fileAccessConfig = { fileMounts: [] };
+        let _fileAccessPresets = [];
+        let _fileAccessDirty = false;
+
+        async function initFileAccess() {
+            if (!window.cerebroDesktop) {
+                const section = document.getElementById('file-access-section');
+                const notAvail = document.getElementById('file-access-not-available');
+                if (section) section.style.display = 'none';
+                if (notAvail) notAvail.style.display = '';
+                return;
+            }
+            try {
+                _fileAccessConfig = await window.cerebroDesktop.getFileAccessConfig();
+                _fileAccessPresets = await window.cerebroDesktop.getFileAccessPresets();
+                if (!_fileAccessConfig.fileMounts) _fileAccessConfig.fileMounts = [];
+                renderFileAccess();
+            } catch (e) {
+                console.error('Failed to init file access:', e);
+            }
+        }
+
+        function _escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function _buildMountCardEl(mount, isPreset, isActive) {
+            const card = document.createElement('div');
+            card.className = 'file-mount-card';
+
+            // Icon
+            const icon = document.createElement('div');
+            icon.className = 'file-mount-icon';
+            icon.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+            card.appendChild(icon);
+
+            // Info
+            const info = document.createElement('div');
+            info.className = 'file-mount-info';
+            const label = document.createElement('div');
+            label.className = 'file-mount-label';
+            label.textContent = mount.label;
+            const pathEl = document.createElement('div');
+            pathEl.className = 'file-mount-path';
+            pathEl.textContent = mount.hostPath;
+            info.appendChild(label);
+            info.appendChild(pathEl);
+            card.appendChild(info);
+
+            // Badges
+            const badges = document.createElement('div');
+            badges.className = 'file-mount-badges';
+            if (isActive) {
+                const badge = document.createElement('span');
+                badge.className = 'file-mount-badge ' + (mount.readOnly ? 'read-only' : 'read-write');
+                badge.textContent = mount.readOnly ? 'Read Only' : 'Read & Write';
+                badge.style.cursor = 'pointer';
+                badge.title = 'Click to toggle';
+                badge.addEventListener('click', () => toggleMountReadOnly(mount.id));
+                badges.appendChild(badge);
+            }
+            card.appendChild(badges);
+
+            if (isPreset) {
+                // Toggle switch
+                const toggle = document.createElement('div');
+                toggle.className = 'toggle-switch' + (isActive ? ' active' : '');
+                toggle.addEventListener('click', () => togglePresetMount(mount.id));
+                card.appendChild(toggle);
+            } else {
+                // Remove button
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'file-mount-remove';
+                removeBtn.title = 'Remove';
+                removeBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+                removeBtn.addEventListener('click', () => removeCustomMount(mount.id));
+                card.appendChild(removeBtn);
+            }
+
+            return card;
+        }
+
+        function renderFileAccess() {
+            // Preset toggles
+            const presetList = document.getElementById('file-access-presets-list');
+            if (presetList) {
+                presetList.replaceChildren();
+                _fileAccessPresets.forEach(p => {
+                    const active = _fileAccessConfig.fileMounts.some(m => m.id === p.id);
+                    const mount = active ? _fileAccessConfig.fileMounts.find(m => m.id === p.id) : p;
+                    presetList.appendChild(_buildMountCardEl(mount, true, active));
+                });
+            }
+
+            // Custom mounts
+            const customList = document.getElementById('custom-mounts-list');
+            const customMounts = _fileAccessConfig.fileMounts.filter(m => !m.preset);
+            if (customList) {
+                customList.replaceChildren();
+                if (customMounts.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.style.cssText = 'padding:14px 20px;font-size:0.8rem;color:var(--text-muted);text-align:center;';
+                    empty.textContent = 'No custom folders added.';
+                    customList.appendChild(empty);
+                } else {
+                    customMounts.forEach(m => {
+                        customList.appendChild(_buildMountCardEl(m, false, true));
+                    });
+                }
+            }
+
+            // Risk badge
+            updateFileAccessRisk();
+            // Warning banner
+            const warning = document.getElementById('file-access-warning');
+            if (warning) {
+                const hasWrite = _fileAccessConfig.fileMounts.some(m => !m.readOnly);
+                warning.style.display = hasWrite ? '' : 'none';
+            }
+        }
+
+        function getFileAccessRiskLevel() {
+            const mounts = _fileAccessConfig.fileMounts;
+            if (mounts.length === 0) return { level: 'safe', label: 'Safe' };
+            const hasWrite = mounts.some(m => !m.readOnly);
+            if (!hasWrite) return { level: 'standard', label: 'Standard' };
+            const writeCount = mounts.filter(m => !m.readOnly).length;
+            if (writeCount <= 2) return { level: 'extended', label: 'Extended' };
+            return { level: 'full', label: 'Full Access' };
+        }
+
+        function updateFileAccessRisk() {
+            const badge = document.getElementById('file-access-risk');
+            if (!badge) return;
+            const risk = getFileAccessRiskLevel();
+            badge.textContent = risk.label;
+            badge.className = 'risk-indicator ' + risk.level;
+        }
+
+        async function togglePresetMount(presetId) {
+            const existing = _fileAccessConfig.fileMounts.findIndex(m => m.id === presetId);
+            if (existing >= 0) {
+                _fileAccessConfig.fileMounts.splice(existing, 1);
+            } else {
+                const preset = _fileAccessPresets.find(p => p.id === presetId);
+                if (preset) _fileAccessConfig.fileMounts.push({ ...preset });
+            }
+            await saveFileAccessConfig();
+            renderFileAccess();
+        }
+
+        async function toggleMountReadOnly(mountId) {
+            const mount = _fileAccessConfig.fileMounts.find(m => m.id === mountId);
+            if (!mount) return;
+            if (mount.readOnly) {
+                const confirmed = confirm('Enable write access? Agents will be able to create, modify, and delete files in this folder.');
+                if (!confirmed) return;
+                mount.readOnly = false;
+            } else {
+                mount.readOnly = true;
+            }
+            await saveFileAccessConfig();
+            renderFileAccess();
+        }
+
+        async function addCustomMount() {
+            if (!window.cerebroDesktop) return;
+            try {
+                const result = await window.cerebroDesktop.browseFolder();
+                if (result.canceled) return;
+                const hostPath = result.path;
+                const folderName = hostPath.split(/[\\/]/).pop().toLowerCase().replace(/[^a-z0-9_-]/g, '-') || 'folder';
+                // Avoid duplicate container paths
+                let containerPath = `/mounts/${folderName}`;
+                const existingPaths = _fileAccessConfig.fileMounts.map(m => m.containerPath);
+                if (existingPaths.includes(containerPath)) {
+                    containerPath = `/mounts/${folderName}-${Date.now()}`;
+                }
+                // Avoid duplicate host paths
+                if (_fileAccessConfig.fileMounts.some(m => m.hostPath === hostPath)) {
+                    showToast('This folder is already added', 'error');
+                    return;
+                }
+                _fileAccessConfig.fileMounts.push({
+                    id: `custom_${Date.now()}`,
+                    label: hostPath.split(/[\\/]/).pop(),
+                    hostPath,
+                    containerPath,
+                    readOnly: true,
+                    preset: false,
+                });
+                await saveFileAccessConfig();
+                renderFileAccess();
+            } catch (e) {
+                console.error('Failed to add custom mount:', e);
+                showToast('Failed to add folder', 'error');
+            }
+        }
+
+        async function removeCustomMount(mountId) {
+            _fileAccessConfig.fileMounts = _fileAccessConfig.fileMounts.filter(m => m.id !== mountId);
+            await saveFileAccessConfig();
+            renderFileAccess();
+        }
+
+        async function saveFileAccessConfig() {
+            if (!window.cerebroDesktop) return;
+            try {
+                await window.cerebroDesktop.saveFileAccessConfig(_fileAccessConfig);
+                _fileAccessDirty = true;
+                const bar = document.getElementById('file-access-restart-bar');
+                if (bar) bar.style.display = '';
+            } catch (e) {
+                console.error('Failed to save file access config:', e);
+                showToast('Failed to save settings', 'error');
+            }
+        }
+
+        async function applyFileAccessRestart() {
+            if (!window.cerebroDesktop) return;
+            const btn = document.getElementById('file-access-restart-btn');
+            if (btn) { btn.disabled = true; btn.textContent = 'Restarting...'; }
+            try {
+                const result = await window.cerebroDesktop.restartDockerStack();
+                if (result.success) {
+                    _fileAccessDirty = false;
+                    const bar = document.getElementById('file-access-restart-bar');
+                    if (bar) bar.style.display = 'none';
+                    showToast('Container restarted with new file mounts');
+                } else {
+                    showToast('Restart failed: ' + (result.error || 'Unknown error'), 'error');
+                }
+            } catch (e) {
+                console.error('Restart failed:', e);
+                showToast('Restart failed', 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = 'Restart Now'; }
             }
         }
 
@@ -32432,6 +32948,7 @@
         }
 
         function populateRightOutputPanel(agentId) {
+            _panelThreadStack = [];
             var agent = agents[agentId];
             if (!agent) return;
 
@@ -32496,7 +33013,7 @@
             if (threadTree.length > 0) {
                 threadsHtml = '<div class="agent-section" style="margin-top: 24px;">'
                     + '<div class="agent-section-title">Conversations (' + threadTree.length + ')</div>'
-                    + '<div id="panel-threads-list">' + renderThreadCards(threadTree) + '</div></div>';
+                    + '<div id="panel-threads-list">' + renderPanelThreadCards(threadTree) + '</div></div>';
             }
 
             document.getElementById('panel-output-area').innerHTML =
@@ -32525,30 +33042,289 @@
             closeAgentPanel();
         }
 
+        var _panelAskCounter = 0;
+
         function panelSubmitAsk() {
             if (!agentPanelAgentId) return;
             var input = document.getElementById('panel-ask-input');
             var question = input.value.trim();
             if (!question) return;
             input.value = '';
-            // Direct API call for asking
+
+            // Generate unique thinking ID
+            var thinkingId = 'panel-thinking-' + (++_panelAskCounter) + '-' + Date.now();
+
+            // Append thinking indicator to output area using safe DOM methods
+            var outputArea = document.getElementById('panel-output-area');
+            if (outputArea) {
+                var thinkDiv = document.createElement('div');
+                thinkDiv.className = 'panel-thinking-indicator';
+                thinkDiv.id = thinkingId;
+                thinkDiv.setAttribute('data-agent-id', agentPanelAgentId);
+
+                var dotsDiv = document.createElement('div');
+                dotsDiv.className = 'thinking-dots';
+                dotsDiv.appendChild(document.createElement('span'));
+                dotsDiv.appendChild(document.createElement('span'));
+                dotsDiv.appendChild(document.createElement('span'));
+                thinkDiv.appendChild(dotsDiv);
+
+                var textDiv = document.createElement('div');
+                textDiv.className = 'thinking-text';
+                var qLine = document.createElement('div');
+                qLine.className = 'thinking-question';
+                qLine.textContent = question;
+                var subLine = document.createElement('div');
+                subLine.className = 'thinking-subtext';
+                subLine.textContent = 'Thinking...';
+                textDiv.appendChild(qLine);
+                textDiv.appendChild(subLine);
+                thinkDiv.appendChild(textDiv);
+
+                outputArea.appendChild(thinkDiv);
+                thinkDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+
+            // Change badge to THINKING
+            var badge = document.getElementById('panel-status-badge');
+            if (badge) {
+                badge.textContent = 'THINKING';
+                badge.className = 'agent-status-badge thinking';
+            }
+
+            // Send request (background: true so Socket.IO delivers answer)
             fetch(API_URL + '/agents/' + agentPanelAgentId + '/ask', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                 body: JSON.stringify({ question: question, background: true })
             }).then(function(resp) { return resp.json(); }).then(function(data) {
-                // Append question to output area
-                var outputArea = document.getElementById('panel-output-area');
-                if (outputArea) {
-                    var qDiv = document.createElement('div');
-                    qDiv.className = 'agent-section';
-                    qDiv.style.marginTop = '16px';
-                    qDiv.innerHTML = '<div class="agent-section-title">Question</div>'
-                        + '<div class="agent-task-box">' + escapeHtml(question) + '</div>'
-                        + '<div style="color: var(--text-muted); font-size: 0.8rem; margin-top: 8px;">Processing in background...</div>';
-                    outputArea.appendChild(qDiv);
+                // Store question_id on thinking div so handleAskResponseReady can find it
+                var thinkEl = document.getElementById(thinkingId);
+                if (thinkEl && data.question_id) {
+                    thinkEl.setAttribute('data-question-id', data.question_id);
                 }
-            }).catch(console.error);
+            }).catch(function(err) {
+                console.error(err);
+                // Show error in thinking indicator
+                var thinkEl = document.getElementById(thinkingId);
+                if (thinkEl) {
+                    thinkEl.querySelector('.thinking-dots').style.display = 'none';
+                    var sub = thinkEl.querySelector('.thinking-subtext');
+                    if (sub) {
+                        sub.textContent = 'Error: ' + (err.message || 'Request failed');
+                        sub.style.color = 'var(--red)';
+                    }
+                }
+                // Restore badge
+                if (badge) {
+                    badge.textContent = 'COMPLETED';
+                    badge.className = 'agent-status-badge completed';
+                }
+            });
+        }
+
+        // ==================== PANEL THREAD NAVIGATION ====================
+        var _panelThreadStack = [];
+
+        function panelNavigateToThread(threadId) {
+            _panelThreadStack.push({ type: 'thread', threadId: threadId });
+            _panelTransitionTo(function() { panelRenderThreadView(threadId); }, 'forward');
+        }
+
+        function panelNavigateBack() {
+            if (_panelThreadStack.length <= 1) {
+                // Back to output view
+                _panelThreadStack = [];
+                _panelTransitionTo(function() {
+                    populateRightOutputPanel(agentPanelAgentId);
+                    // Restore main ask area, hide thread reply area
+                    var mainAsk = document.getElementById('panel-ask-area-main');
+                    var threadReply = document.getElementById('panel-thread-reply-area');
+                    if (mainAsk) mainAsk.style.display = '';
+                    if (threadReply) threadReply.style.display = 'none';
+                }, 'back');
+                return;
+            }
+            _panelThreadStack.pop();
+            var prev = _panelThreadStack[_panelThreadStack.length - 1];
+            if (prev.type === 'thread') {
+                _panelTransitionTo(function() { panelRenderThreadView(prev.threadId); }, 'back');
+            } else {
+                _panelThreadStack = [];
+                _panelTransitionTo(function() {
+                    populateRightOutputPanel(agentPanelAgentId);
+                    var mainAsk = document.getElementById('panel-ask-area-main');
+                    var threadReply = document.getElementById('panel-thread-reply-area');
+                    if (mainAsk) mainAsk.style.display = '';
+                    if (threadReply) threadReply.style.display = 'none';
+                }, 'back');
+            }
+        }
+
+        function _panelTransitionTo(renderFn, direction) {
+            var outputArea = document.getElementById('panel-output-area');
+            if (!outputArea) { renderFn(); return; }
+
+            // Fade out
+            outputArea.classList.add('panel-thread-transitioning');
+            setTimeout(function() {
+                renderFn();
+                outputArea.classList.remove('panel-thread-transitioning');
+                // Apply fade-in animation
+                var animName = direction === 'back' ? 'panelContentFadeBack' : 'panelContentFadeIn';
+                outputArea.style.animation = animName + ' 0.25s ease forwards';
+                setTimeout(function() {
+                    outputArea.style.animation = '';
+                }, 260);
+            }, 200);
+        }
+
+        function panelRenderThreadView(threadId) {
+            var agent = agents[agentPanelAgentId];
+            if (!agent) return;
+
+            var tree = buildThreadTree(agent.conversation || []);
+            var thread = findThreadById(tree, threadId);
+            if (!thread) return;
+
+            // Build answer HTML
+            var answerContent;
+            if (typeof marked !== 'undefined' && thread.answer) {
+                answerContent = marked.parse(thread.answer);
+            } else {
+                answerContent = escapeHtml(thread.answer || 'Waiting for response...');
+            }
+
+            // Build child threads HTML
+            var childThreadsHtml = '';
+            if (thread.children.length > 0) {
+                childThreadsHtml = '<div class="agent-section" style="margin-top: 24px;">'
+                    + '<div class="agent-section-title">Replies (' + thread.children.length + ')</div>'
+                    + renderPanelThreadCards(thread.children)
+                    + '</div>';
+            }
+
+            var outputArea = document.getElementById('panel-output-area');
+            outputArea.textContent = '';
+
+            // Back button
+            var backBtn = document.createElement('div');
+            backBtn.style.cssText = 'cursor:pointer;font-size:0.85rem;color:var(--accent);margin-bottom:12px;display:inline-flex;align-items:center;gap:4px;';
+            backBtn.textContent = '\u2190 Back';
+            backBtn.onclick = panelNavigateBack;
+            outputArea.appendChild(backBtn);
+
+            // Thread exchange
+            var exchangeDiv = document.createElement('div');
+            exchangeDiv.className = 'thread-exchange';
+
+            var userBubble = document.createElement('div');
+            userBubble.className = 'thread-bubble user';
+            var userLabel = document.createElement('div');
+            userLabel.className = 'chat-label';
+            userLabel.textContent = 'You';
+            var userContentDiv = document.createElement('div');
+            userContentDiv.className = 'chat-content';
+            userContentDiv.textContent = thread.question;
+            userBubble.appendChild(userLabel);
+            userBubble.appendChild(userContentDiv);
+
+            var assistantBubble = document.createElement('div');
+            assistantBubble.className = 'thread-bubble assistant';
+            var assistantLabel = document.createElement('div');
+            assistantLabel.className = 'chat-label';
+            assistantLabel.textContent = 'Agent';
+            var assistantContentDiv = document.createElement('div');
+            assistantContentDiv.className = 'chat-content';
+            // Use innerHTML for markdown-rendered content (same trusted-backend pattern as rest of codebase)
+            assistantContentDiv.innerHTML = answerContent;
+            assistantBubble.appendChild(assistantLabel);
+            assistantBubble.appendChild(assistantContentDiv);
+
+            exchangeDiv.appendChild(userBubble);
+            exchangeDiv.appendChild(assistantBubble);
+            outputArea.appendChild(exchangeDiv);
+
+            // Append child threads
+            if (childThreadsHtml) {
+                var childDiv = document.createElement('div');
+                childDiv.innerHTML = childThreadsHtml;
+                while (childDiv.firstChild) outputArea.appendChild(childDiv.firstChild);
+            }
+
+            // Switch bottom area: hide main ask, show thread reply
+            var mainAsk = document.getElementById('panel-ask-area-main');
+            var threadReply = document.getElementById('panel-thread-reply-area');
+            if (mainAsk) mainAsk.style.display = 'none';
+            if (threadReply) {
+                threadReply.style.display = '';
+                var replyInput = document.getElementById('panel-thread-reply-input');
+                if (replyInput) {
+                    replyInput.setAttribute('data-parent-thread-id', threadId);
+                    setTimeout(function() { replyInput.focus(); }, 100);
+                }
+            }
+        }
+
+        function renderPanelThreadCards(threads) {
+            if (!threads || threads.length === 0) return '';
+            return threads.map(function(t) {
+                var qPreview = escapeHtml((t.question || '').slice(0, 120)) + (t.question && t.question.length > 120 ? '...' : '');
+                var aPreview = escapeHtml((t.answer || '').slice(0, 150)) + (t.answer && t.answer.length > 150 ? '...' : '');
+                var timeStr = t.timestamp ? formatTimeAgo(new Date(t.timestamp)) : '';
+                var replyCount = t.children.length;
+                return '<div class="thread-card" onclick="panelNavigateToThread(\'' + t.thread_id + '\')">'
+                    + '<div class="thread-question">' + qPreview + '</div>'
+                    + '<div class="thread-preview">' + aPreview + '</div>'
+                    + '<div class="thread-meta">'
+                    + '<span>' + timeStr + '</span>'
+                    + (replyCount > 0 ? '<span class="reply-count">' + replyCount + ' repl' + (replyCount === 1 ? 'y' : 'ies') + '</span>' : '')
+                    + '</div></div>';
+            }).join('');
+        }
+
+        function panelSubmitThreadReply() {
+            if (!agentPanelAgentId) return;
+            var input = document.getElementById('panel-thread-reply-input');
+            if (!input) return;
+            var question = input.value.trim();
+            if (!question) return;
+            var parentThreadId = input.getAttribute('data-parent-thread-id');
+            if (!parentThreadId) return;
+            input.value = '';
+
+            // Synchronous call (no background flag)
+            fetch(API_URL + '/agents/' + agentPanelAgentId + '/ask', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ question: question, parent_thread_id: parentThreadId })
+            }).then(function(resp) { return resp.json(); }).then(function(data) {
+                if (data.answer || data.thread_id) {
+                    // Update conversation data
+                    var agent = agents[agentPanelAgentId];
+                    if (agent) {
+                        if (!agent.conversation) agent.conversation = [];
+                        agent.conversation.push({
+                            role: 'user',
+                            content: question,
+                            thread_id: data.thread_id || (parentThreadId + '-reply-' + Date.now()),
+                            parent_thread_id: parentThreadId,
+                            timestamp: new Date().toISOString()
+                        });
+                        agent.conversation.push({
+                            role: 'assistant',
+                            content: data.answer || '',
+                            thread_id: data.thread_id || (parentThreadId + '-reply-' + Date.now()),
+                            parent_thread_id: parentThreadId,
+                            timestamp: new Date().toISOString()
+                        });
+                    }
+                    // Re-render current thread view
+                    panelRenderThreadView(parentThreadId);
+                }
+            }).catch(function(err) {
+                console.error('Thread reply error:', err);
+            });
         }
 
         // ==================== PROMPT TEMPLATES ====================

@@ -42,6 +42,13 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
   getAutostart: () => ipcRenderer.invoke('get-autostart'),
   enableAutostart: () => ipcRenderer.invoke('enable-autostart'),
 
+  // File access settings
+  getFileAccessConfig: () => ipcRenderer.invoke('get-file-access-config'),
+  saveFileAccessConfig: (config) => ipcRenderer.invoke('save-file-access-config', config),
+  getFileAccessPresets: () => ipcRenderer.invoke('get-file-access-presets'),
+  browseFolder: () => ipcRenderer.invoke('browse-folder'),
+  restartDockerStack: () => ipcRenderer.invoke('restart-docker-stack'),
+
   // Restart & setup state
   needsRestart: () => ipcRenderer.invoke('needs-restart'),
   saveSetupState: (state) => ipcRenderer.invoke('save-setup-state', state),

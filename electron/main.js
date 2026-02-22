@@ -19,6 +19,14 @@ const isDev = process.env.CEREBRO_DEV === '1';
 const dockerManager = new DockerManager();
 const licenseManager = new LicenseManager();
 
+// Prevent multiple instances — focus existing window if second copy is launched
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  // Another instance already has the lock — quit immediately
+  app.quit();
+  process.exit(0);
+}
+
 let mainWindow = null;
 let splashWindow = null;
 let tray = null;
@@ -256,6 +264,15 @@ async function shutdown() {
   console.log('[Main] Shutting down...');
   await dockerManager.stopStack();
 }
+
+// Focus existing window when a second instance is launched
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+});
 
 // App lifecycle
 app.whenReady().then(async () => {
@@ -727,6 +744,45 @@ ipcMain.handle('load-setup-state', () => {
 ipcMain.handle('clear-setup-state', () => {
   dockerManager.clearSetupState();
   return true;
+});
+
+// File access settings
+ipcMain.handle('get-file-access-config', () => {
+  return dockerManager.loadFileAccessConfig();
+});
+
+ipcMain.handle('save-file-access-config', async (_event, config) => {
+  try {
+    dockerManager.saveFileAccessConfig(config);
+    await dockerManager.writeComposeFile();
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('get-file-access-presets', () => {
+  return dockerManager.getPresetMounts();
+});
+
+ipcMain.handle('browse-folder', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory'],
+    title: 'Select folder to share with Cerebro',
+  });
+  if (result.canceled || !result.filePaths.length) return { canceled: true };
+  return { canceled: false, path: result.filePaths[0] };
+});
+
+ipcMain.handle('restart-docker-stack', async () => {
+  try {
+    await dockerManager.stopStack();
+    await dockerManager.writeComposeFile();
+    await dockerManager.startStack();
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
 });
 
 ipcMain.handle('restart-computer', () => {

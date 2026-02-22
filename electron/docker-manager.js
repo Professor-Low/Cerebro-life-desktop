@@ -11,6 +11,7 @@ const CEREBRO_DIR = path.join(os.homedir(), '.cerebro');
 const COMPOSE_FILE = path.join(CEREBRO_DIR, 'docker-compose.yml');
 const ENV_FILE = path.join(CEREBRO_DIR, '.env');
 const SETUP_STATE_FILE = path.join(CEREBRO_DIR, '.setup-state.json');
+const FILE_ACCESS_CONFIG = path.join(CEREBRO_DIR, 'file-access.json');
 const BACKEND_IMAGE = 'ghcr.io/professor-low/cerebro-backend';
 
 class DockerManager extends EventEmitter {
@@ -219,6 +220,7 @@ class DockerManager extends EventEmitter {
       content = this._getDefaultComposeContent();
     }
 
+    content = this._injectFileMounts(content);
     fs.writeFileSync(COMPOSE_FILE, content);
     console.log(`[Docker] Wrote docker-compose.yml to ${COMPOSE_FILE}`);
   }
@@ -1328,6 +1330,61 @@ class DockerManager extends EventEmitter {
         fs.unlinkSync(SETUP_STATE_FILE);
       }
     } catch {}
+  }
+
+  loadFileAccessConfig() {
+    try {
+      if (fs.existsSync(FILE_ACCESS_CONFIG)) {
+        return JSON.parse(fs.readFileSync(FILE_ACCESS_CONFIG, 'utf-8'));
+      }
+    } catch {}
+    return { fileMounts: [] };
+  }
+
+  saveFileAccessConfig(config) {
+    this._ensureCerebroDir();
+    fs.writeFileSync(FILE_ACCESS_CONFIG, JSON.stringify(config, null, 2));
+  }
+
+  getPresetMounts() {
+    const homeDir = os.homedir();
+    const isWin = process.platform === 'win32';
+    const presets = [
+      { id: 'desktop', label: 'Desktop', folder: 'Desktop' },
+      { id: 'documents', label: 'Documents', folder: 'Documents' },
+      { id: 'downloads', label: 'Downloads', folder: 'Downloads' },
+    ];
+    return presets.map(p => ({
+      id: p.id,
+      label: p.label,
+      hostPath: isWin ? path.join(homeDir, p.folder) : path.join(homeDir, p.folder),
+      containerPath: `/mounts/${p.id}`,
+      readOnly: true,
+      preset: true,
+    }));
+  }
+
+  _injectFileMounts(composeContent) {
+    const config = this.loadFileAccessConfig();
+    if (!config.fileMounts || config.fileMounts.length === 0) return composeContent;
+
+    const anchor = '${CLAUDE_CONFIG_DIR:-~/.claude}:/home/cerebro/.claude';
+    const anchorIdx = composeContent.indexOf(anchor);
+    if (anchorIdx === -1) {
+      console.warn('[Docker] File mounts anchor line not found in compose content');
+      return composeContent;
+    }
+
+    // Find end of the anchor line
+    const endOfLine = composeContent.indexOf('\n', anchorIdx);
+    if (endOfLine === -1) return composeContent;
+
+    const mountLines = config.fileMounts.map(m => {
+      const suffix = m.readOnly ? ':ro' : '';
+      return `      - "${m.hostPath}:${m.containerPath}${suffix}"`;
+    }).join('\n');
+
+    return composeContent.slice(0, endOfLine + 1) + mountLines + '\n' + composeContent.slice(endOfLine + 1);
   }
 
   _getDefaultComposeContent() {
