@@ -1157,7 +1157,7 @@ async def list_tools():
                     },
                     "device_tag": {
                         "type": "string",
-                        "description": "Device tag to filter by (e.g., 'dgx_spark', 'windows_pc')"
+                        "description": "Device tag to filter by (e.g., 'gpu_server', 'windows_pc')"
                     },
                     "include_untagged": {
                         "type": "boolean",

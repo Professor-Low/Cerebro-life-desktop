@@ -190,8 +190,8 @@ class SmartSuggestionGenerator:
             "recent_learnings": [],
             "capabilities": [],
             "infrastructure": {
-                "has_nas": True,
-                "has_dgx_spark": True
+                "has_nas": bool(os.environ.get("NAS_HOSTNAME")),
+                "has_gpu_server": bool(os.environ.get("DGX_HOST"))
             }
         }
 
@@ -11346,7 +11346,7 @@ async def agent_question_response(sid, data):
 # Tamagotchi Health System (Cerebro v2.0)
 # ============================================================================
 # XP/Level system + memory health for the Info tab health panel.
-# State persisted to Z:\AI_MEMORY\cerebro\tamagotchi_state.json
+# State persisted to <AI_MEMORY_PATH>/cerebro/tamagotchi_state.json
 
 TAMAGOTCHI_STATE_PATH = Path(config.AI_MEMORY_PATH) / "cerebro" / "tamagotchi_state.json"
 TAMAGOTCHI_LEVEL_THRESHOLDS = [0, 50, 200, 500, 1000, 2000, 5000, 10000, 25000, 50000]
@@ -11564,7 +11564,7 @@ async def update_known_device(mac: str, request: Request, user: str = Depends(ve
 
 @app.post("/api/network/alert")
 async def receive_network_alert(request: Request):
-    """Receive unknown device alert from Darkhorse network monitor. No auth (LAN-only service).
+    """Receive unknown device alert from network monitor. No auth (LAN-only service).
     Known devices get a quiet chat notification. Unknown devices get the full critical popup."""
     data = await request.json()
     unknown_devices = data.get("unknown_devices", [])

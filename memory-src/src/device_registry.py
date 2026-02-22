@@ -172,7 +172,7 @@ class DeviceRegistry:
         Used for tagging conversations.
 
         Returns:
-            Device tag like "dgx_spark" or "windows_pc"
+            Device tag like "gpu_server" or "windows_pc"
         """
         device = self.get_current_device()
         return device.get("device_type", "unknown")

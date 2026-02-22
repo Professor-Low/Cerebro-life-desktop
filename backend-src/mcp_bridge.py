@@ -15,6 +15,7 @@ import os
 import sys
 import json
 import asyncio
+import platform
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any
@@ -751,10 +752,10 @@ class MCPBridge:
                             profile["preferences"] = qf.get("preferences", {})
                             profile["goals"] = qf.get("active_goals", [])
                             profile["technical_environment"] = {
-                                "os": "Windows 11",
-                                "python": "3.13",
+                                "os": platform.system(),
+                                "python": platform.python_version(),
                                 "nas": os.environ.get("NAS_HOSTNAME", ""),
-                                "dgx_spark": os.environ.get("DGX_HOST", ""),
+                                "gpu_server": os.environ.get("DGX_HOST", ""),
                                 "ai_memory_path": str(self.base_path)
                             }
                     except:

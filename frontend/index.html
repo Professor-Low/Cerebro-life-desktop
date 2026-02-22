@@ -28382,7 +28382,7 @@
 
             const timestamp = document.createElement('div');
             timestamp.className = 'security-alert-timestamp';
-            timestamp.textContent = 'Detected: ' + new Date(data.timestamp || Date.now()).toLocaleString() + ' | Source: ' + (data.source || 'Darkhorse Network Monitor');
+            timestamp.textContent = 'Detected: ' + new Date(data.timestamp || Date.now()).toLocaleString() + ' | Source: ' + (data.source || 'Network Monitor');
             body.appendChild(timestamp);
 
             // Store devices on the overlay for register flow

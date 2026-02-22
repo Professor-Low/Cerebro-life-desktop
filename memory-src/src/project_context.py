@@ -20,7 +20,6 @@ PROJECT_SUFFIX_MAPPINGS = [
     ("Cerebro-life-desktop", "cerebro_desktop"),
     ("cerebral-interface/visualization", "cerebral_interface"),
     ("cerebral-interface", "ai_memory"),
-    ("Scraper", "lead2leads"),
 ]
 
 # Project-specific context templates

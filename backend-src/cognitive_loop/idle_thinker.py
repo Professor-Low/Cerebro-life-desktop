@@ -652,20 +652,20 @@ class HeartbeatEngine:
 
 
     async def _monitor_network_devices(self) -> MonitorResult:
-        """Check Darkhorse reachability and unresolved network alerts."""
+        """Check network monitor reachability and unresolved network alerts."""
         checks: List[str] = []
         severity = "info"
 
-        # Darkhorse Pi reachability (TCP port 22)
+        # Network monitor reachability (TCP port 22)
         try:
             reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(os.environ.get("DARKHORSE_HOST", "192.168.1.100"), 22), timeout=3.0
+                asyncio.open_connection(os.environ.get("NETWORK_MONITOR_HOST", ""), 22), timeout=3.0
             )
             writer.close()
             await writer.wait_closed()
-            checks.append("Darkhorse Pi: reachable (scanner active)")
+            checks.append("Network monitor: reachable (scanner active)")
         except Exception:
-            checks.append("Darkhorse Pi: UNREACHABLE (scanner may be down)")
+            checks.append("Network monitor: UNREACHABLE (scanner may be down)")
             severity = "warning"
 
         # Check for unresolved alerts
