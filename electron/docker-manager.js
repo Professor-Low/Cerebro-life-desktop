@@ -1422,7 +1422,10 @@ class DockerManager extends EventEmitter {
 
     const mountLines = config.fileMounts.map(m => {
       const suffix = m.readOnly ? ':ro' : '';
-      return `      - "${m.hostPath}:${m.containerPath}${suffix}"`;
+      // Convert Windows backslashes to forward slashes — YAML double-quoted
+      // strings interpret \U, \t etc. as escape sequences, breaking the parse.
+      const hostPath = m.hostPath.replace(/\\/g, '/');
+      return `      - "${hostPath}:${m.containerPath}${suffix}"`;
     }).join('\n');
 
     return composeContent.slice(0, endOfLine + 1) + mountLines + '\n' + composeContent.slice(endOfLine + 1);
