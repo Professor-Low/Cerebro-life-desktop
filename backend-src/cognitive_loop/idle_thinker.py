@@ -567,22 +567,30 @@ class HeartbeatEngine:
         except Exception:
             checks.append("Stored items: error")
 
-        # FAISS index
-        faiss_path = AI_MEMORY_PATH / "faiss_index"
-        if faiss_path.exists():
+        # FAISS index (skip in standalone — no FAISS, use Docker volume)
+        _standalone = os.environ.get("CEREBRO_STANDALONE", "") == "1"
+        if _standalone:
             try:
-                age_hours = (time.time() - faiss_path.stat().st_mtime) / 3600
-                if age_hours > 48:
-                    checks.append(f"FAISS index: stale ({int(age_hours)}h old)")
-                    if severity == "info":
-                        severity = "warning"
-                else:
-                    checks.append(f"FAISS index: OK ({int(age_hours)}h old)")
+                file_count = sum(1 for f in AI_MEMORY_PATH.rglob("*") if f.is_file())
+                checks.append(f"Local memory: {file_count} files")
             except Exception:
-                checks.append("FAISS index: error checking")
+                checks.append("Local memory: error checking")
         else:
-            checks.append("FAISS index: MISSING")
-            severity = "alert"
+            faiss_path = AI_MEMORY_PATH / "faiss_index"
+            if faiss_path.exists():
+                try:
+                    age_hours = (time.time() - faiss_path.stat().st_mtime) / 3600
+                    if age_hours > 48:
+                        checks.append(f"FAISS index: stale ({int(age_hours)}h old)")
+                        if severity == "info":
+                            severity = "warning"
+                    else:
+                        checks.append(f"FAISS index: OK ({int(age_hours)}h old)")
+                except Exception:
+                    checks.append("FAISS index: error checking")
+            else:
+                checks.append("FAISS index: MISSING")
+                severity = "alert"
 
         summary_parts = [c for c in checks if "MISSING" in c or "CORRUPT" in c or "stale" in c or "near limit" in c]
         summary = "; ".join(summary_parts) if summary_parts else "Memory healthy"
@@ -592,34 +600,50 @@ class HeartbeatEngine:
     async def _monitor_system_health(self) -> MonitorResult:
         checks: List[str] = []
         severity = "info"
+        _standalone = os.environ.get("CEREBRO_STANDALONE", "") == "1"
 
-        # NAS mount
-        nas_path = AI_MEMORY_PATH
-        if nas_path.exists():
-            try:
-                test_file = AI_MEMORY_PATH / ".heartbeat_test"
-                test_file.write_text("ok", encoding="utf-8")
-                test_file.unlink()
-                checks.append("NAS: mounted & writable")
-            except Exception:
-                checks.append("NAS: mounted but NOT writable")
+        if _standalone:
+            # Docker volume check
+            if AI_MEMORY_PATH.exists():
+                try:
+                    test_file = AI_MEMORY_PATH / ".heartbeat_test"
+                    test_file.write_text("ok", encoding="utf-8")
+                    test_file.unlink()
+                    checks.append("Memory volume: writable")
+                except Exception:
+                    checks.append("Memory volume: NOT writable")
+                    severity = "alert"
+            else:
+                checks.append("Memory volume: NOT mounted")
                 severity = "alert"
         else:
-            checks.append("NAS: NOT mounted")
-            severity = "alert"
+            # NAS mount
+            nas_path = AI_MEMORY_PATH
+            if nas_path.exists():
+                try:
+                    test_file = AI_MEMORY_PATH / ".heartbeat_test"
+                    test_file.write_text("ok", encoding="utf-8")
+                    test_file.unlink()
+                    checks.append("NAS: mounted & writable")
+                except Exception:
+                    checks.append("NAS: mounted but NOT writable")
+                    severity = "alert"
+            else:
+                checks.append("NAS: NOT mounted")
+                severity = "alert"
 
-        # DGX Spark reachability (quick TCP check on port 11434 - Ollama)
-        try:
-            reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(os.environ.get("DGX_HOST", ""), 11434), timeout=3.0
-            )
-            writer.close()
-            await writer.wait_closed()
-            checks.append("DGX Spark: reachable")
-        except Exception:
-            checks.append("DGX Spark: unreachable")
-            if severity == "info":
-                severity = "warning"
+            # DGX Spark reachability (quick TCP check on port 11434 - Ollama)
+            try:
+                reader, writer = await asyncio.wait_for(
+                    asyncio.open_connection(os.environ.get("DGX_HOST", ""), 11434), timeout=3.0
+                )
+                writer.close()
+                await writer.wait_closed()
+                checks.append("DGX Spark: reachable")
+            except Exception:
+                checks.append("DGX Spark: unreachable")
+                if severity == "info":
+                    severity = "warning"
 
         alert_parts = [c for c in checks if "NOT" in c or "unreachable" in c]
         summary = "; ".join(alert_parts) if alert_parts else "All systems OK"

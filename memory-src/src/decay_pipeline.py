@@ -26,7 +26,7 @@ Corrections are NEVER decayed - they're sacred.
 
 Run: Daily via cron or on-startup check.
 
-Author: Claude (for Professor)
+Author: Professor (Michael Anthony Lopez)
 Updated: 2026-01-18 (Phase 4)
 """
 

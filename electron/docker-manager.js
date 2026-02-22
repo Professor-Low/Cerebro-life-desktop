@@ -1436,7 +1436,7 @@ class DockerManager extends EventEmitter {
   redis:
     image: redis:7-alpine
     ports:
-      - "16379:6379"
+      - "127.0.0.1:16379:6379"
     volumes:
       - cerebro-redis:/data
     restart: unless-stopped
@@ -1449,7 +1449,7 @@ class DockerManager extends EventEmitter {
   backend:
     image: ghcr.io/professor-low/cerebro-backend:latest
     ports:
-      - "61000:59000"
+      - "127.0.0.1:61000:59000"
     environment:
       REDIS_URL: redis://redis:6379/0
       AI_MEMORY_PATH: /data/memory

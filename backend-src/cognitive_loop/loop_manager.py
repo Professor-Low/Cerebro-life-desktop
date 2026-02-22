@@ -437,10 +437,13 @@ class CognitiveLoopManager:
         if self._status in [LoopStatus.RUNNING, LoopStatus.STARTING]:
             return {"success": False, "error": "Loop already running or starting"}
 
-        # Check Ollama availability
-        if not await self.ollama.is_available():
+        # Check Ollama availability (skip in standalone — uses Claude CLI for agents)
+        _standalone = os.environ.get("CEREBRO_STANDALONE", "") == "1"
+        if not _standalone and not await self.ollama.is_available():
             self._error = "Ollama not available at DGX Spark"
             return {"success": False, "error": self._error}
+        if _standalone:
+            print("[CogLoop] Standalone mode — Ollama check skipped, using Claude CLI")
 
         # Set autonomy level
         print(f"[CogLoop] Setting autonomy level to {level} (was {self.safety.autonomy_level})")

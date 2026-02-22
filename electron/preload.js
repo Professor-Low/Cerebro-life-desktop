@@ -64,28 +64,35 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
 
   // Event listeners for progress
   onPullProgress: (callback) => {
+    ipcRenderer.removeAllListeners('pull-progress');
     ipcRenderer.on('pull-progress', (_event, data) => callback(data));
   },
   onUpdateProgress: (callback) => {
+    ipcRenderer.removeAllListeners('update-progress');
     ipcRenderer.on('update-progress', (_event, data) => callback(data));
   },
   onDockerInstallProgress: (callback) => {
+    ipcRenderer.removeAllListeners('docker-install-progress');
     ipcRenderer.on('docker-install-progress', (_event, data) => callback(data));
   },
   onDockerStartProgress: (callback) => {
+    ipcRenderer.removeAllListeners('docker-start-progress');
     ipcRenderer.on('docker-start-progress', (_event, data) => callback(data));
   },
 
   // Resume after restart signal
   onResumeAfterRestart: (callback) => {
+    ipcRenderer.removeAllListeners('resume-after-restart');
     ipcRenderer.on('resume-after-restart', (_event, state) => callback(state));
   },
 
   // Credential events
   onCredentialsExpired: (callback) => {
+    ipcRenderer.removeAllListeners('credentials-expired');
     ipcRenderer.on('credentials-expired', (_event, data) => callback(data));
   },
   onCredentialsRefreshed: (callback) => {
+    ipcRenderer.removeAllListeners('credentials-refreshed');
     ipcRenderer.on('credentials-refreshed', (_event, data) => callback(data));
   },
 

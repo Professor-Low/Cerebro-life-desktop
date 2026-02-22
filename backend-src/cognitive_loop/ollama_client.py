@@ -113,6 +113,8 @@ class OllamaClient:
 
     async def is_available(self) -> bool:
         """Check if Ollama server is available."""
+        if not self.base_url:
+            return False
         try:
             session = await self._get_session()
             async with session.get(f"{self.base_url}/api/tags") as resp:
@@ -164,6 +166,11 @@ class OllamaClient:
         Returns:
             OllamaResponse with content and optional thinking
         """
+        # Standalone: no Ollama server — return empty response
+        if not self.base_url:
+            return OllamaResponse(content="", thinking=None, model="none",
+                                  total_duration_ms=0, tokens_generated=0, tokens_per_second=0)
+
         # Collect full response from stream
         full_content = ""
         response_meta = {}
@@ -214,6 +221,10 @@ class OllamaClient:
         Yields:
             Dict chunks from Ollama stream
         """
+        if not self.base_url:
+            yield {"done": True, "model": "none"}
+            return
+
         session = await self._get_session()
 
         # Format messages for Ollama

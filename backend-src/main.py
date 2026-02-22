@@ -2820,6 +2820,8 @@ async def connect(sid, environ, auth=None):
         raise ConnectionRefusedError("Invalid token")
 
     print(f"Client connected: {sid} (user: {user_id})")
+    # Add to broadcast room so client receives all emitted events
+    await sio.enter_room(sid, os.environ.get("CEREBRO_ROOM", "default"))
     # Add to professor's room for cross-device sync
     await sio.enter_room(sid, "professor")
     if "professor" not in connected_clients:
@@ -11402,13 +11404,24 @@ async def get_tamagotchi_state():
     nas_connected = nas_path.exists() and nas_path.is_dir()
     faiss_ok = False
     faiss_size_mb = 0
-    try:
-        faiss_index = nas_path / "embeddings" / "indexes"
-        if faiss_index.exists():
-            faiss_ok = True
-            faiss_size_mb = round(sum(f.stat().st_size for f in faiss_index.rglob("*") if f.is_file()) / (1024 * 1024), 1)
-    except Exception:
-        pass
+
+    if _IS_STANDALONE:
+        # Standalone: check Docker volume health (/data/memory)
+        try:
+            if nas_connected:
+                total_bytes = sum(f.stat().st_size for f in nas_path.rglob("*") if f.is_file())
+                faiss_size_mb = round(total_bytes / (1024 * 1024), 1)
+                faiss_ok = True
+        except Exception:
+            pass
+    else:
+        try:
+            faiss_index = nas_path / "embeddings" / "indexes"
+            if faiss_index.exists():
+                faiss_ok = True
+                faiss_size_mb = round(sum(f.stat().st_size for f in faiss_index.rglob("*") if f.is_file()) / (1024 * 1024), 1)
+        except Exception:
+            pass
 
     return {
         "lifetime_xp": xp,

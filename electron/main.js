@@ -7,6 +7,13 @@ const { DockerManager } = require('./docker-manager');
 const { LicenseManager } = require('./license-manager');
 const { createTray, updateTrayStatus } = require('./tray');
 
+process.on('uncaughtException', (err) => {
+  console.error('[Main] Uncaught exception:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[Main] Unhandled rejection:', reason);
+});
+
 // Linux GPU handling: use real GPU if available, avoid SwiftShader fallback
 if (process.platform === 'linux') {
   // Force Chromium to use the actual GPU (NVIDIA/Intel) instead of SwiftShader blocklist fallback
@@ -310,6 +317,14 @@ app.whenReady().then(async () => {
   });
 
   createSplashWindow();
+  setTimeout(() => {
+    if (splashWindow && !splashWindow.isDestroyed()) {
+      console.error('[Main] Splash timeout — startup took too long');
+      splashWindow.close();
+      splashWindow = null;
+      if (mainWindow) showSetupWizard();
+    }
+  }, 60000);
   createMainWindow();
 
   // Create system tray
