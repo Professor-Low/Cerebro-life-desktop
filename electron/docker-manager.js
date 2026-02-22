@@ -256,11 +256,10 @@ class DockerManager extends EventEmitter {
     const cleanConfigDir = path.join(CEREBRO_DIR, 'claude-config');
     existingEnv.CLAUDE_CONFIG_DIR = cleanConfigDir;
 
-    // Point CEREBRO_FRONTEND_DIR to the frontend folder bundled with the Electron app
-    const frontendDir = path.join(__dirname, '..', 'frontend');
-    if (fs.existsSync(frontendDir)) {
-      existingEnv.CEREBRO_FRONTEND_DIR = frontendDir;
-    }
+    // Copy frontend from the app bundle to a real directory Docker can mount
+    const frontendDest = path.join(CEREBRO_DIR, 'frontend');
+    this._syncFrontend(frontendDest);
+    existingEnv.CEREBRO_FRONTEND_DIR = frontendDest;
 
     const envContent = Object.entries(existingEnv)
       .map(([k, v]) => `${k}=${v}`)
@@ -268,6 +267,33 @@ class DockerManager extends EventEmitter {
 
     fs.writeFileSync(ENV_FILE, envContent);
     console.log(`[Docker] Wrote .env to ${ENV_FILE}`);
+  }
+
+  /**
+   * Copy frontend files from the app bundle (possibly inside asar) to a real
+   * directory that Docker can mount as a volume.
+   */
+  _syncFrontend(destDir) {
+    const srcDir = path.join(__dirname, '..', 'frontend');
+    try {
+      if (!fs.existsSync(srcDir)) {
+        console.warn('[Docker] Frontend source not found, skipping sync');
+        return;
+      }
+      fs.mkdirSync(destDir, { recursive: true });
+      const files = fs.readdirSync(srcDir);
+      for (const file of files) {
+        const srcFile = path.join(srcDir, file);
+        const destFile = path.join(destDir, file);
+        const stat = fs.statSync(srcFile);
+        if (stat.isFile()) {
+          fs.copyFileSync(srcFile, destFile);
+        }
+      }
+      console.log(`[Docker] Synced frontend to ${destDir} (${files.length} files)`);
+    } catch (err) {
+      console.warn(`[Docker] Frontend sync failed: ${err.message}`);
+    }
   }
 
   /**
