@@ -53,8 +53,7 @@ Deadline: {deadline}
 Type: {goal_type}
 
 Context about the user:
-- Developer with coding skills (Python, JavaScript, FastAPI)
-- Has local storage system and GPU server for AI inference
+- Consider the user's existing skills and resources
 - Looking for practical, achievable paths
 
 Break this goal into 3-5 MILESTONES. Each milestone should:
@@ -63,48 +62,50 @@ Break this goal into 3-5 MILESTONES. Each milestone should:
 3. Build toward the final goal progressively
 4. Be achievable in 1-2 weeks max
 
-For financial goals, milestones might be:
-- Research & validate approach ($0 target, 0% of goal)
-- Set up infrastructure ($0-100, 5-10% of goal)
-- First revenue milestone ($X, 25% of goal)
-- Scaling milestone ($X, 50% of goal)
-- Target milestone (100%)
+Milestones should follow a pattern like:
+- Research & validate approach (0% of goal)
+- Set up foundation (5-10% of goal)
+- First meaningful progress checkpoint (25% of goal)
+- Scaling / acceleration phase (50% of goal)
+- Reach final target (100%)
 
-RESPOND WITH ONLY JSON in this exact format:
+Example for a fitness goal like "Run a marathon":
 {{
     "milestones": [
         {{
-            "description": "Research and validate 3 income approaches",
+            "description": "Research training plans and assess current fitness level",
             "target_percentage": 0.0,
             "target_value": 0,
             "order": 0
         }},
         {{
-            "description": "Set up chosen approach (tools, accounts, first steps)",
+            "description": "Build base endurance - complete a 5K run",
             "target_percentage": 0.1,
-            "target_value": 200,
+            "target_value": 5,
             "order": 1
         }},
         {{
-            "description": "First $500 milestone",
+            "description": "Complete a 10K run with consistent training",
             "target_percentage": 0.25,
-            "target_value": 500,
+            "target_value": 10,
             "order": 2
         }},
         {{
-            "description": "Scale to $1000/month",
+            "description": "Complete a half marathon (21K)",
             "target_percentage": 0.5,
-            "target_value": 1000,
+            "target_value": 21,
             "order": 3
         }},
         {{
-            "description": "Reach passive income target",
+            "description": "Complete the full marathon (42K)",
             "target_percentage": 1.0,
-            "target_value": 2000,
+            "target_value": 42,
             "order": 4
         }}
     ]
-}}'''
+}}
+
+RESPOND WITH ONLY JSON matching the format above, adapted to the actual goal.'''
 
     SUBTASK_PROMPT = '''You are generating subtasks for a milestone. These will be executed by autonomous AI agents.
 
@@ -136,25 +137,23 @@ RESPOND WITH ONLY JSON in this exact format:
 {{
     "subtasks": [
         {{
-            "description": "Search web for top 10 income approaches",
+            "description": "Research best approaches and resources for the goal",
             "agent_type": "researcher",
             "depends_on": []
         }},
         {{
-            "description": "Create Upwork freelancer profile",
+            "description": "Set up required accounts or environment",
             "agent_type": "worker",
-            "exploration_goal": "Navigate to Upwork signup, complete freelancer registration form",
+            "exploration_goal": "Navigate to the relevant platform and complete registration",
             "depends_on": ["0"]
         }},
         {{
-            "description": "Post first job listing on platform",
+            "description": "Complete first concrete action toward the milestone",
             "agent_type": "worker",
-            "skill_id": "skill_post_job",
-            "skill_parameters": {{"job_title": "B2B Lead Generation", "budget": "500"}},
             "depends_on": ["1"]
         }},
         {{
-            "description": "Write recommendation report",
+            "description": "Write progress report with findings and next steps",
             "agent_type": "coder",
             "depends_on": ["2"]
         }}
@@ -191,22 +190,22 @@ RESPOND WITH ONLY JSON in this exact format:
 {{
     "subtasks": [
         {{
-            "description": "Search web for top 10 ways to earn passive income with coding skills",
+            "description": "Search web for top approaches and strategies related to the goal",
             "agent_type": "researcher",
             "depends_on": []
         }},
         {{
-            "description": "Analyze existing business for expansion opportunities",
+            "description": "Analyze the user's existing resources and capabilities",
             "agent_type": "analyst",
             "depends_on": []
         }},
         {{
-            "description": "Research freelancing platforms and their earning potential",
+            "description": "Research relevant tools, platforms, and communities",
             "agent_type": "researcher",
             "depends_on": []
         }},
         {{
-            "description": "Create comparison matrix of income approaches",
+            "description": "Create comparison matrix of viable approaches",
             "agent_type": "analyst",
             "depends_on": ["0", "1", "2"]
         }},

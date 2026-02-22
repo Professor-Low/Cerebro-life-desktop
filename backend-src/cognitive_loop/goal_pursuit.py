@@ -25,7 +25,7 @@ from enum import Enum
 
 class GoalType(str, Enum):
     """Type of goal."""
-    OUTCOME = "outcome"  # Result-based (e.g., "Earn passive income")
+    OUTCOME = "outcome"  # Result-based (e.g., "Run a marathon", "Launch a website")
     PROCESS = "process"  # Activity-based (e.g., "Exercise daily")
 
 
@@ -207,8 +207,8 @@ class Goal:
     goal_type: str = "outcome"  # outcome or process
 
     # Targeting
-    target_value: Optional[float] = None  # e.g., 2000
-    target_unit: str = ""  # e.g., "dollars"
+    target_value: Optional[float] = None  # e.g., 42 (km for a marathon)
+    target_unit: str = ""  # e.g., "km", "chapters", "dollars"
     deadline: Optional[str] = None  # ISO datetime
 
     # Progress

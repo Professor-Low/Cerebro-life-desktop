@@ -1379,7 +1379,7 @@ The question should help me:
 Generate a question that sounds like ME asking THEM - personal, direct, curious.
 
 Example formats:
-- "For the passive income goal - are you looking for something that uses your coding skills, or would you prefer something that runs more passively?"
+- "For this goal - are you looking for something hands-on, or would you prefer a more automated approach?"
 - "I want to help you achieve this. What's the maximum time you could dedicate per week?"
 - "Before I go deeper - do you have any existing projects or skills I should factor into my research?"
 
@@ -2306,7 +2306,7 @@ Respond with ONLY JSON:
             # Open-ended
             "ways to", "methods for", "options for", "alternatives to",
             # Financial/business goals
-            "make money", "earn money", "passive income", "side hustle",
+            "make money", "earn money", "side hustle",
             "$", "per month", "per year",
             # Learning tasks
             "learn everything", "teach me about", "explain everything",
