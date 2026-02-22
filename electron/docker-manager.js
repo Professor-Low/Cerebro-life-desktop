@@ -280,19 +280,28 @@ class DockerManager extends EventEmitter {
         console.warn('[Docker] Frontend source not found, skipping sync');
         return;
       }
-      fs.mkdirSync(destDir, { recursive: true });
-      const files = fs.readdirSync(srcDir);
-      for (const file of files) {
-        const srcFile = path.join(srcDir, file);
-        const destFile = path.join(destDir, file);
-        const stat = fs.statSync(srcFile);
-        if (stat.isFile()) {
-          fs.copyFileSync(srcFile, destFile);
-        }
-      }
-      console.log(`[Docker] Synced frontend to ${destDir} (${files.length} files)`);
+      this._copyDirRecursive(srcDir, destDir);
+      console.log(`[Docker] Synced frontend to ${destDir}`);
     } catch (err) {
       console.warn(`[Docker] Frontend sync failed: ${err.message}`);
+    }
+  }
+
+  /**
+   * Recursively copy a directory and all its contents.
+   */
+  _copyDirRecursive(src, dest) {
+    fs.mkdirSync(dest, { recursive: true });
+    const entries = fs.readdirSync(src);
+    for (const entry of entries) {
+      const srcPath = path.join(src, entry);
+      const destPath = path.join(dest, entry);
+      const stat = fs.statSync(srcPath);
+      if (stat.isDirectory()) {
+        this._copyDirRecursive(srcPath, destPath);
+      } else {
+        fs.copyFileSync(srcPath, destPath);
+      }
     }
   }
 

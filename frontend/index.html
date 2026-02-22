@@ -10231,16 +10231,21 @@
             font-size: 0.75rem; color: var(--text-muted);
             overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
-        .file-mount-badges { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
-        .file-mount-badge {
-            font-size: 0.65rem; font-weight: 600; padding: 3px 8px;
-            border-radius: 20px; white-space: nowrap;
+        .file-mount-badges { display: flex; gap: 0; align-items: center; flex-shrink: 0; }
+        .file-mount-toggle {
+            display: flex; border-radius: 8px; overflow: hidden;
+            border: 1px solid var(--border);
         }
-        .file-mount-badge.read-only {
-            background: rgba(34,197,94,0.12); color: var(--green);
+        .file-mount-toggle-btn {
+            font-size: 0.65rem; font-weight: 600; padding: 4px 10px;
+            white-space: nowrap; border: none; cursor: pointer;
+            transition: all 0.2s; background: transparent; color: var(--text-muted);
         }
-        .file-mount-badge.read-write {
-            background: rgba(234,179,8,0.12); color: var(--yellow);
+        .file-mount-toggle-btn.active-read {
+            background: rgba(34,197,94,0.15); color: var(--green);
+        }
+        .file-mount-toggle-btn.active-write {
+            background: rgba(234,179,8,0.15); color: var(--yellow);
         }
         .file-mount-remove {
             width: 28px; height: 28px; border-radius: 8px; border: none;
@@ -30416,17 +30421,23 @@
             info.appendChild(pathEl);
             card.appendChild(info);
 
-            // Badges
+            // Read / Read & Write toggle
             const badges = document.createElement('div');
             badges.className = 'file-mount-badges';
             if (isActive) {
-                const badge = document.createElement('span');
-                badge.className = 'file-mount-badge ' + (mount.readOnly ? 'read-only' : 'read-write');
-                badge.textContent = mount.readOnly ? 'Read Only' : 'Read & Write';
-                badge.style.cursor = 'pointer';
-                badge.title = 'Click to toggle';
-                badge.addEventListener('click', () => toggleMountReadOnly(mount.id));
-                badges.appendChild(badge);
+                const toggleWrap = document.createElement('div');
+                toggleWrap.className = 'file-mount-toggle';
+                const readBtn = document.createElement('button');
+                readBtn.className = 'file-mount-toggle-btn' + (mount.readOnly ? ' active-read' : '');
+                readBtn.textContent = 'Read';
+                readBtn.addEventListener('click', () => { if (!mount.readOnly) return; toggleMountReadOnly(mount.id); });
+                const rwBtn = document.createElement('button');
+                rwBtn.className = 'file-mount-toggle-btn' + (!mount.readOnly ? ' active-write' : '');
+                rwBtn.textContent = 'Read & Write';
+                rwBtn.addEventListener('click', () => { if (mount.readOnly) toggleMountReadOnly(mount.id); });
+                toggleWrap.appendChild(readBtn);
+                toggleWrap.appendChild(rwBtn);
+                badges.appendChild(toggleWrap);
             }
             card.appendChild(badges);
 
@@ -30521,13 +30532,7 @@
         async function toggleMountReadOnly(mountId) {
             const mount = _fileAccessConfig.fileMounts.find(m => m.id === mountId);
             if (!mount) return;
-            if (mount.readOnly) {
-                const confirmed = confirm('Enable write access? Agents will be able to create, modify, and delete files in this folder.');
-                if (!confirmed) return;
-                mount.readOnly = false;
-            } else {
-                mount.readOnly = true;
-            }
+            mount.readOnly = !mount.readOnly;
             await saveFileAccessConfig();
             renderFileAccess();
         }
