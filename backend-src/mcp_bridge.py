@@ -22,8 +22,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 # Add MCP modules to path for imports
 # Standalone Docker: /app/mcp_modules (bundled in image)
-# ASUS/dev: ~/NAS-cerebral-interface/src or CEREBRO_MCP_SRC env var
-_default_mcp_path = "/app/mcp_modules" if os.environ.get("CEREBRO_STANDALONE") == "1" else os.path.expanduser("~/NAS-cerebral-interface/src")
+# Dev: ~/cerebro-mcp/src or CEREBRO_MCP_SRC env var
+_default_mcp_path = "/app/mcp_modules" if os.environ.get("CEREBRO_STANDALONE") == "1" else os.path.expanduser("~/cerebro-mcp/src")
 MCP_PATH = Path(os.environ.get("CEREBRO_MCP_SRC") or _default_mcp_path)
 if str(MCP_PATH) not in sys.path:
     sys.path.insert(0, str(MCP_PATH))

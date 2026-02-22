@@ -12,15 +12,16 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-# Known project paths -> project identifiers
-PROJECT_MAPPINGS = {
-    "C:\\Users\\marke\\NAS-cerebral-interface": "ai_memory",
-    "C:\\Users\\marke\\NAS-cerebral-interface\\src": "ai_memory",
-    "C:\\Users\\marke\\NAS-cerebral-interface\\visualization": "cerebral_interface",
-    "C:\\Users\\marke\\Scraper": "lead2leads",
-    "C:\\Users\\marke\\OneDrive\\Desktop": "desktop_work",
-    "C:\\Users\\marke": "home",
-}
+# Known project path suffixes -> project identifiers
+# Uses suffix matching so paths work across machines/users
+PROJECT_SUFFIX_MAPPINGS = [
+    ("cerebro-mcp/src", "ai_memory"),
+    ("cerebro-mcp", "ai_memory"),
+    ("Cerebro-life-desktop", "cerebro_desktop"),
+    ("cerebral-interface/visualization", "cerebral_interface"),
+    ("cerebral-interface", "ai_memory"),
+    ("Scraper", "lead2leads"),
+]
 
 # Project-specific context templates
 PROJECT_CONTEXTS = {
@@ -87,16 +88,13 @@ class ProjectContextManager:
         if not cwd:
             return None
 
-        # Normalize path
-        cwd_normalized = cwd.replace("/", "\\")
+        # Normalize path separators to forward slashes for cross-platform matching
+        cwd_normalized = cwd.replace("\\", "/").rstrip("/")
 
-        # Try exact match first
-        if cwd_normalized in PROJECT_MAPPINGS:
-            return PROJECT_MAPPINGS[cwd_normalized]
-
-        # Try prefix matching (for subdirectories)
-        for project_path, project_id in PROJECT_MAPPINGS.items():
-            if cwd_normalized.startswith(project_path):
+        # Try suffix matching against known project patterns
+        for suffix, project_id in PROJECT_SUFFIX_MAPPINGS:
+            suffix_normalized = suffix.replace("\\", "/")
+            if cwd_normalized.endswith(suffix_normalized) or ("/" + suffix_normalized + "/") in (cwd_normalized + "/"):
                 return project_id
 
         return None
@@ -160,10 +158,10 @@ if __name__ == "__main__":
     manager = ProjectContextManager()
 
     test_dirs = [
-        "C:\\Users\\marke\\NAS-cerebral-interface",
-        "C:\\Users\\marke\\NAS-cerebral-interface\\src",
-        "C:\\Users\\marke\\Scraper",
-        "C:\\Users\\marke\\Random\\Unknown"
+        "/home/user/cerebro-mcp",
+        "/home/user/cerebro-mcp/src",
+        "/home/user/Scraper",
+        "/home/user/Random/Unknown"
     ]
 
     for d in test_dirs:

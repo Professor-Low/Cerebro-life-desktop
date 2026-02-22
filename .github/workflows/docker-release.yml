@@ -141,7 +141,7 @@ jobs:
 
             1. Download the installer for your platform below
             2. Ensure Docker is installed and running
-            3. Ensure Claude Code Desktop is installed with an active subscription
+            3. Ensure Claude Code is installed with an active subscription
             4. Run the installer and follow the setup wizard
           files: |
             artifacts/electron-win/*

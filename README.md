@@ -48,4 +48,4 @@ scripts/       Build and packaging scripts
 
 ## License
 
-AGPL-3.0 - Copyright 2024-2026 Professor (Michael Anthony Lopez)
+Cerebro Source Available License - See [LICENSE](LICENSE)

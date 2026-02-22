@@ -19,8 +19,8 @@ from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 
-# Add NAS-cerebral-interface to path for SolutionTracker access
-MCP_SRC = Path(os.environ.get("CEREBRO_MCP_SRC", os.path.expanduser("~/NAS-cerebral-interface/src")))
+# Add cerebro-mcp to path for SolutionTracker access
+MCP_SRC = Path(os.environ.get("CEREBRO_MCP_SRC", os.path.expanduser("~/cerebro-mcp/src")))
 if str(MCP_SRC) not in sys.path:
     sys.path.insert(0, str(MCP_SRC))
 

@@ -22,8 +22,8 @@ from typing import Optional, Dict, Any, Callable, Awaitable, List
 from pathlib import Path
 from enum import Enum
 
-# Add NAS-cerebral-interface to path for SolutionTracker access
-MCP_SRC = Path(os.environ.get("CEREBRO_MCP_SRC", os.path.expanduser("~/NAS-cerebral-interface/src")))
+# Add cerebro-mcp to path for SolutionTracker access
+MCP_SRC = Path(os.environ.get("CEREBRO_MCP_SRC", os.path.expanduser("~/cerebro-mcp/src")))
 if str(MCP_SRC) not in sys.path:
     sys.path.insert(0, str(MCP_SRC))
 

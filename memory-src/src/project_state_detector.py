@@ -16,8 +16,8 @@ class ProjectStateDetector:
     # Known project patterns
     KNOWN_PROJECTS = {
         "cerebral-interface": {
-            "names": ["cerebral", "brain", "visualization", "nas-cerebral", "cerebral interface"],
-            "paths": ["NAS-cerebral-interface", "visualization", "cerebral-interface"],
+            "names": ["cerebral", "brain", "visualization", "cerebral interface"],
+            "paths": ["cerebro-mcp", "visualization", "cerebral-interface"],
             "technologies": ["Python", "WebSocket", "Three.js", "FAISS", "sentence-transformers"]
         },
         "lead-enrichment": {

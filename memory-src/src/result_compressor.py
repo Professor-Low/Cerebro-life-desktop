@@ -236,7 +236,7 @@ if __name__ == "__main__":
             "conversation_id": "test-conv-3"
         },
         {
-            "content": "The AI Memory project path on Windows is C:\\Users\\marke\\NAS-cerebral-interface",
+            "content": "The AI Memory project path is /home/user/projects/cerebro",
             "chunk_type": "file_path",
             "score": 0.71,
             "timestamp": "2025-12-28T12:00:00",

@@ -461,7 +461,7 @@ class HeartbeatEngine:
 
     async def _monitor_git_repos(self) -> MonitorResult:
         repos = [
-            Path(os.environ.get("CEREBRO_MCP_SRC", os.path.expanduser("~/NAS-cerebral-interface"))),
+            Path(os.environ.get("CEREBRO_MCP_SRC", os.path.expanduser("~/cerebro-mcp"))),
             AI_MEMORY_PATH / "projects" / "digital_companion" / "cerebro",
         ]
         lines: List[str] = []

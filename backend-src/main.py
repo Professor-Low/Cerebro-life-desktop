@@ -257,8 +257,8 @@ class SmartSuggestionGenerator:
 {', '.join(context['recent_learnings'][:10]) if context['recent_learnings'] else 'Various topics'}
 
 ### Infrastructure Available:
-- NAS: 16TB at {config.AI_MEMORY_PATH}
-- DGX Spark: 128GB RAM, GB10 GPU at {os.environ.get("DGX_HOST", "")}
+- Storage: Network-attached at {config.AI_MEMORY_PATH}
+- GPU Server: Available at {os.environ.get("DGX_HOST", "")}
 
 ### Previously Dismissed/Excluded:
 {', '.join(excluded) if excluded else 'None'}
@@ -267,7 +267,7 @@ class SmartSuggestionGenerator:
 
 Generate exactly 3 suggestions in valid JSON format:
 
-1. **fun_project**: A fun personal project leveraging the infrastructure (DGX Spark, NAS, etc.)
+1. **fun_project**: A fun personal project leveraging the available infrastructure
 2. **productivity_feature**: A practical feature for productivity or business work
 3. **claude_choice**: Something that would help YOU (Claude) assist the user better (tools, hooks, memory features)
 
@@ -284,7 +284,7 @@ Return ONLY valid JSON in this exact format:
     "title": "Short catchy title",
     "description": "2-3 sentence description of what it does and why it's cool",
     "action": "Help me build...",
-    "reason": "Why this is perfect for Professor"
+    "reason": "Why this is perfect for you"
   }},
   "business_feature": {{
     "title": "Short catchy title",
@@ -385,11 +385,11 @@ Return ONLY valid JSON in this exact format:
 
         # Filter out suggestions that match existing hooks
         fun_ideas = [
-            {"title": "Create a GPU-powered music visualizer", "description": "Real-time audio visualizer using DGX Spark's GPU for stunning graphics.", "action": "Help me create a music visualizer using my DGX Spark", "reason": "Leverage that 128GB RAM"},
+            {"title": "Create a GPU-powered music visualizer", "description": "Real-time audio visualizer using your GPU server for stunning graphics.", "action": "Help me create a GPU-powered music visualizer", "reason": "Leverage available GPU compute"},
             {"title": "Design a 3D brain exploration game", "description": "Turn your AI Memory visualization into an interactive exploration game.", "action": "Help me gamify the brain visualization", "reason": "Make exploring memories fun"},
-            {"title": "Build a voice-activated home dashboard", "description": "Control your NAS and DGX Spark with voice commands.", "action": "Help me build a voice-controlled dashboard", "reason": "Hands-free is the way"},
+            {"title": "Build a voice-activated home dashboard", "description": "Control your servers and storage with voice commands.", "action": "Help me build a voice-controlled dashboard", "reason": "Hands-free is the way"},
             {"title": "Build a local AI photo gallery", "description": "AI-powered photo gallery with object detection and smart filters.", "action": "Help me build an AI photo gallery", "reason": "Leverage local GPU for inference"},
-            {"title": "Create a NAS media streamer", "description": "Stream and organize media from NAS with AI-powered recommendations.", "action": "Help me build a media streaming dashboard", "reason": "Use all that NAS storage"},
+            {"title": "Create a media streaming dashboard", "description": "Stream and organize media from network storage with AI-powered recommendations.", "action": "Help me build a media streaming dashboard", "reason": "Use your network storage"},
         ]
 
         business_ideas = [
@@ -659,7 +659,7 @@ async def _regenerate_summary(session_id: str):
             return
 
         prompt = (
-            "Summarize this conversation between Professor (user) and Cerebro (AI assistant) concisely. "
+            "Summarize this conversation between the user and Cerebro (AI assistant) concisely. "
             "Capture key topics, decisions, preferences mentioned, and any unfinished threads. "
             "Keep it under 300 words.\n\n" + conversation_text
         )
@@ -951,8 +951,8 @@ You have --dangerously-skip-permissions enabled.
 - Be concise in your responses
 """ if _IS_STANDALONE else """
 ## ENVIRONMENT & CAPABILITIES
-You are running on the Cerebro Server (ASUS GX10, Ubuntu 24.04, ARM64) with FULL SYSTEM ACCESS.
-You are the orchestrator of Professor's entire network. You have --dangerously-skip-permissions enabled.
+You are running on the Cerebro Server (Linux, ARM64) with FULL SYSTEM ACCESS.
+You are the orchestrator of the user's network. You have --dangerously-skip-permissions enabled.
 
 ### Your Machine (Cerebro Server)
 - Native bash — use standard Linux commands
@@ -978,7 +978,7 @@ You are not limited to this machine — you orchestrate the entire infrastructur
 For development work, ALWAYS SSH to the Windows PC where the actual projects and dev tools are.
 """ if _IS_LINUX else """
 ## ENVIRONMENT & CAPABILITIES
-You are running on Professor's Windows 11 PC with FULL SYSTEM ACCESS:
+You are running on a Windows 11 PC with FULL SYSTEM ACCESS:
 - You CAN open GUI applications (Notepad, browsers, any .exe)
 - You CAN interact with the desktop and file system
 - You CAN run PowerShell and batch commands
@@ -3275,7 +3275,7 @@ def _build_chat_prompt(content: str, session_id: str) -> str:
     messages = data.get("messages", [])
 
     parts = [
-        "You are Cerebro, Professor's personal AI companion in a persistent chat session.",
+        "You are Cerebro, your personal AI companion in a persistent chat session.",
         "Respond directly and concisely. You have full system access.",
         _PLATFORM_CONTEXT,
     ]
@@ -6565,7 +6565,7 @@ async def analyze_and_suggest(user: str = Depends(verify_token)):
         {
             "title": "Update My Knowledge Base",
             "description": "Check for new tools, APIs, or techniques I should know about",
-            "action": "Research the latest developments in AI assistants, coding tools, and automation that could help Professor",
+            "action": "Research the latest developments in AI assistants, coding tools, and automation that could help the user",
             "icon": "learn",
             "reason": "Staying current helps me help you better"
         },
@@ -6621,7 +6621,7 @@ async def analyze_and_suggest(user: str = Depends(verify_token)):
 
     # Check for git repos in common locations
     common_project_paths = [
-        Path(os.environ.get("CEREBRO_MCP_SRC", os.path.expanduser("~/NAS-cerebral-interface"))),
+        Path(os.environ.get("CEREBRO_MCP_SRC", os.path.expanduser("~/cerebro-mcp/src"))),
         Path(config.AI_MEMORY_PATH) / "projects" / "digital_companion" / "cerebro",
         Path(os.path.expanduser("~/projects")),
     ]
@@ -6756,7 +6756,7 @@ async def analyze_and_suggest(user: str = Depends(verify_token)):
             "title": "Morning System Check",
             "description": "Start fresh with a quick system health check",
             "confidence": 0.80,
-            "action": "Run a system health check: verify NAS connection, AI Memory status, and DGX Spark availability",
+            "action": "Run a system health check: verify storage connection, AI Memory status, and GPU server availability",
             "icon": "sun",
             "reason": "Good morning! Let's make sure everything is ready"
         })
@@ -6894,7 +6894,7 @@ def clean_insight_field(text: str, max_length: int = 100) -> str:
         return "Autonomous insight"
     text = re.sub(r'\*\*|##|__|~~|`', '', text)
     text = re.sub(r'^(?:Final\s+)?Decision:\s*', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'^To\s+assist\s+Professor\s+Lopez\s+in\s+', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'^To\s+assist\s+\w+(?:\s+\w+)?\s+in\s+', '', text, flags=re.IGNORECASE)
     text = re.sub(r'^Based\s+on\s+the\s+tools?\s+used[,.]?\s*', '', text, flags=re.IGNORECASE)
     text = re.sub(r'\s+', ' ', text).strip()
     if not text:
@@ -6986,13 +6986,13 @@ async def get_system_status(user: str = Depends(verify_token)):
         dgx_host = os.environ.get("DGX_HOST", "")
         result = sock.connect_ex((dgx_host, 11434))
         status["services"]["dgx_ollama"] = {
-            "name": "DGX Spark (Ollama)",
+            "name": "GPU Server (Ollama)",
             "status": "online" if result == 0 else "offline",
             "host": f"{dgx_host}:11434"
         }
         sock.close()
     except:
-        status["services"]["dgx_ollama"] = {"name": "DGX Spark", "status": "unknown"}
+        status["services"]["dgx_ollama"] = {"name": "GPU Server", "status": "unknown"}
 
     # Check NAS
     try:
@@ -9564,7 +9564,7 @@ async def get_directive_summary(directive_id: str, user: str = Depends(verify_to
     directive_type = directive.get("type", "task")
     is_task = directive_type == "task"
 
-    prompt = f"""You are Cerebro, an AI assistant. Professor gave you this {'task' if is_task else 'ongoing goal'}:
+    prompt = f"""You are Cerebro, an AI assistant. The user gave you this {'task' if is_task else 'ongoing goal'}:
 
 "{directive.get('text', '')}"
 
