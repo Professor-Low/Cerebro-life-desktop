@@ -33,6 +33,7 @@ services:
     volumes:
       - cerebro-data:/data/memory
       - "${CLAUDE_CONFIG_DIR:-~/.claude}:/home/cerebro/.claude"
+      - "${CEREBRO_FRONTEND_DIR:-./frontend}:/app/frontend"
     depends_on:
       redis:
         condition: service_healthy

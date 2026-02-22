@@ -256,6 +256,12 @@ class DockerManager extends EventEmitter {
     const cleanConfigDir = path.join(CEREBRO_DIR, 'claude-config');
     existingEnv.CLAUDE_CONFIG_DIR = cleanConfigDir;
 
+    // Point CEREBRO_FRONTEND_DIR to the frontend folder bundled with the Electron app
+    const frontendDir = path.join(__dirname, '..', 'frontend');
+    if (fs.existsSync(frontendDir)) {
+      existingEnv.CEREBRO_FRONTEND_DIR = frontendDir;
+    }
+
     const envContent = Object.entries(existingEnv)
       .map(([k, v]) => `${k}=${v}`)
       .join('\n') + '\n';
@@ -1423,6 +1429,7 @@ class DockerManager extends EventEmitter {
     volumes:
       - cerebro-data:/data/memory
       - "\${CLAUDE_CONFIG_DIR:-~/.claude}:/home/cerebro/.claude"
+      - "\${CEREBRO_FRONTEND_DIR:-./frontend}:/app/frontend"
     depends_on:
       redis:
         condition: service_healthy
