@@ -766,12 +766,17 @@ ipcMain.handle('get-file-access-presets', () => {
 });
 
 ipcMain.handle('browse-folder', async () => {
-  const result = await dialog.showOpenDialog({
-    properties: ['openDirectory'],
-    title: 'Select folder to share with Cerebro',
-  });
-  if (result.canceled || !result.filePaths.length) return { canceled: true };
-  return { canceled: false, path: result.filePaths[0] };
+  try {
+    const win = BrowserWindow.getFocusedWindow() || mainWindow;
+    const result = await dialog.showOpenDialog(win, {
+      properties: ['openDirectory'],
+      title: 'Select folder to share with Cerebro',
+    });
+    if (result.canceled || !result.filePaths.length) return { canceled: true };
+    return { canceled: false, path: result.filePaths[0] };
+  } catch (err) {
+    return { canceled: true, error: err.message };
+  }
 });
 
 ipcMain.handle('restart-docker-stack', async () => {

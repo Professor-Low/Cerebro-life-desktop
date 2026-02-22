@@ -23742,22 +23742,40 @@
 
                     <div class="section-title" style="display:flex;align-items:center;">File Access<span class="risk-indicator safe" id="file-access-risk">Safe</span></div>
                     <div id="file-access-section">
+                        <!-- Explanation card -->
+                        <div class="settings-card" style="margin-bottom:12px;">
+                            <div style="padding:16px 20px;display:flex;gap:14px;align-items:flex-start;">
+                                <div style="width:36px;height:36px;border-radius:10px;background:rgba(139,92,246,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                                </div>
+                                <div>
+                                    <div style="font-weight:600;font-size:0.9rem;margin-bottom:4px;">Share folders with your agents</div>
+                                    <div style="font-size:0.78rem;color:var(--text-muted);line-height:1.5;">Cerebro agents run in an isolated container and can't see your files by default. Enable folders below to let agents read (or write) files on your computer. Changes require a container restart.</div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="file-access-warning" id="file-access-warning">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                            Write access is enabled on one or more folders. Agents can modify files in those directories.
+                            Write access is enabled on one or more folders. Agents can modify and delete files in those directories.
                         </div>
+
+                        <!-- Quick presets -->
+                        <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:6px;padding-left:2px;">Quick Presets</div>
                         <div class="settings-card" id="file-access-presets-card">
                             <div id="file-access-presets-list">
                                 <!-- Populated by JS -->
                             </div>
                         </div>
-                        <div class="section-title" style="font-size:0.85rem;margin-top:12px;">Custom Folders</div>
+
+                        <!-- Custom folders -->
+                        <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:6px;margin-top:14px;padding-left:2px;">Custom Folders</div>
                         <div class="settings-card">
                             <div id="custom-mounts-list">
                                 <!-- Populated by JS -->
                             </div>
                             <div style="padding:12px 20px;">
-                                <button class="btn btn-secondary btn-block" onclick="addCustomMount()" style="font-size:0.8rem;padding:8px 16px;">
+                                <button class="btn btn-secondary btn-block" onclick="addCustomMount()" style="font-size:0.8rem;padding:10px 16px;">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                                     Add Folder
                                 </button>
@@ -23765,7 +23783,10 @@
                         </div>
                     </div>
                     <div class="file-access-not-available" id="file-access-not-available" style="display:none;">
-                        File access settings are only available in the desktop app.
+                        <div style="margin-bottom:8px;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                        </div>
+                        File access settings are only available in the Cerebro desktop app.
                     </div>
 
                     <div class="section-title">Audio</div>
@@ -30512,10 +30533,14 @@
         }
 
         async function addCustomMount() {
-            if (!window.cerebroDesktop) return;
+            if (!window.cerebroDesktop || !window.cerebroDesktop.browseFolder) {
+                showToast('Folder picker requires the desktop app', 'error');
+                return;
+            }
             try {
                 const result = await window.cerebroDesktop.browseFolder();
-                if (result.canceled) return;
+                if (!result || result.canceled) return;
+                if (result.error) { showToast('Could not open folder picker: ' + result.error, 'error'); return; }
                 const hostPath = result.path;
                 const folderName = hostPath.split(/[\\/]/).pop().toLowerCase().replace(/[^a-z0-9_-]/g, '-') || 'folder';
                 // Avoid duplicate container paths
