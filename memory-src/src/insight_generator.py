@@ -195,7 +195,7 @@ class InsightGenerator:
                 insight = Insight(
                     insight_id=self._generate_id("night_work"),
                     insight_type=InsightType.PATTERN,
-                    content=f"Professor works late: {int(night_hours/total_convs*100)}% of sessions are between 22:00-03:00",
+                    content=f"The user works late: {int(night_hours/total_convs*100)}% of sessions are between 22:00-03:00",
                     evidence={
                         "total_conversations": total_convs,
                         "night_conversations": night_hours,
@@ -363,7 +363,7 @@ class InsightGenerator:
         """
         Generate a logical inference from two premises.
 
-        Simple pattern matching for now - could be enhanced with DGX LLM.
+        Simple pattern matching for now - could be enhanced with GPU server LLM.
         """
         # Look for transitive patterns
         # If A causes B and B causes C, then A causes C

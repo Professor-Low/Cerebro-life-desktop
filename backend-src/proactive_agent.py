@@ -268,7 +268,7 @@ class ProactiveAgentManager:
         action.executed_at = datetime.now().isoformat()
 
         try:
-            task = f"""I'm helping Professor resolve a blocker for one of their goals.
+            task = f"""I'm helping the user resolve a blocker for one of their goals.
 
 GOAL: {goal['description']}
 BLOCKER: {blocker}

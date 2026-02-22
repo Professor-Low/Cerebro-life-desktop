@@ -76,14 +76,14 @@ Example: <tool_call>{"tool": "web_search", "params": {"query": "walrus habitat a
 Example: <tool_call>{"tool": "web_search", "params": {"query": "futures trading strategies 2024", "max_results": 8}}</tool_call>
 
 ### search_memory
-Search the AI Memory system for relevant context (things Professor has saved before).
+Search the AI Memory system for relevant context (things the user has saved before).
 Parameters:
   - query (required): What to search for
   - limit (optional): Max results (default 5)
 Example: <tool_call>{"tool": "search_memory", "params": {"query": "NAS configuration issues"}}</tool_call>
 
 ### get_user_profile
-Get Professor's profile - preferences, identity, projects, goals.
+Get the user's profile - preferences, identity, projects, goals.
 Parameters:
   - category (optional): "all", "identity", "preferences", "goals", "technical_environment"
 Example: <tool_call>{"tool": "get_user_profile", "params": {"category": "preferences"}}</tool_call>
@@ -195,7 +195,7 @@ Deploy a Claude Code agent to execute a complex task. This is YOUR HANDS - the w
 **REQUIREMENTS:**
   - Full Autonomy mode must be ON
   - CEREBRO_COGNITIVE_SPAWN feature flag must be true
-  - Uses Professor's Anthropic subscription - use wisely!
+  - Uses the user's Anthropic subscription - use wisely!
   - Max 10 spawns per cognitive session, 5/hour, 20/day
 Parameters:
   - task (required): What the agent should accomplish
@@ -305,7 +305,7 @@ When done reasoning, output your final answer WITHOUT tool calls.
     # Session spawn limits
     MAX_SPAWNS_PER_SESSION = 10
     MAX_SPAWN_OUTPUT_CHARS = 5000
-    MAX_CONCURRENT_AGENTS = 3  # Professor's computer can handle max 3 agents at once
+    MAX_CONCURRENT_AGENTS = 3  # The user's computer can handle max 3 agents at once
 
     def __init__(self, debug_callback: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None):
         self._debug_callback = debug_callback
@@ -705,7 +705,7 @@ When done reasoning, output your final answer WITHOUT tool calls.
     def _get_skill_generator(self):
         """Lazy-load skill generator to avoid circular imports."""
         from .skill_generator import get_skill_generator
-        return get_skill_generator(headless=False)  # Show browser for Professor to see
+        return get_skill_generator(headless=False)  # Show browser for the user to see
 
     async def _tool_browser_navigate(self, params: Dict) -> Any:
         """Navigate to a URL in the browser."""
@@ -924,7 +924,7 @@ When done reasoning, output your final answer WITHOUT tool calls.
         """
         Spawn a Claude Code agent to execute a task.
 
-        This uses Professor's Anthropic subscription - requires Full Autonomy mode.
+        This uses the user's Anthropic subscription - requires Full Autonomy mode.
         Has session limit of 10 spawns to prevent runaway.
         """
         # Log that spawn_agent was called (for debugging)
@@ -1036,21 +1036,21 @@ When done reasoning, output your final answer WITHOUT tool calls.
                                 "message": f"{len(similar_completed)} similar agents already ran in last 24h. "
                                            "Spawning more is unlikely to help.",
                                 "similar_agents": [a.get("agent_id") or a.get("id") for a in similar_completed[:5]],
-                                "suggestion": "Report findings to Professor or try a completely different approach.",
+                                "suggestion": "Report findings to the user or try a completely different approach.",
                                 "tip": "The same task type has been attempted multiple times. Consider: "
-                                       "(1) Reviewing existing results, (2) Reporting to Professor, or "
+                                       "(1) Reviewing existing results, (2) Reporting to the user, or "
                                        "(3) Trying a fundamentally different approach."
                             }
 
-                        # For 1-2 similar tasks: ASK Professor instead of silently blocking
+                        # For 1-2 similar tasks: ASK the user instead of silently blocking
                         most_recent = similar_completed[0]
                         return {
                             "needs_confirmation": True,
                             "similar_agent_id": most_recent.get("agent_id") or most_recent.get("id"),
                             "similar_task": most_recent.get("task", "")[:200],
                             "completed_at": most_recent.get("completed_at"),
-                            "message": "A similar task was completed recently. Ask Professor if he wants to run it again.",
-                            "suggested_question": "Professor, I already researched something similar recently. Do you want me to do this again for updated results, or should I use the previous findings?"
+                            "message": "A similar task was completed recently. Ask the user if they want to run it again.",
+                            "suggested_question": "I already researched something similar recently. Do you want me to do this again for updated results, or should I use the previous findings?"
                         }
 
         except Exception as e:
@@ -1563,7 +1563,7 @@ When done reasoning, output your final answer WITHOUT tool calls.
             if subtask:
                 # If max attempts reached, escalate
                 if subtask.status == SubtaskStatus.FAILED.value:
-                    escalation_msg = "Max attempts reached - escalating to Professor"
+                    escalation_msg = "Max attempts reached - escalating to the user"
                 else:
                     escalation_msg = f"Will retry ({subtask.max_attempts - subtask.attempts} attempts remaining)"
 

@@ -344,7 +344,7 @@ class ProgressTracker:
         suggestions = []
 
         if metrics.risk_level == "critical":
-            suggestions.append("URGENT: Escalate to Professor for guidance")
+            suggestions.append("URGENT: Escalate to the user for guidance")
             suggestions.append("Consider reducing scope or extending deadline")
 
         if "No recent progress" in str(metrics.risk_factors):

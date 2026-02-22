@@ -27,7 +27,7 @@ USER_PROFILE = BASE_PATH / "user" / "profile.json"
 def test_nas_accessible() -> Tuple[bool, str]:
     """Test that NAS is accessible."""
     if BASE_PATH.exists():
-        return True, "NAS accessible at Z:\\AI_MEMORY"
+        return True, "Data directory accessible"
     return False, "NAS NOT accessible"
 
 

@@ -8,7 +8,7 @@ Features:
 - Golden facts tier for permanent retention
 - Usage-based decay decisions
 
-Author: Professor (Michael Anthony Lopez)
+Author: Michael Lopez (Professor-Low)
 Created: 2026-01-18
 """
 

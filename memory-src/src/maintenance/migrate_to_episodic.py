@@ -50,7 +50,7 @@ def extract_episode_from_conversation(conv: Dict) -> Optional[Dict]:
         "conversation_id": conv_id,
         "event": event,
         "outcome": outcome,
-        "actors": ["professor", "claude"],
+        "actors": ["user", "claude"],
         "emotional_state": emotional_state,
         "timestamp": timestamp,
         "date": timestamp[:10],
@@ -82,8 +82,8 @@ def detect_emotion(text: str) -> str:
 
 
 def migrate_conversations_to_episodic(
-    conversations_path: str = "Z:\\AI_MEMORY\\conversations",
-    episodic_path: str = "Z:\\AI_MEMORY\\episodic",
+    conversations_path: str = None,
+    episodic_path: str = None,
     batch_size: int = 100,
     dry_run: bool = False
 ) -> Dict:
@@ -99,6 +99,12 @@ def migrate_conversations_to_episodic(
     Returns:
         Statistics about the migration
     """
+    if conversations_path is None:
+        from config import DATA_DIR
+        conversations_path = str(DATA_DIR / "conversations")
+    if episodic_path is None:
+        from config import DATA_DIR
+        episodic_path = str(DATA_DIR / "episodic")
     conv_path = Path(conversations_path)
     ep_path = Path(episodic_path)
 

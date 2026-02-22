@@ -217,7 +217,7 @@ class PatternDetector:
         Strategy:
         - Track topics user explains frequently
         - Identify concepts mentioned 3+ times by user
-        - These should become part of Professor profile or system context
+        - These should become part of user profile or system context
 
         Returns:
             [

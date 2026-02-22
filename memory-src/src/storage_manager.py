@@ -8,7 +8,7 @@ Features:
 - Cold storage archival
 - Storage alerts and warnings
 
-Author: Professor (Michael Anthony Lopez)
+Author: Michael Lopez (Professor-Low)
 Created: 2026-01-18
 """
 

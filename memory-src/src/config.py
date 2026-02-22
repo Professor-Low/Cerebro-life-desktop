@@ -62,7 +62,7 @@ EMBEDDING_DIM = int(os.environ.get("CEREBRO_EMBEDDING_DIM", "768"))
 EMBEDDING_DEVICE = os.environ.get("CEREBRO_DEVICE", "auto")
 # Valid: "auto" (GPU if available, else CPU), "cuda" (force GPU), "cpu" (force CPU)
 
-# ============== DGX / GPU SERVER CONFIGURATION ==============
+# ============== GPU SERVER CONFIGURATION ==============
 DGX_HOST = os.environ.get("CEREBRO_DGX_HOST", "")
 DGX_OLLAMA_PORT = int(os.environ.get("CEREBRO_DGX_OLLAMA_PORT", "11434"))
 DGX_EMBEDDING_PORT = int(os.environ.get("CEREBRO_DGX_EMBEDDING_PORT", "8781"))

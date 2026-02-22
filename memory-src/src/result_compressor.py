@@ -229,7 +229,7 @@ if __name__ == "__main__":
             "conversation_id": "test-conv-2"
         },
         {
-            "content": "Professor prefers automation over manual processes. He dislikes having to repeat context.",
+            "content": "The user prefers automation over manual processes. They dislike having to repeat context.",
             "chunk_type": "fact",
             "score": 0.78,
             "timestamp": "2026-01-05T16:00:00",

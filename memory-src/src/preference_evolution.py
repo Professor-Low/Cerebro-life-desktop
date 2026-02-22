@@ -8,7 +8,7 @@ Features:
 - Contradiction detection and supersession
 - Bounded lists with FIFO eviction
 
-Author: Professor (Michael Anthony Lopez)
+Author: Michael Lopez (Professor-Low)
 Created: 2026-01-18
 """
 

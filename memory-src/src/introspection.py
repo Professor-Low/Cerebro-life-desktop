@@ -14,7 +14,7 @@ from typing import Dict, List
 
 import requests
 
-# DGX Spark configuration
+# GPU server configuration
 _dgx_host = os.environ.get("CEREBRO_DGX_HOST", "")
 DGX_SELF_EVAL_SERVICE = f"http://{_dgx_host}:8770" if _dgx_host else ""
 DGX_TIMEOUT = 30
@@ -74,7 +74,7 @@ class Introspector:
     - Detect potential hallucinations
     - Evaluate evidence sufficiency
     - Monitor confidence calibration
-    - Integrate with DGX for deep analysis
+    - Integrate with GPU server for deep analysis
     """
 
     # Patterns indicating potential issues
@@ -121,7 +121,7 @@ class Introspector:
         return f"intro_{hashlib.sha256(ts.encode()).hexdigest()[:10]}"
 
     def _check_dgx_available(self) -> bool:
-        """Check if DGX self-eval service is available."""
+        """Check if GPU self-eval service is available."""
         if self._dgx_available is not None:
             return self._dgx_available
 
@@ -212,8 +212,8 @@ class Introspector:
 
     def evaluate_with_llm(self, text: str, context: str = None) -> IntrospectionResult:
         """
-        Use DGX LLM for deep reasoning evaluation.
-        Falls back to local analysis if DGX unavailable.
+        Use GPU server LLM for deep reasoning evaluation.
+        Falls back to local analysis if GPU server unavailable.
         """
         if not self._check_dgx_available():
             return self.analyze_reasoning(text, context)

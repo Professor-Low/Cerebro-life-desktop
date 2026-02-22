@@ -2,7 +2,7 @@
 Secret Detector - Phase 5: Privacy Layer
 Detects secrets, API keys, tokens, and sensitive data in text.
 
-Author: Professor (Michael Anthony Lopez)
+Author: Michael Lopez (Professor-Low)
 Created: 2026-01-18
 """
 

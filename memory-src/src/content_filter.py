@@ -21,7 +21,7 @@ SYSTEM_CONTENT_PATTERNS = [
     # Memory context markers
     r"\[MEMORY CONTEXT\]",
     r"\[/MEMORY CONTEXT\]",
-    r"USER: Professor \| direct",
+    r"USER: \w+ \| direct",
     r"PROJECTS:.*\(active",
     r"CORRECTIONS:",
     r"LAST:.*Did:",
@@ -180,7 +180,7 @@ def get_message_hash(content: str) -> str:
 if __name__ == "__main__":
     # Test the filter
     test_messages = [
-        {"role": "user", "content": "[MEMORY CONTEXT]\nUSER: Professor\n[/MEMORY CONTEXT]\nHello, help me debug this."},
+        {"role": "user", "content": "[MEMORY CONTEXT]\nUSER: User\n[/MEMORY CONTEXT]\nHello, help me debug this."},
         {"role": "assistant", "content": "I'll help you debug. Let me look at the code."},
         {"role": "user", "content": "No, that's wrong. Use Python 3."},
         {"role": "user", "content": "[SESSION CONTINUATION AVAILABLE]\nI found recent work..."},

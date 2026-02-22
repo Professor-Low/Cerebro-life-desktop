@@ -249,7 +249,7 @@ class EpisodicMemoryManager:
             timestamp=timestamp,
             event=event_summary,
             context=context,
-            actors=["Professor", "Claude"],
+            actors=["User", "Claude"],
             outcome=outcome,
             emotional_state=emotional_state,
             duration_minutes=duration,

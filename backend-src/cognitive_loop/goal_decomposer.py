@@ -1,7 +1,7 @@
 """
 Goal Decomposer - Hierarchical Task Network Decomposition
 
-Uses LLM (Qwen3-32B on DGX Spark) to break goals into:
+Uses LLM to break goals into:
 - Milestones (3-5 checkpoints, each ~20-30% of goal)
 - Subtasks for active milestone (atomic, 15-60 min tasks)
 
@@ -54,7 +54,7 @@ Type: {goal_type}
 
 Context about the user:
 - Developer with coding skills (Python, JavaScript, FastAPI)
-- Has NAS storage system and DGX Spark AI server
+- Has local storage system and GPU server for AI inference
 - Looking for practical, achievable paths
 
 Break this goal into 3-5 MILESTONES. Each milestone should:
@@ -98,7 +98,7 @@ RESPOND WITH ONLY JSON in this exact format:
             "order": 3
         }},
         {{
-            "description": "Reach target of $2000/month",
+            "description": "Reach passive income target",
             "target_percentage": 1.0,
             "target_value": 2000,
             "order": 4
@@ -191,7 +191,7 @@ RESPOND WITH ONLY JSON in this exact format:
 {{
     "subtasks": [
         {{
-            "description": "Search web for top 10 ways to earn $2000/month with coding skills",
+            "description": "Search web for top 10 ways to earn passive income with coding skills",
             "agent_type": "researcher",
             "depends_on": []
         }},
@@ -211,7 +211,7 @@ RESPOND WITH ONLY JSON in this exact format:
             "depends_on": ["0", "1", "2"]
         }},
         {{
-            "description": "Write recommendation report with top 3 paths for Professor to choose",
+            "description": "Write recommendation report with top 3 paths for the user to choose",
             "agent_type": "coder",
             "depends_on": ["3"]
         }}

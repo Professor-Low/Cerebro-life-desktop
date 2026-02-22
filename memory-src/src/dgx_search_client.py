@@ -1,13 +1,13 @@
 """
-DGX Search Service Client
+GPU Search Service Client
 
-Provides async HTTP client for the DGX-based search service.
-Falls back gracefully if DGX is unavailable.
+Provides async HTTP client for the GPU-based search service.
+Falls back gracefully if GPU server is unavailable.
 
 Usage:
     from dgx_search_client import dgx_search, is_dgx_available
 
-    # Check if DGX is available
+    # Check if GPU server is available
     if await is_dgx_available():
         results = await dgx_search("my query", top_k=10, mode="hybrid")
     else:
@@ -30,14 +30,14 @@ DGX_TIMEOUT = float(os.environ.get("DGX_SEARCH_TIMEOUT", "5.0"))
 
 DGX_SEARCH_URL = f"http://{DGX_HOST}:{DGX_PORT}"
 
-# Cache for DGX availability (avoid repeated health checks)
+# Cache for GPU server availability (avoid repeated health checks)
 _dgx_available: Optional[bool] = None
 _dgx_check_time: float = 0
 _DGX_CHECK_INTERVAL = 30  # Re-check every 30 seconds
 
 
 def _is_dgx_reachable() -> bool:
-    """Quick socket check if DGX is reachable"""
+    """Quick socket check if GPU server is reachable"""
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(1.0)
@@ -50,7 +50,7 @@ def _is_dgx_reachable() -> bool:
 
 async def is_dgx_available() -> bool:
     """
-    Check if DGX search service is available.
+    Check if GPU search service is available.
     Caches result for _DGX_CHECK_INTERVAL seconds.
     """
     global _dgx_available, _dgx_check_time
@@ -144,7 +144,7 @@ async def dgx_search(
     timeout: float = None
 ) -> Optional[Dict[str, Any]]:
     """
-    Search using DGX search service.
+    Search using GPU search service.
 
     Args:
         query: Search query
@@ -154,7 +154,7 @@ async def dgx_search(
         timeout: Request timeout (default: DGX_TIMEOUT)
 
     Returns:
-        Search results dict or None if DGX unavailable
+        Search results dict or None if GPU server unavailable
     """
     if timeout is None:
         timeout = DGX_TIMEOUT
@@ -168,7 +168,7 @@ async def dgx_search(
         )
 
         if "error" in result and not result.get("results"):
-            # DGX returned error with no results
+            # GPU server returned error with no results
             return None
 
         return result
@@ -180,17 +180,17 @@ async def dgx_search(
 
 
 async def dgx_keyword_search(query: str, top_k: int = 10) -> Optional[Dict[str, Any]]:
-    """Keyword-only search via DGX"""
+    """Keyword-only search via GPU server"""
     return await dgx_search(query, top_k=top_k, mode="keyword")
 
 
 async def dgx_semantic_search(query: str, top_k: int = 10) -> Optional[Dict[str, Any]]:
-    """Semantic-only search via DGX"""
+    """Semantic-only search via GPU server"""
     return await dgx_search(query, top_k=top_k, mode="semantic")
 
 
 async def dgx_stats() -> Optional[Dict[str, Any]]:
-    """Get DGX search service stats"""
+    """Get GPU search service stats"""
     loop = asyncio.get_event_loop()
 
     def _get_stats():
@@ -214,7 +214,7 @@ async def dgx_stats() -> Optional[Dict[str, Any]]:
 
 
 async def dgx_reindex() -> bool:
-    """Trigger reindex on DGX"""
+    """Trigger reindex on GPU server"""
     loop = asyncio.get_event_loop()
 
     def _trigger_reindex():
@@ -237,7 +237,7 @@ async def dgx_reindex() -> bool:
 
 # Invalidate cache (call after saving new conversations)
 def invalidate_dgx_cache():
-    """Force re-check of DGX availability on next call"""
+    """Force re-check of GPU server availability on next call"""
     global _dgx_available, _dgx_check_time
     _dgx_available = None
     _dgx_check_time = 0

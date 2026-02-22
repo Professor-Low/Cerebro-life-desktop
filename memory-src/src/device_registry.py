@@ -78,11 +78,11 @@ class DeviceRegistry:
 
         # Check for known device patterns
         if "spark" in hostname.lower():
-            device_type = "dgx_spark"
-            device_name = "DGX Spark"
+            device_type = "gpu_server"
+            device_name = "GPU Server"
         elif "gx10" in hostname.lower():
-            device_type = "asus_gx10"
-            device_name = "ASUS GX10"
+            device_type = "linux_server"
+            device_name = "Linux Server"
         elif system == "Windows":
             device_type = "windows_pc"
             device_name = "Windows PC"
@@ -90,8 +90,8 @@ class DeviceRegistry:
             device_type = "mac"
             device_name = "Mac"
         elif architecture == "aarch64" and "nvidia" in platform.release().lower():
-            device_type = "dgx_spark"
-            device_name = "DGX Spark"
+            device_type = "gpu_server"
+            device_name = "GPU Server"
         elif system == "Linux":
             device_type = "linux_pc"
             device_name = "Linux PC"
@@ -121,7 +121,7 @@ class DeviceRegistry:
 
         Args:
             device_info: Device info dict (auto-detected if None)
-            friendly_name: Human-friendly name (e.g., "DGX Spark", "Gaming PC")
+            friendly_name: Human-friendly name (e.g., "GPU Server", "Gaming PC")
             description: Description of the device
 
         Returns:

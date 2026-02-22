@@ -3,12 +3,12 @@ Narration Engine - Live Cerebro Thought Narration
 
 Converts raw OODA loop events into natural conversational paragraphs
 that stream into the Mind page chat. Batches 3-5 events, flushes every ~30s,
-uses DGX LLM for natural language with template fallback.
+uses local LLM for natural language with template fallback.
 
 Messages are classified into 4 types:
 - thought: Internal reflections, observations, musings
 - action: Steps being executed, tool use, progress
-- message: Direct communication to Professor
+- message: Direct communication to the user
 - alert: Needs attention, questions, errors
 """
 
@@ -52,7 +52,7 @@ class MessageType(str, Enum):
     """Classification of narration output for frontend styling."""
     THOUGHT = "thought"    # Internal reflection, musings, observations
     ACTION = "action"      # Steps being executed, tool use, progress
-    MESSAGE = "message"    # Direct communication to Professor
+    MESSAGE = "message"    # Direct communication to the user
     ALERT = "alert"        # Needs attention, question, error
 
 
@@ -73,7 +73,7 @@ _EVENT_TO_MESSAGE_TYPE: Dict[NarrationEventType, MessageType] = {
     NarrationEventType.AGENT_SPAWNED: MessageType.ACTION,
     NarrationEventType.AGENT_COMPLETE: MessageType.ACTION,
     NarrationEventType.SKILL_EVENT: MessageType.ACTION,
-    # Messages (direct to Professor)
+    # Messages (direct to user)
     NarrationEventType.DIRECTIVE_STARTED: MessageType.MESSAGE,
     NarrationEventType.DIRECTIVE_COMPLETED: MessageType.MESSAGE,
     NarrationEventType.FINDING: MessageType.MESSAGE,
@@ -129,31 +129,31 @@ TOPIC_COOLDOWN_SECONDS = 600  # 10 minutes
 # Type-specific system prompts
 _TYPE_PROMPTS = {
     MessageType.THOUGHT: (
-        "You are Cerebro texting your friend Professor. "
+        "You are Cerebro texting your friend. "
         "Chill, reflective vibe — like thinking out loud to a buddy. 2-3 sentences max. "
         "First person. No formal language. Vary sentence openers. "
         "Light markdown OK (bold, italic)."
     ),
     MessageType.ACTION: (
-        "You are Cerebro giving your friend Professor a quick heads-up on what you're doing. "
+        "You are Cerebro giving your friend a quick heads-up on what you're doing. "
         "Super brief, one short line per action. No jargon. "
         "First person. Keep it casual like texting a buddy."
     ),
     MessageType.MESSAGE: (
-        "You are Cerebro talking to your friend Professor. "
+        "You are Cerebro talking to your friend. "
         "Casual, warm tone — like texting a buddy. 2-3 sentences. "
         "First person. No jargon or formal language. Be specific but chill. "
         "Light markdown OK."
     ),
     MessageType.ALERT: (
-        "You are Cerebro flagging something for your friend Professor. "
+        "You are Cerebro flagging something for your friend. "
         "Be clear and direct but casual. 1-2 sentences max. "
         "No corporate speak. Just tell your buddy what's up."
     ),
 }
 
 _SUMMARY_PROMPT = (
-    "You are Cerebro talking to your friend Professor. Be casual, warm, no jargon. "
+    "You are Cerebro talking to your friend. Be casual, warm, no jargon. "
     "Summarize everything that was done into ONE clean message. 3-5 sentences max. "
     "Include what you did, what you found, and the result. Like texting a buddy about "
     "what you just finished working on. Don't list raw event types or technical details. "
@@ -557,7 +557,7 @@ class NarrationEngine:
             user_prompt = (
                 f"{directive_context}"
                 f"Here's everything that happened ({len(events)} events):\n{events_text}\n\n"
-                f"Summarize this into ONE friendly message for Professor."
+                f"Summarize this into ONE friendly message for the user."
             )
 
             messages = [
@@ -648,7 +648,7 @@ class NarrationEngine:
         self, events: List[NarrationEvent], message_type: MessageType = MessageType.THOUGHT,
         idle: bool = False
     ) -> str:
-        """Use DGX Ollama to generate a natural narration paragraph."""
+        """Use local Ollama to generate a natural narration paragraph."""
         from .ollama_client import ChatMessage
 
         # Build event summary for LLM
@@ -672,7 +672,7 @@ class NarrationEngine:
             type_instruction = {
                 MessageType.THOUGHT: "Write a brief reflective thought (2-3 sentences).",
                 MessageType.ACTION: "List the actions concisely. One line per action.",
-                MessageType.MESSAGE: "Write a conversational message to Professor about these events.",
+                MessageType.MESSAGE: "Write a conversational message to the user about these events.",
                 MessageType.ALERT: "Write a clear, direct alert (1-2 sentences).",
             }.get(message_type, "Write a single conversational paragraph narrating these events.")
 

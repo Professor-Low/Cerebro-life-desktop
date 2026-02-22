@@ -136,7 +136,7 @@ ACTION_RISK_MAP: Dict[str, RiskLevel] = {
     "list_files": RiskLevel.LOW,
     "get_status": RiskLevel.LOW,
     "query_database": RiskLevel.LOW,
-    "ask_question": RiskLevel.LOW,  # Asking Professor a question - no side effects
+    "ask_question": RiskLevel.LOW,  # Asking the user a question - no side effects
     "propose_paths": RiskLevel.LOW,  # Proposing strategic paths for approval
 
     # Medium risk - limited side effects

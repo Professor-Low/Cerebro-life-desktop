@@ -9,7 +9,7 @@ Monitors:
   - git_repos: Check watched repos for uncommitted changes
   - file_changes: Scan AI_MEMORY for recently modified files
   - memory_health: Validate quick_facts, conversation count, FAISS index
-  - system_health: NAS mount, Cerebro port, DGX Spark reachability
+  - system_health: NAS mount, Cerebro port, GPU Server reachability
 """
 
 import asyncio
@@ -632,16 +632,16 @@ class HeartbeatEngine:
                 checks.append("NAS: NOT mounted")
                 severity = "alert"
 
-            # DGX Spark reachability (quick TCP check on port 11434 - Ollama)
+            # GPU Server reachability (quick TCP check on port 11434 - Ollama)
             try:
                 reader, writer = await asyncio.wait_for(
                     asyncio.open_connection(os.environ.get("DGX_HOST", ""), 11434), timeout=3.0
                 )
                 writer.close()
                 await writer.wait_closed()
-                checks.append("DGX Spark: reachable")
+                checks.append("GPU Server: reachable")
             except Exception:
-                checks.append("DGX Spark: unreachable")
+                checks.append("GPU Server: unreachable")
                 if severity == "info":
                     severity = "warning"
 
@@ -659,7 +659,7 @@ class HeartbeatEngine:
         # Darkhorse Pi reachability (TCP port 22)
         try:
             reader, writer = await asyncio.wait_for(
-                asyncio.open_connection("192.168.0.81", 22), timeout=3.0
+                asyncio.open_connection(os.environ.get("DARKHORSE_HOST", "192.168.1.100"), 22), timeout=3.0
             )
             writer.close()
             await writer.wait_closed()

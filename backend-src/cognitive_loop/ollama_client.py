@@ -1,7 +1,7 @@
 """
 Ollama Client for Local LLM Reasoning
 
-Connects to DGX Spark for local LLM inference (configured via OLLAMA_URL env var).
+Connects to GPU Server for local LLM inference (configured via OLLAMA_URL env var).
 Supports multiple models with automatic thinking extraction.
 
 Supported Models:

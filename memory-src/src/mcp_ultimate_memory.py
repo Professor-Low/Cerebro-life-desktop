@@ -2,7 +2,7 @@
 """
 Cerebro Memory - MCP Server
 Copyright (C) 2026 Michael Lopez (Professor-Low)
-Licensed under AGPL-3.0 — see LICENSE for details.
+See LICENSE for details.
 
 MCP Server for Ultimate AI Memory System with RAG
 Exposes comprehensive memory capabilities via Model Context Protocol
@@ -31,7 +31,7 @@ import sys
 _original_stdout = sys.stdout  # Save for MCP protocol
 sys.stdout = sys.stderr        # All print() now goes to stderr
 
-# Embeddings enabled — uses DGX Spark for embedding generation (lazy-loaded, won't block startup)
+# Embeddings enabled — uses GPU server for embedding generation (lazy-loaded, won't block startup)
 os.environ.setdefault('ENABLE_EMBEDDINGS', '1')
 os.environ.setdefault('CEREBRO_DGX_HOST', '')
 os.environ.setdefault('DGX_EMBEDDING_HOST', '')
@@ -199,12 +199,12 @@ _embeddings = None
 _initialized = False
 _init_event = None  # Created in main() when event loop is running
 
-# DGX embedding integration - use GPU for embedding generation without blocking MCP startup
+# GPU server embedding integration - use GPU for embedding generation without blocking MCP startup
 _dgx_embedding_available = None  # Cached availability check
 
 
 def is_dgx_embedding_available_cached() -> bool:
-    """Check if DGX embedding service is available (cached for performance)."""
+    """Check if GPU embedding service is available (cached for performance)."""
     global _dgx_embedding_available
     if _dgx_embedding_available is not None:
         return _dgx_embedding_available
@@ -218,8 +218,8 @@ def is_dgx_embedding_available_cached() -> bool:
 
 def embed_chunks_via_dgx(chunks: list, batch_size: int = 128) -> list:
     """
-    Generate embeddings for chunks using DGX GPU service.
-    Returns chunks with embeddings attached, or original chunks if DGX fails.
+    Generate embeddings for chunks using GPU server.
+    Returns chunks with embeddings attached, or original chunks if GPU server fails.
     """
     if not is_dgx_embedding_available_cached():
         return chunks  # Return without embeddings
@@ -245,7 +245,7 @@ def embed_chunks_via_dgx(chunks: list, batch_size: int = 128) -> list:
 
         return chunks
     except Exception as e:
-        print(f"[MCP] DGX embedding failed: {e}")
+        print(f"[MCP] GPU embedding failed: {e}")
         return chunks  # Return without embeddings
 
 
@@ -1147,7 +1147,7 @@ async def list_tools():
         ),
         Tool(
             name="search_by_device",
-            description="Search conversations filtered by device. Use to find content from a specific device (e.g., only DGX Spark conversations).",
+            description="Search conversations filtered by device. Use to find content from a specific device (e.g., only GPU Server conversations).",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -1426,7 +1426,7 @@ async def list_tools():
                     },
                     "actor": {
                         "type": "string",
-                        "description": "Actor filter (for query_episodic, e.g., 'Professor', 'Claude')"
+                        "description": "Actor filter (for query_episodic, e.g., 'User', 'Claude')"
                     },
                     "emotion": {
                         "type": "string",
@@ -1599,7 +1599,7 @@ async def list_tools():
                     },
                     "use_llm": {
                         "type": "boolean",
-                        "description": "Use DGX LLM for extraction (for extract, default false)"
+                        "description": "Use GPU server LLM for extraction (for extract, default false)"
                     },
                     "confidence_threshold": {
                         "type": "number",
@@ -1654,7 +1654,7 @@ async def list_tools():
                     },
                     "use_llm": {
                         "type": "boolean",
-                        "description": "Use DGX LLM for deeper reasoning (default false)"
+                        "description": "Use GPU server LLM for deeper reasoning (default false)"
                     },
                     "limit": {
                         "type": "number",
@@ -1909,7 +1909,7 @@ async def list_tools():
                     },
                     "use_llm": {
                         "type": "boolean",
-                        "description": "Use DGX LLM for deep analysis (for introspect)"
+                        "description": "Use GPU server LLM for deep analysis (for introspect)"
                     }
                 }
             }
@@ -2074,7 +2074,7 @@ async def call_tool(name: str, arguments: dict):
 
             # AUTO-CHUNK: Create searchable chunks for this conversation
             # INCREMENTAL OPTIMIZATION (Agent 7): Only embed new chunks
-            # DGX INTEGRATION (Phase 4): Use DGX GPU for embedding generation
+            # GPU INTEGRATION (Phase 4): Use GPU server for embedding generation
             def do_chunk():
                 chunks = _embeddings.chunk_conversation(saved)
                 if not chunks:
@@ -2083,7 +2083,7 @@ async def call_tool(name: str, arguments: dict):
                 # Check if this is an incremental save
                 previous_chunk_count = metadata.get("previous_chunk_count", 0)
 
-                # Try DGX embedding if available (doesn't block MCP startup!)
+                # Try GPU server embedding if available (doesn't block MCP startup!)
                 used_dgx = False
                 if is_dgx_embedding_available_cached():
                     chunks = embed_chunks_via_dgx(chunks, batch_size=128)
@@ -2111,8 +2111,8 @@ async def call_tool(name: str, arguments: dict):
             used_dgx = chunk_result[1] if isinstance(chunk_result, tuple) else False
 
             if used_dgx:
-                embedding_stats = {"chunks": chunk_count, "embedded": True, "embedded_via": "dgx", "indexed": True, "note": "Chunks embedded via DGX GPU"}
-                # Notify DGX search service to reindex (non-blocking)
+                embedding_stats = {"chunks": chunk_count, "embedded": True, "embedded_via": "dgx", "indexed": True, "note": "Chunks embedded via GPU server"}
+                # Notify GPU search service to reindex (non-blocking)
                 try:
                     from dgx_search_client import invalidate_dgx_cache
                     invalidate_dgx_cache()
@@ -2230,7 +2230,7 @@ async def call_tool(name: str, arguments: dict):
 
         elif name == "search":
             # Consolidated: replaces semantic_search, hybrid_search, get_rag_context
-            # OPTIMIZED: Try DGX search service first (fast), fall back to local
+            # OPTIMIZED: Try GPU search service first (fast), fall back to local
             query = arguments.get("query")
             mode = arguments.get("mode", "hybrid")
             top_k = arguments.get("top_k", 5)
@@ -2241,19 +2241,19 @@ async def call_tool(name: str, arguments: dict):
             max_tokens = arguments.get("max_tokens")
             compact = arguments.get("compact", False)
 
-            # Try DGX search service first (sub-50ms, GPU accelerated)
+            # Try GPU search service first (sub-50ms, GPU accelerated)
             dgx_result = None
             try:
                 from dgx_search_client import dgx_search, is_dgx_available
                 if await is_dgx_available():
                     dgx_result = await dgx_search(query, top_k=top_k, mode=mode, alpha=alpha)
             except ImportError:
-                pass  # DGX client not available
+                pass  # GPU search client not available
             except Exception as e:
-                sys.stderr.write(f"[Search] DGX search failed: {e}\n")
+                sys.stderr.write(f"[Search] GPU search failed: {e}\n")
 
             if dgx_result and dgx_result.get("results"):
-                # DGX search successful - use those results
+                # GPU search successful - use those results
                 results = dgx_result.get("results", [])
                 results = sanitize_results(results)
                 search_source = "dgx"
@@ -3105,7 +3105,7 @@ async def call_tool(name: str, arguments: dict):
                             event=event,
                             outcome=arguments.get("outcome"),
                             emotional_state=arguments.get("emotional_state"),
-                            actors=["Professor", "Claude"],
+                            actors=["User", "Claude"],
                             conversation_id=arguments.get("conversation_id")
                         )
                         episode_id = episodic.save_episode(episode)

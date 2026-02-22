@@ -96,7 +96,7 @@ class CorrectionsTracker:
         return True
 
     def _validate_with_llm(self, mistake: str, correction: str, context: str, user_message: str) -> object:
-        """Validate correction via DGX Spark LLM. Returns cleaned correction dict, None (rejected), or 'FALLBACK'."""
+        """Validate correction via GPU server LLM. Returns cleaned correction dict, None (rejected), or 'FALLBACK'."""
         import urllib.error
         import urllib.request
 
@@ -146,7 +146,7 @@ If this is NOT a real correction, respond: NO"""
                 return None  # LLM says not a real correction
 
         except Exception:
-            return "FALLBACK"  # DGX unavailable, fall back to strict regex
+            return "FALLBACK"  # GPU server unavailable, fall back to strict regex
 
     def __init__(self, base_path: str = None):
         if base_path is None:
@@ -211,7 +211,7 @@ If this is NOT a real correction, respond: NO"""
             print(f"Rejected invalid correction: {mistake[:30]} -> {correction[:30]}")
             return None
 
-        # LLM validation (if DGX available)
+        # LLM validation (if GPU server available)
         llm_result = self._validate_with_llm(mistake, correction, context, user_message)
         llm_validated = False
 
@@ -220,7 +220,7 @@ If this is NOT a real correction, respond: NO"""
             print(f"LLM rejected correction: {mistake[:30]} -> {correction[:30]}")
             return None
         elif llm_result == "FALLBACK":
-            # DGX unavailable — apply strict regex fallback
+            # GPU server unavailable — apply strict regex fallback
             if len(mistake.split()) < 2 or len(correction.split()) < 3:
                 print(f"Strict regex rejected: {mistake[:30]} -> {correction[:30]}")
                 return None

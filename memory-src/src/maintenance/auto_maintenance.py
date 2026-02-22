@@ -129,9 +129,9 @@ def run_maintenance(check_only: bool = False, quiet: bool = False) -> Dict:
     print("\n[1/5] Checking NAS connectivity...")
     if not BASE_PATH.exists():
         report["checks"]["nas"] = "UNREACHABLE"
-        report["issues"].append("NAS unreachable at Z:\\AI_MEMORY")
+        report["issues"].append("Data directory unreachable")
         if not quiet:
-            notify_issue("nas_unreachable", "Cannot access Z:\\AI_MEMORY - check network")
+            notify_issue("nas_unreachable", "Cannot access data directory - check network")
         print("  FAIL: NAS not accessible")
         return report
 

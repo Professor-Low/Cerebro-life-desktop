@@ -8,7 +8,7 @@ Features:
 - Confidence reinforcement (facts that are confirmed gain confidence)
 - Full provenance tracking (why confidence was assigned, all changes)
 
-Author: Professor (Michael Anthony Lopez)
+Author: Michael Lopez (Professor-Low)
 Created: 2026-01-18
 """
 

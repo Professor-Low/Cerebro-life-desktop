@@ -23721,7 +23721,7 @@
                             <span class="settings-value" id="data-dir-display"></span>
                         </div>
                         <div class="settings-row">
-                            <span class="settings-label">DGX Spark</span>
+                            <span class="settings-label">GPU Server</span>
                             <span class="settings-value" id="dgx-host-display"></span>
                         </div>
                     </div>
@@ -24782,7 +24782,7 @@
                         <div class="device-modal-section-title">SSH Configuration</div>
                         <div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:8px; opacity:0.7;">Set Host/IP for ping testing and remote access</div>
                         <div class="ssh-config-grid">
-                            <div><label>Host / IP</label><input type="text" id="device-ssh-host" placeholder="e.g. 192.168.0.6"></div>
+                            <div><label>Host / IP</label><input type="text" id="device-ssh-host" placeholder="e.g. 192.168.1.100"></div>
                             <div><label>Port</label><input type="number" id="device-ssh-port" placeholder="22" value="22"></div>
                             <div><label>Username</label><input type="text" id="device-ssh-user" placeholder="e.g. user"></div>
                             <div><label>Key Path</label><input type="text" id="device-ssh-key" placeholder="~/.ssh/id_rsa"></div>
@@ -24839,8 +24839,8 @@
                             <option value="linux_pc">Linux PC</option>
                             <option value="windows_pc">Windows PC</option>
                             <option value="mac">Mac</option>
-                            <option value="dgx_spark">DGX Spark</option>
-                            <option value="asus_gx10">ASUS GX10</option>
+                            <option value="gpu_server">GPU Server</option>
+                            <option value="linux_server">Linux Server</option>
                             <option value="crystal">Crystal</option>
                             <option value="server">Server</option>
                             <option value="raspberry_pi">Raspberry Pi</option>
@@ -24850,7 +24850,7 @@
                         <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
                             <div class="device-modal-section-title">SSH Configuration (optional)</div>
                             <div class="ssh-config-grid" style="margin-top:8px;">
-                                <div><label>Host / IP</label><input type="text" id="add-device-ssh-host" placeholder="e.g. 192.168.0.6"></div>
+                                <div><label>Host / IP</label><input type="text" id="add-device-ssh-host" placeholder="e.g. 192.168.1.100"></div>
                                 <div><label>Port</label><input type="number" id="add-device-ssh-port" placeholder="22" value="22"></div>
                                 <div><label>Username</label><input type="text" id="add-device-ssh-user" placeholder="e.g. user"></div>
                                 <div><label>Key Path</label><input type="text" id="add-device-ssh-key" placeholder="~/.ssh/id_rsa"></div>
@@ -27995,7 +27995,7 @@
             "I've been keeping track of everything. Your memory bank is growing nicely.",
             "Need help debugging something? I'm always ready to dive in.",
             "I noticed some interesting patterns in your recent work. Want me to analyze them?",
-            "The DGX is humming along. Ready to spin up some agents whenever you are.",
+            "The GPU server is humming along. Ready to spin up some agents whenever you are.",
             "Your AI Memory system is holding 306+ conversations. That's a lot of wisdom stored!",
             "Multi-agent workflows are ready. Want to tackle something complex together?",
             "I'm always learning from our conversations. Thanks for teaching me.",
@@ -46259,7 +46259,7 @@ Please proceed with implementing this recommendation. You have full permissions.
         }
 
         // ==================== STANDALONE / ELECTRON DETECTION ====================
-        // Standalone mode: running inside Electron or Docker (not the ASUS server)
+        // Standalone mode: running inside Electron or Docker (not the Linux server)
         const _IS_STANDALONE = !!(window.cerebroDesktop) || (window.location.port === '61000' && window.location.hostname === 'localhost');
 
         // ==================== PARTICLE BACKGROUND ====================

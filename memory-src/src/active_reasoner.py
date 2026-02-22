@@ -3,7 +3,7 @@ Active Reasoner - Claude.Me v6.0
 Form new connections and generate insights without being prompted.
 
 Part of Phase 4: Active Reasoning Over Memory
-Uses DGX Spark for LLM-powered reasoning when available.
+Uses GPU server for LLM-powered reasoning when available.
 """
 import json
 import os
@@ -15,7 +15,7 @@ import requests
 
 from insight_generator import Insight, InsightGenerator, InsightType
 
-# DGX Spark configuration
+# GPU server configuration
 _dgx_host = os.environ.get("CEREBRO_DGX_HOST", "")
 DGX_REASONING_SERVICE = f"http://{_dgx_host}:8768" if _dgx_host else ""
 DGX_TIMEOUT = 45
@@ -45,7 +45,7 @@ class ActiveReasoner:
         self._dgx_available = None
 
     def _check_dgx_available(self) -> bool:
-        """Check if DGX reasoning service is available."""
+        """Check if GPU reasoning service is available."""
         if self._dgx_available is not None:
             return self._dgx_available
 
@@ -69,7 +69,7 @@ class ActiveReasoner:
         Args:
             memories: List of memory dicts (conversations, facts, etc.)
             context: Optional context for focused reasoning
-            use_llm: Whether to use DGX LLM for deeper reasoning
+            use_llm: Whether to use GPU server LLM for deeper reasoning
 
         Returns:
             Dict with insights, connections, and reasoning trace
@@ -166,7 +166,7 @@ class ActiveReasoner:
         return results
 
     def _reason_with_llm(self, memories: List[Dict], context: str = None) -> List[Insight]:
-        """Use DGX Spark LLM for deeper reasoning."""
+        """Use GPU server LLM for deeper reasoning."""
         try:
             # Prepare memory summaries
             memory_summaries = []

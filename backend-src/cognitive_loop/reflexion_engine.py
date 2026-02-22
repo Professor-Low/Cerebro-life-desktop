@@ -646,7 +646,7 @@ REFLEXION ANALYSIS:
 1. What SPECIFICALLY worked or didn't work?
 2. What should I try DIFFERENTLY next time?
 3. Is this a pattern I'm seeing? (same failure mode as before?)
-4. Should I escalate to Professor? (after 3 failures)
+4. Should I escalate to the user? (after 3 failures)
 
 Provide VERBAL REINFORCEMENT - a short phrase I'll remember:
 - For success: "X works well for Y because Z"

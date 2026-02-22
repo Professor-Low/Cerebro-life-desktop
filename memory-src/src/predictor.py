@@ -3,7 +3,7 @@ Predictor - Claude.Me v6.0
 Use causal model and history for predictions.
 
 Part of Phase 7: Predictive Simulation
-Uses DGX Spark for LLM-powered predictions when available.
+Uses GPU server for LLM-powered predictions when available.
 """
 import hashlib
 import json
@@ -14,7 +14,7 @@ from typing import Dict, List, Optional
 
 import requests
 
-# DGX Spark configuration
+# GPU server configuration
 _dgx_host = os.environ.get("CEREBRO_DGX_HOST", "")
 DGX_PREDICTION_SERVICE = f"http://{_dgx_host}:8771" if _dgx_host else ""
 DGX_TIMEOUT = 45
@@ -105,7 +105,7 @@ class Predictor:
         return f"pred_{hashlib.sha256(f'{context}{ts}'.encode()).hexdigest()[:10]}"
 
     def _check_dgx_available(self) -> bool:
-        """Check if DGX prediction service is available."""
+        """Check if GPU prediction service is available."""
         if self._dgx_available is not None:
             return self._dgx_available
 
@@ -215,7 +215,7 @@ class Predictor:
         return similar[:5]
 
     def predict_with_llm(self, action: str, context: str = None) -> Prediction:
-        """Make a prediction using DGX LLM."""
+        """Make a prediction using GPU server LLM."""
         if not self._check_dgx_available():
             return self.predict_from_causal(action, context)
 

@@ -2,7 +2,7 @@
 Privacy Filter - Phase 5: Privacy Layer
 Handles redaction, sensitive tagging, and optional encryption.
 
-Author: Professor (Michael Anthony Lopez)
+Author: Michael Lopez (Professor-Low)
 Created: 2026-01-18
 """
 

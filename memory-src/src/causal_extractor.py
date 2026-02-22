@@ -3,7 +3,7 @@ Causal Extractor - Claude.Me v6.0
 Extracts cause-effect relationships from conversations.
 
 Part of Phase 3: Causal Model Building
-Uses DGX Spark for LLM-based extraction when available.
+Uses GPU server for LLM-based extraction when available.
 """
 import os
 import re
@@ -12,7 +12,7 @@ from typing import Dict, List, Optional
 
 import requests
 
-# DGX Spark configuration
+# GPU server configuration
 _dgx_host = os.environ.get("CEREBRO_DGX_HOST", "")
 DGX_CAUSAL_SERVICE = f"http://{_dgx_host}:8767" if _dgx_host else ""
 DGX_TIMEOUT = 30
@@ -24,7 +24,7 @@ class CausalExtractor:
 
     Uses a combination of:
     1. Pattern matching (fast, local)
-    2. DGX Spark LLM service (accurate, requires network)
+    2. GPU server LLM service (accurate, requires network)
     """
 
     # Causal language patterns
@@ -69,7 +69,7 @@ class CausalExtractor:
         self._dgx_available = None
 
     def _check_dgx_available(self) -> bool:
-        """Check if DGX causal service is available."""
+        """Check if GPU causal service is available."""
         if self._dgx_available is not None:
             return self._dgx_available
 
@@ -87,7 +87,7 @@ class CausalExtractor:
 
         Args:
             text: Text to analyze
-            use_llm: Whether to use DGX LLM (slower but more accurate)
+            use_llm: Whether to use GPU server LLM (slower but more accurate)
 
         Returns:
             List of causal relationships
@@ -189,7 +189,7 @@ class CausalExtractor:
         return None
 
     def _extract_with_llm(self, text: str) -> List[Dict]:
-        """Extract causal relationships using DGX Spark LLM."""
+        """Extract causal relationships using GPU server LLM."""
         try:
             resp = requests.post(
                 f"{DGX_CAUSAL_SERVICE}/extract",

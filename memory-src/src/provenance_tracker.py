@@ -8,7 +8,7 @@ Features:
 - Reinforcement logging: Track when facts are confirmed
 - Contradiction detection: Alert when storing conflicting facts
 
-Author: Professor (Michael Anthony Lopez)
+Author: Michael Lopez (Professor-Low)
 Created: 2026-01-18
 """
 

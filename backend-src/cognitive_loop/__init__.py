@@ -1,7 +1,7 @@
 """
 Cerebro Cognitive Loop - True Autonomous Intelligence
 
-This module implements continuous autonomous thinking using local LLM (Qwen3-32B on DGX Spark).
+This module implements continuous autonomous thinking using a local LLM.
 Architecture: OODA + ReAct + Reflexion + Goal Pursuit + Adaptive Browser Learning
 
 OBSERVE → ORIENT → DECIDE → ACT → REFLECT → LEARN

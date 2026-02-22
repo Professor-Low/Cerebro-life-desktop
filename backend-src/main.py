@@ -58,7 +58,7 @@ class Config:
     AI_MEMORY_PATH = os.environ.get("AI_MEMORY_PATH", os.path.expanduser("~/.cerebro/data"))
     ALLOWED_ORIGINS = os.environ.get("CEREBRO_CORS_ORIGINS", "http://localhost:5173,http://localhost:3000,https://cerebro.local").split(",")
 
-    # Ollama on DGX Spark for local LLM inference
+    # Ollama on GPU Server for local LLM inference
     OLLAMA_URL = os.environ.get("OLLAMA_URL", "")
     OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:14b")
 
@@ -956,7 +956,7 @@ You are the orchestrator of the user's network. You have --dangerously-skip-perm
 
 ### Your Machine (Cerebro Server)
 - Native bash — use standard Linux commands
-- NAS mounted at /mnt/nas/AI_MEMORY (shared storage)
+- Data storage mounted at the configured AI_MEMORY_PATH
 
 ### Network
 - Devices listed in /data/memory/network_config.json (if configured)
@@ -970,7 +970,7 @@ You are the orchestrator of the user's network. You have --dangerously-skip-perm
 
 ### AI Memory (MCP)
 Agents have access to the full AI Memory system via MCP tools (search, record_learning, etc.)
-The NAS at /mnt/nas/AI_MEMORY contains all conversation history, learnings, and knowledge.
+The data directory contains all conversation history, learnings, and knowledge.
 
 ### Key Principle
 You can run commands on ANY machine via SSH. You can call ANY service via HTTP.
@@ -1691,7 +1691,7 @@ async def auto_categorize_agent(agent: dict):
             return  # Already assigned
 
         # Load existing projects from tracker with full context
-        tracker_path = Path("/mnt/nas/AI_MEMORY/projects/tracker.json")
+        tracker_path = Path(config.AI_MEMORY_PATH) / "projects" / "tracker.json"
         tracker_data = {}
         project_lines = []
         project_map = {}  # various keys -> canonical project_id
@@ -2097,7 +2097,7 @@ When the user mentions trades, positions, buying, selling, crypto, stocks — US
 ### Remote Machines (SSH Access)
 - Devices listed in /data/memory/network_config.json (if configured)
 - Use `cat /data/memory/network_config.json` to discover available SSH targets and their aliases
-- NAS shared storage is mounted locally at `/mnt/nas/AI_MEMORY/` (read/write)
+- Shared data storage is mounted locally (read/write) at the configured AI_MEMORY_PATH
 """)
     else:
         full_prompt_parts.append(f"""
@@ -3993,7 +3993,7 @@ async def list_agent_projects(user: str = Depends(verify_token)):
                     all_agents[entry["id"]] = entry
 
         # Load project tracker for metadata
-        tracker_path = Path("/mnt/nas/AI_MEMORY/projects/tracker.json")
+        tracker_path = Path(config.AI_MEMORY_PATH) / "projects" / "tracker.json"
         tracker_projects = {}
         if tracker_path.exists():
             try:
@@ -4126,7 +4126,7 @@ async def create_project(request: CreateProjectRequest, user: str = Depends(veri
         if not project_id:
             return {"status": "error", "error": "Invalid project name"}
 
-        tracker_path = Path("/mnt/nas/AI_MEMORY/projects/tracker.json")
+        tracker_path = Path(config.AI_MEMORY_PATH) / "projects" / "tracker.json"
         tracker_data = {}
         if tracker_path.exists():
             try:
@@ -4166,7 +4166,7 @@ async def create_project(request: CreateProjectRequest, user: str = Depends(veri
 async def rename_project(project_id: str, request: RenameProjectRequest, user: str = Depends(verify_token)):
     """Rename an agent project group."""
     try:
-        tracker_path = Path("/mnt/nas/AI_MEMORY/projects/tracker.json")
+        tracker_path = Path(config.AI_MEMORY_PATH) / "projects" / "tracker.json"
         tracker_data = {}
         if tracker_path.exists():
             with open(tracker_path, "r", encoding="utf-8") as f:
@@ -4241,7 +4241,7 @@ async def delete_project(project_id: str, user: str = Depends(verify_token)):
                 os.fsync(f.fileno())
 
         # Remove from tracker
-        tracker_path = Path("/mnt/nas/AI_MEMORY/projects/tracker.json")
+        tracker_path = Path(config.AI_MEMORY_PATH) / "projects" / "tracker.json"
         if tracker_path.exists():
             with open(tracker_path, "r", encoding="utf-8") as f:
                 tracker_data = json.load(f)
@@ -6979,7 +6979,7 @@ async def get_system_status(user: str = Depends(verify_token)):
         "services": {}
     }
 
-    # Check DGX Spark
+    # Check GPU Server
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(2)
@@ -11248,7 +11248,9 @@ async def notify_file_ready(request: Request, user: str = Depends(verify_token))
     description = body.get("description", "")
 
     # Build the Windows-accessible UNC path
-    windows_path = filepath.replace("/mnt/nas/AI_MEMORY/", "\\\\192.168.0.21\\home\\AI_MEMORY\\").replace("/", "\\")
+    nas_ip = os.environ.get("CEREBRO_NAS_IP", "localhost")
+    data_dir = os.environ.get("CEREBRO_DATA_DIR", "/data/memory")
+    windows_path = filepath.replace(f"{data_dir}/", f"\\\\{nas_ip}\\home\\AI_MEMORY\\").replace("/", "\\")
 
     notification = {
         "type": "file_ready",

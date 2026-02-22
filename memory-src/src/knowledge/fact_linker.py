@@ -3,7 +3,7 @@ Fact Linker - Create relationships between facts.
 
 Part of Phase 2 Enhancement in the All-Knowing Brain PRD.
 Links facts based on:
-- Same entity (NAS, Professor, etc.)
+- Same entity (NAS, server, etc.)
 - Same project
 - Related topic (semantically related)
 - Causal relationships (A led to B)
@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 # Link types with their default weights
 LINK_TYPES = {
-    'same_entity': 0.9,      # Facts about same thing (NAS, Professor)
+    'same_entity': 0.9,      # Facts about same thing (NAS, server)
     'same_project': 0.7,     # Facts from same project
     'related_topic': 0.5,    # Semantically related
     'causal': 0.8,           # A led to B

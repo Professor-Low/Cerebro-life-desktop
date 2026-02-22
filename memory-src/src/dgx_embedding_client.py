@@ -1,13 +1,13 @@
 """
-DGX Embedding Service Client
+GPU Embedding Service Client
 
-Provides async HTTP client for the DGX-based embedding service.
-Falls back gracefully if DGX is unavailable.
+Provides async HTTP client for the GPU-based embedding service.
+Falls back gracefully if GPU server is unavailable.
 
 Usage:
     from dgx_embedding_client import dgx_embed, is_dgx_embedding_available
 
-    # Check if DGX is available
+    # Check if GPU server is available
     if await is_dgx_embedding_available():
         vectors = await dgx_embed(["text1", "text2"], batch_size=128)
         # vectors is np.ndarray shape (2, 768)
@@ -33,10 +33,10 @@ DGX_TIMEOUT = float(os.environ.get("DGX_EMBEDDING_TIMEOUT", "10.0"))
 
 DGX_EMBEDDING_URL = f"http://{DGX_HOST}:{DGX_PORT}"
 
-# Cache for DGX availability (avoid repeated health checks)
+# Cache for GPU server availability (avoid repeated health checks)
 _dgx_available: Optional[bool] = None
 
-# If no DGX host configured, mark as unavailable immediately
+# If no GPU host configured, mark as unavailable immediately
 if not DGX_HOST:
     _dgx_available = False
 _dgx_check_time: float = 0
@@ -44,7 +44,7 @@ _DGX_CHECK_INTERVAL = 30  # Re-check every 30 seconds
 
 
 def _is_dgx_reachable() -> bool:
-    """Quick socket check if DGX is reachable"""
+    """Quick socket check if GPU server is reachable"""
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(1.0)
@@ -57,7 +57,7 @@ def _is_dgx_reachable() -> bool:
 
 async def is_dgx_embedding_available() -> bool:
     """
-    Check if DGX embedding service is available.
+    Check if GPU embedding service is available.
     Caches result for _DGX_CHECK_INTERVAL seconds.
     """
     global _dgx_available, _dgx_check_time
@@ -140,13 +140,13 @@ def _do_embed(texts: List[str], batch_size: int = 128, normalize: bool = True) -
                 return None
 
     except HTTPError as e:
-        print(f"[DGX Embed] HTTP error: {e.code}")
+        print(f"[GPU Embed] HTTP error: {e.code}")
         return None
     except URLError as e:
-        print(f"[DGX Embed] Connection error: {e.reason}")
+        print(f"[GPU Embed] Connection error: {e.reason}")
         return None
     except Exception as e:
-        print(f"[DGX Embed] Error: {e}")
+        print(f"[GPU Embed] Error: {e}")
         return None
 
 
@@ -157,7 +157,7 @@ async def dgx_embed(
     timeout: float = None
 ) -> Optional[np.ndarray]:
     """
-    Generate embeddings using DGX embedding service.
+    Generate embeddings using GPU embedding service.
 
     Args:
         texts: List of strings to embed
@@ -166,7 +166,7 @@ async def dgx_embed(
         timeout: Request timeout (default: DGX_TIMEOUT)
 
     Returns:
-        Numpy array of embeddings (N x 768) or None if DGX unavailable
+        Numpy array of embeddings (N x 768) or None if GPU server unavailable
     """
     if timeout is None:
         timeout = DGX_TIMEOUT
@@ -184,10 +184,10 @@ async def dgx_embed(
         return result
 
     except asyncio.TimeoutError:
-        print(f"[DGX Embed] Request timed out after {timeout}s")
+        print(f"[GPU Embed] Request timed out after {timeout}s")
         return None
     except Exception as e:
-        print(f"[DGX Embed] Error: {e}")
+        print(f"[GPU Embed] Error: {e}")
         return None
 
 
@@ -217,7 +217,7 @@ async def dgx_embed_batch(
         embeddings = await dgx_embed(batch, batch_size=internal_batch)
 
         if embeddings is None:
-            return None  # Fail fast if DGX fails
+            return None  # Fail fast if GPU server fails
 
         all_embeddings.append(embeddings)
 
@@ -225,7 +225,7 @@ async def dgx_embed_batch(
 
 
 async def dgx_embedding_stats() -> Optional[dict]:
-    """Get DGX embedding service stats"""
+    """Get GPU embedding service stats"""
     loop = asyncio.get_event_loop()
 
     def _get_stats():
@@ -249,7 +249,7 @@ async def dgx_embedding_stats() -> Optional[dict]:
 
 
 def invalidate_dgx_embedding_cache():
-    """Force re-check of DGX availability on next call"""
+    """Force re-check of GPU server availability on next call"""
     global _dgx_available, _dgx_check_time
     _dgx_available = None
     _dgx_check_time = 0

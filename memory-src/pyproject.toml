@@ -7,7 +7,7 @@ name = "cerebro-ai"
 version = "0.1.0"
 description = "A cognitive memory system for AI agents — 49 MCP tools for persistent memory, causal reasoning, and predictive intelligence"
 readme = "README.md"
-license = "AGPL-3.0-only"
+license = "SEE LICENSE IN LICENSE"
 requires-python = ">=3.10"
 authors = [
     { name = "Michael Lopez", email = "lopez.michael19007@gmail.com" },
@@ -16,7 +16,7 @@ keywords = ["ai", "memory", "mcp", "claude", "cognitive", "reasoning", "llm"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "License :: Other/Proprietary License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",

@@ -296,7 +296,7 @@ class AlpacaClient:
 # ── Trade Log (persisted to AI_MEMORY) ─────────────────────────────────────
 
 TRADE_LOG_PATH = os.path.join(
-    os.environ.get("AI_MEMORY_PATH", "Z:/AI_MEMORY"),
+    os.environ.get("AI_MEMORY_PATH", os.path.expanduser("~/.cerebro/data")),
     "cerebro", "trade_log.json"
 )
 
@@ -365,7 +365,7 @@ def log_trade(order: Dict[str, Any], source: str = "manual") -> Dict:
 # ── Wallet Log (unified financial activity tracker) ───────────────────────
 
 WALLET_LOG_PATH = os.path.join(
-    os.environ.get("AI_MEMORY_PATH", "Z:/AI_MEMORY"),
+    os.environ.get("AI_MEMORY_PATH", os.path.expanduser("~/.cerebro/data")),
     "cerebro", "wallet_log.json"
 )
 

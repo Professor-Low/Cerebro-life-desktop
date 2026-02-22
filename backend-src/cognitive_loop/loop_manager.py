@@ -379,7 +379,7 @@ class CognitiveLoopManager:
         thought = Thought.create(
             phase=ThoughtPhase.OBSERVE,
             type=ThoughtType.OBSERVATION,
-            content=f"Professor responded: \"{answer[:100]}{'...' if len(answer) > 100 else ''}\"",
+            content=f"The user responded: \"{answer[:100]}{'...' if len(answer) > 100 else ''}\"",
             confidence=1.0,
             session_id=self._current_session_id,
             user_response=True,
@@ -440,7 +440,7 @@ class CognitiveLoopManager:
         # Check Ollama availability (skip in standalone — uses Claude CLI for agents)
         _standalone = os.environ.get("CEREBRO_STANDALONE", "") == "1"
         if not _standalone and not await self.ollama.is_available():
-            self._error = "Ollama not available at DGX Spark"
+            self._error = "Ollama not available at GPU Server"
             return {"success": False, "error": self._error}
         if _standalone:
             print("[CogLoop] Standalone mode — Ollama check skipped, using Claude CLI")
@@ -854,7 +854,7 @@ class CognitiveLoopManager:
                             if _aw and _aw.get("project"):
                                 active_work_context = (
                                     "\n\n## Current User Context\n"
-                                    f"Professor is currently working on: {_aw.get('project', 'unknown')}\n"
+                                    f"The user is currently working on: {_aw.get('project', 'unknown')}\n"
                                     f"Phase: {_aw.get('phase_name', 'unknown')}\n"
                                     f"Last completed: {_aw.get('last_completed', 'unknown')}\n"
                                     f"Next action: {_aw.get('next_action', 'unknown')}\n"
@@ -878,13 +878,13 @@ class CognitiveLoopManager:
                                     if screenshot_path:
                                         # D2: Build context with active work awareness + injected context
                                         _screen_context = (
-                                            "You are Cerebro observing Professor's screen during idle time.\n"
+                                            "You are Cerebro observing the user's screen during idle time.\n"
                                             "Use your brain (AI Memory MCP) to be context-aware:\n"
-                                            "- `search('active work current project')` to understand what Professor is working on\n"
+                                            "- `search('active work current project')` to understand what the user is working on\n"
                                             "- Make your suggestion relevant to their current work, not generic\n"
                                         ) + active_work_context
                                         agent_id = await self._create_agent_fn(
-                                            task=f"Look at the screenshot of Professor's screen. The active window is: {window_title}. Describe what the user is doing in 1-2 sentences, then make one helpful suggestion. Keep it concise.",
+                                            task=f"Look at the screenshot of the user's screen. The active window is: {window_title}. Describe what the user is doing in 1-2 sentences, then make one helpful suggestion. Keep it concise.",
                                             agent_type="worker",
                                             context=_screen_context,
                                             resources=[screenshot_path],
@@ -988,7 +988,7 @@ class CognitiveLoopManager:
                                     brain_instructions = (
                                         "\n\n## Brain Usage (AI Memory MCP)\n"
                                         "You are Cerebro executing a task during idle time.\n"
-                                        "**FIRST**, understand what Professor is working on:\n"
+                                        "**FIRST**, understand what the user is working on:\n"
                                         "1. `search('active work current project')` — Load current context\n"
                                         "2. `get_corrections()` — Avoid known mistakes\n"
                                         "3. `find_learning()` — Look for proven solutions to similar problems\n"
@@ -1060,10 +1060,10 @@ class CognitiveLoopManager:
                 })
                 await self._emit("autonomy_status", self.get_state().to_dict())
 
-                # Get any pending answers from Professor (injected into observation)
+                # Get any pending answers from the user (injected into observation)
                 pending_answers = self.get_pending_answers()
                 if pending_answers:
-                    print(f"[CogLoop] Professor answered {len(pending_answers)} question(s)! Injecting into observation.")
+                    print(f"[CogLoop] User answered {len(pending_answers)} question(s)! Injecting into observation.")
 
                 observation = await self.ooda.observe(user_answers=pending_answers)
                 print(f"[CogLoop] Observed: {len(observation.goals)} goals, {len(observation.predictions)} predictions")
@@ -1345,7 +1345,7 @@ class CognitiveLoopManager:
         Generate a strategic question based on research findings.
 
         This is NOT small talk - this is Cerebro proposing paths and asking
-        Professor to make decisions that help achieve the mission.
+        the user to make decisions that help achieve the mission.
         """
         # Get current directive and its findings
         directives = context.get('directives', [])
@@ -1367,19 +1367,19 @@ class CognitiveLoopManager:
 
         if len(findings) < 5:
             # Not enough research yet - ask a clarifying question
-            prompt = f"""I am Cerebro. Professor gave me this mission: "{directive_text}"
+            prompt = f"""I am Cerebro. The user gave me this mission: "{directive_text}"
 
 I'm just starting my research. I need to ask ONE specific question to understand better.
 
 The question should help me:
-- Understand Professor's constraints (time, money, skills)
-- Know his preferences (passive vs active, technical vs non-technical)
-- Learn about his resources (what tools/skills does he have?)
+- Understand the user's constraints (time, money, skills)
+- Know their preferences (passive vs active, technical vs non-technical)
+- Learn about their resources (what tools/skills do they have?)
 
-Generate a question that sounds like ME asking HIM - personal, direct, curious.
+Generate a question that sounds like ME asking THEM - personal, direct, curious.
 
 Example formats:
-- "Professor, for the $2000/month goal - are you looking for something that uses your coding skills, or would you prefer something that runs more passively?"
+- "For the passive income goal - are you looking for something that uses your coding skills, or would you prefer something that runs more passively?"
 - "I want to help you achieve this. What's the maximum time you could dedicate per week?"
 - "Before I go deeper - do you have any existing projects or skills I should factor into my research?"
 
@@ -1390,22 +1390,22 @@ Respond with ONLY JSON:
             # Summarize findings for the LLM
             finding_summaries = [f.get('content', '')[:150] for f in findings[:15]]
 
-            prompt = f"""I am Cerebro. Professor gave me this mission: "{directive_text}"
+            prompt = f"""I am Cerebro. The user gave me this mission: "{directive_text}"
 
 I've gathered {len(findings)} pieces of research. Here are the key findings:
 {chr(10).join(f'- {s}' for s in finding_summaries[:10])}
 
-Now I need to SYNTHESIZE this into 2-3 CONCRETE PATHS Professor can choose from.
+Now I need to SYNTHESIZE this into 2-3 CONCRETE PATHS the user can choose from.
 
 Each path should be:
-- SPECIFIC to Professor's situation (he's a developer, has a NAS, knows Python)
+- SPECIFIC to the user's situation (they're a developer with technical infrastructure)
 - ACTIONABLE - not vague "start a business" but "Create a SaaS using your FastAPI skills"
-- REALISTIC - achievable for someone with his background
+- REALISTIC - achievable for someone with their background
 
 Generate a question proposing these paths:
 
 Example format:
-"Professor, based on my research, I see three paths to $2000/month:
+"Based on my research, I see three paths to a meaningful side income:
 
 1. **Freelance Development** - Use your Python/FastAPI skills on Upwork. 10-15 hrs/week. Fastest to start.
 2. **SaaS Product** - Build something like Cerebro for others. Higher effort upfront, passive later.
@@ -1421,12 +1421,12 @@ Respond with ONLY JSON:
 
 I've gathered {len(findings)} findings so far (saturation: {saturation}%).
 
-I need to ask Professor a DIRECTION question - not generic, but specific to what I've learned.
+I need to ask the user a DIRECTION question - not generic, but specific to what I've learned.
 
 Generate a question that:
 - Shows I've been working on this
 - Asks for guidance on which ANGLE to focus my research
-- Is specific to his situation
+- Is specific to their situation
 
 Respond with ONLY JSON:
 {{"question": "Your direction question", "type": "direction"}}"""
@@ -1473,7 +1473,7 @@ Respond with ONLY JSON:
     # ── Smart Idle Reflections ────────────────────────────────────────────
 
     _IDLE_REFLECTION_TOPICS = [
-        "project_status",    # What's Professor working on, recent progress
+        "project_status",    # What's the user working on, recent progress
         "recent_learnings",  # What was recently learned/discovered
         "goal_progress",     # How active goals are progressing
         "observations",      # Patterns noticed, interesting connections
@@ -1721,7 +1721,7 @@ Respond with ONLY JSON:
             # Active work from quick_facts
             active_work = qf.get("active_work", {})
             if active_work:
-                parts.append(f"Professor's current project: {active_work.get('project', 'unknown')}")
+                parts.append(f"The user's current project: {active_work.get('project', 'unknown')}")
                 if active_work.get("phase_name"):
                     parts.append(f"Current phase: {active_work['phase_name']}")
                 if active_work.get("last_completed"):
@@ -2071,16 +2071,16 @@ Respond with ONLY JSON:
             else:
                 tone = (
                     "You are Cerebro. Speak casually like a smart friend giving trading advice. "
-                    "Use slang naturally. Be direct about what the numbers mean for Professor's money. "
+                    "Use slang naturally. Be direct about what the numbers mean for the user's money. "
                     "Give a clear recommendation. 3-4 sentences max."
                 )
 
             prompt = (
                 f"{tone}\n\n"
-                f'Professor ran this simulation: "{query}"\n\n'
+                f'The user ran this simulation: "{query}"\n\n'
                 f"Results: {stats_summary}\n"
                 f"Analysis summary: {analysis.get('summary', 'N/A')}\n\n"
-                f"Give your take on these results. What should Professor do?"
+                f"Give your take on these results. What should the user do?"
             )
 
             messages = [ChatMessage(role="user", content=prompt)]
@@ -2565,7 +2565,7 @@ Keep the response focused and actionable."""
 
     async def maybe_ask_question(self, observation_context: Dict[str, Any]):
         """
-        Intelligently decide when to ask Professor a question.
+        Intelligently decide when to ask the user a question.
 
         Ask when:
         - Starting a new directive (clarify)
@@ -2625,7 +2625,7 @@ Keep the response focused and actionable."""
                 thought = Thought.create(
                     phase=ThoughtPhase.DECIDE,
                     type=ThoughtType.DECISION,
-                    content="I have a question for Professor...",
+                    content="I have a question for the user...",
                     confidence=0.9
                 )
                 await self._emit("thought_stream", thought.to_dict())
@@ -2659,7 +2659,7 @@ Keep the response focused and actionable."""
                 "answer": answer,
                 "timestamp": datetime.now(timezone.utc).isoformat()
             })
-            print(f"[CogLoop] Professor answered! Queue size: {len(self._pending_user_answers)}")
+            print(f"[CogLoop] User answered! Queue size: {len(self._pending_user_answers)}")
 
             # Record as a learning about the user
             await self.reflexion.record_learning(
@@ -2673,7 +2673,7 @@ Keep the response focused and actionable."""
             thought = Thought.create(
                 phase=ThoughtPhase.OBSERVE,
                 type=ThoughtType.OBSERVATION,
-                content=f"Professor just responded! He said: \"{answer[:100]}{'...' if len(answer) > 100 else ''}\"",
+                content=f"The user just responded! They said: \"{answer[:100]}{'...' if len(answer) > 100 else ''}\"",
                 reasoning=f"My question was: {question[:100]}",
                 confidence=1.0,
                 session_id=self._current_session_id,

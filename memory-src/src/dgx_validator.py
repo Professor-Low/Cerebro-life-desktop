@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-DGX Spark Fact Validator - Validates facts using Ollama on DGX Spark.
+GPU Fact Validator - Validates facts using Ollama on GPU server.
 
-Sends new facts to the DGX Spark's Ollama instance for validation.
+Sends new facts to the GPU server's Ollama instance for validation.
 Returns confidence adjustments and flags obvious errors.
 
 Phase 4.3 of Brain Evolution.
@@ -22,7 +22,7 @@ except ImportError:
 
 from config import DATA_DIR
 
-# DGX Spark Ollama configuration
+# GPU server Ollama configuration
 _dgx_host = os.environ.get("CEREBRO_DGX_HOST", "")
 DGX_OLLAMA_URL = f"http://{_dgx_host}:11434/api/generate" if _dgx_host else ""
 DGX_OLLAMA_MODEL = "llama3:latest"  # Fast model for validation
@@ -33,7 +33,7 @@ VALIDATION_CACHE_PATH = DATA_DIR / "validation" / "fact_validations.json"
 
 
 class DGXFactValidator:
-    """Validates facts using DGX Spark's Ollama instance."""
+    """Validates facts using GPU server's Ollama instance."""
 
     def __init__(self):
         self.cache = self._load_cache()
@@ -59,7 +59,7 @@ class DGXFactValidator:
             print(f"Error saving validation cache: {e}")
 
     def _call_ollama(self, prompt: str) -> Optional[str]:
-        """Call Ollama API on DGX Spark."""
+        """Call Ollama API on GPU server."""
         if not HAS_REQUESTS:
             return None
 
@@ -138,7 +138,7 @@ JSON response:"""
                 "valid": True,
                 "confidence_adjustment": 0.0,
                 "issues": [],
-                "reasoning": "Could not validate (DGX unavailable)",
+                "reasoning": "Could not validate (GPU server unavailable)",
                 "validated_at": datetime.now().isoformat(),
             }
 
@@ -251,7 +251,7 @@ if __name__ == "__main__":
         {"content": "Before I can", "id": "test3"},  # Fragment - should fail
     ]
 
-    print("Testing DGX Fact Validator...")
+    print("Testing GPU Fact Validator...")
     for fact in test_facts:
         print(f"\nValidating: {fact['content'][:50]}...")
         result = validator.validate_fact(fact["content"], fact["id"])

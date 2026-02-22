@@ -247,19 +247,19 @@ class EmbeddingsEngine:
         """
         Load the model with a timeout to prevent hanging.
         AGENT 15: Enhanced with class-level caching and GPU support.
-        DGX-FIRST: Skip local model if DGX embedding service is available.
+        GPU-FIRST: Skip local model if GPU embedding service is available.
         """
         # AGENT 15: Check class-level cache first
         if EmbeddingsEngine._model_cache is not None:
             print("[Embeddings] Using cached model (instant load)")
             return EmbeddingsEngine._model_cache
 
-        # DGX-FIRST: If DGX is available, skip local model entirely
-        # DGX handles embedding via HTTP API, no local model needed
+        # GPU-FIRST: If GPU server is available, skip local model entirely
+        # GPU server handles embedding via HTTP API, no local model needed
         try:
             from dgx_embedding_client import is_dgx_embedding_available_sync
             if is_dgx_embedding_available_sync():
-                print("[Embeddings] DGX embedding service available — skipping local model load")
+                print("[Embeddings] GPU embedding service available — skipping local model load")
                 self._model_load_failed = True  # Prevent retry
                 return None
         except ImportError:
@@ -332,7 +332,7 @@ class EmbeddingsEngine:
     def warmup_cache(self) -> bool:
         """
         Pre-load FAISS index AND embedding model into memory for instant first search.
-        DGX-FIRST: Skips local model if DGX embedding service is available.
+        GPU-FIRST: Skips local model if GPU embedding service is available.
         """
         print("[Embeddings] Warming up cache...")
 
@@ -346,7 +346,7 @@ class EmbeddingsEngine:
         except Exception as e:
             print(f"[Embeddings] FAISS warmup failed: {e}")
 
-        # Step 2: Pre-warm embedding model (respects DGX-first)
+        # Step 2: Pre-warm embedding model (respects GPU-first)
         dgx_available = False
         try:
             from dgx_embedding_client import is_dgx_embedding_available_sync
@@ -357,10 +357,10 @@ class EmbeddingsEngine:
             pass
 
         if dgx_available:
-            print("[Embeddings] DGX embedding service available — skipping local model warmup")
+            print("[Embeddings] GPU embedding service available — skipping local model warmup")
             return self.index is not None
 
-        # No DGX: pre-load local model so first search is instant
+        # No GPU server: pre-load local model so first search is instant
         if os.environ.get('ENABLE_EMBEDDINGS', '0') == '1':
             print("[Embeddings] Pre-loading embedding model...")
             model = self.model  # Triggers lazy load via @property
@@ -560,18 +560,18 @@ class EmbeddingsEngine:
         Returns:
             Numpy array of embeddings
         """
-        # Strategy 1: DGX GPU embedding (preferred)
+        # Strategy 1: GPU server embedding (preferred)
         try:
             from dgx_embedding_client import dgx_embed_sync, is_dgx_embedding_available_sync
             if is_dgx_embedding_available_sync():
                 result = dgx_embed_sync(texts, batch_size=batch_size)
                 if result is not None:
-                    print(f"[Embeddings] Batch of {len(texts)} embedded via DGX")
+                    print(f"[Embeddings] Batch of {len(texts)} embedded via GPU server")
                     return result.astype(np.float32)
         except ImportError:
             pass
         except Exception as e:
-            print(f"[Embeddings] DGX batch embedding failed: {e}")
+            print(f"[Embeddings] GPU batch embedding failed: {e}")
 
         # Strategy 2: Local model fallback
         if not self.model:
@@ -938,16 +938,16 @@ class EmbeddingsEngine:
             # STEP 2: Try local SSD cache first (fast)
             local_idx, local_mapping = self._load_from_local_cache()
             if local_idx is not None:
-                # Check if we should update from NAS (background, non-blocking)
+                # Check if we should update from data dir (background, non-blocking)
                 if self._is_local_cache_stale():
-                    print("[Embeddings] Local cache is stale, will sync from NAS in background")
+                    print("[Embeddings] Local cache is stale, will sync from data dir in background")
                     # Use stale cache now, update later (fast user experience)
                     self.index = local_idx
                     self.id_mapping = local_mapping
                     # Update class-level cache
                     with self._index_cache_lock:
                         EmbeddingsEngine._index_cache = (self.index, self.id_mapping)
-                    # TODO: Background sync from NAS
+                    # TODO: Background sync from data dir
                     return self.index
                 else:
                     self.index = local_idx
@@ -1189,23 +1189,23 @@ class EmbeddingsEngine:
             recency_decay_days: Half-life for recency decay (default 30 days)
             conversation_type: Filter by type ("meta_system" or "user_work") - Enhancement 2
         """
-        # Try to get query embedding via DGX first, then local model, then keyword fallback
+        # Try to get query embedding via GPU server first, then local model, then keyword fallback
         query_embedding = None
 
-        # Strategy 1: DGX GPU embedding (preferred — no local model needed)
+        # Strategy 1: GPU server embedding (preferred — no local model needed)
         try:
             from dgx_embedding_client import dgx_embed_sync, is_dgx_embedding_available_sync
             if is_dgx_embedding_available_sync():
                 dgx_result = dgx_embed_sync([query])
                 if dgx_result is not None and len(dgx_result) > 0:
                     query_embedding = dgx_result.astype(np.float32)
-                    print(f"[Embeddings] Query embedded via DGX ({query_embedding.shape[1]}d)")
+                    print(f"[Embeddings] Query embedded via GPU server ({query_embedding.shape[1]}d)")
         except ImportError:
             pass
         except Exception as e:
-            print(f"[Embeddings] DGX query embedding failed: {e}")
+            print(f"[Embeddings] GPU query embedding failed: {e}")
 
-        # Strategy 2: Local model fallback (only if DGX failed)
+        # Strategy 2: Local model fallback (only if GPU server failed)
         if query_embedding is None and self.model:
             query_embedding = self.model.encode([query], convert_to_numpy=True).astype(np.float32)
             print("[Embeddings] Query embedded via local model")

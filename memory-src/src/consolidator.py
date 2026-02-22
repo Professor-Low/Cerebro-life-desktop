@@ -18,7 +18,7 @@ from typing import Dict, List, Optional
 
 import requests
 
-# DGX Spark configuration
+# GPU server configuration
 _dgx_host = os.environ.get("CEREBRO_DGX_HOST", "")
 DGX_CONSOLIDATION_SERVICE = f"http://{_dgx_host}:8769" if _dgx_host else ""
 DGX_TIMEOUT = 120  # Longer timeout for batch processing
@@ -148,7 +148,7 @@ class Consolidator:
             json.dump(run.to_dict(), f, indent=2)
 
     def _check_dgx_available(self) -> bool:
-        """Check if DGX consolidation service is available."""
+        """Check if GPU consolidation service is available."""
         if self._dgx_available is not None:
             return self._dgx_available
 
@@ -296,7 +296,7 @@ class Consolidator:
         """Generate insights from consolidated patterns."""
         generated = 0
 
-        # Try to use DGX for insight generation
+        # Try to use GPU server for insight generation
         if self._check_dgx_available():
             try:
                 # Load recent abstractions
@@ -335,7 +335,7 @@ class Consolidator:
                             generated += 1
 
             except Exception as e:
-                run.errors.append(f"DGX insight generation failed: {e}")
+                run.errors.append(f"GPU insight generation failed: {e}")
 
         return {"generated": generated}
 

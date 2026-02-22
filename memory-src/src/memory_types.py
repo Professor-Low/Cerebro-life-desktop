@@ -34,8 +34,8 @@ class EpisodicMemory:
     An episodic memory - a specific event with full context.
 
     Examples:
-    - "On 2026-01-30, Professor debugged NAS timeout for 45 min, fixed by increasing to 60s"
-    - "Session where we implemented emotion tracker - Professor was initially frustrated"
+    - "On 2026-01-30, the user debugged NAS timeout for 45 min, fixed by increasing to 60s"
+    - "Session where we implemented emotion tracker - the user was initially frustrated"
     """
     id: str
     timestamp: str
@@ -86,7 +86,7 @@ class SemanticMemory:
 
     Examples:
     - "NAS operations require 60s timeout due to SMB latency"
-    - "Professor prefers direct communication without pleasantries"
+    - "The user prefers direct communication without pleasantries"
     """
     id: str
     fact: str

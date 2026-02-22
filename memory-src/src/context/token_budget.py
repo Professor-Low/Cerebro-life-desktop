@@ -340,7 +340,7 @@ if __name__ == "__main__":
     manager = TokenBudgetManager()
 
     # Test identity
-    identity = [{"text": "USER: Professor | direct | technical"}]
+    identity = [{"text": "USER: User | direct | technical"}]
 
     # Test corrections
     corrections = [

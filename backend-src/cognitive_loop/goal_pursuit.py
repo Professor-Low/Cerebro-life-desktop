@@ -25,7 +25,7 @@ from enum import Enum
 
 class GoalType(str, Enum):
     """Type of goal."""
-    OUTCOME = "outcome"  # Result-based (e.g., "Make $2000")
+    OUTCOME = "outcome"  # Result-based (e.g., "Earn passive income")
     PROCESS = "process"  # Activity-based (e.g., "Exercise daily")
 
 
@@ -197,7 +197,7 @@ class Goal:
     Enhanced Goal with targeting, progress tracking, and hierarchy.
 
     Supports:
-    - Quantifiable targets (e.g., $2000 by end of month)
+    - Quantifiable targets (e.g., revenue goal by end of month)
     - Process goals (e.g., exercise 3x/week)
     - Hierarchical decomposition into milestones and subtasks
     - Progress history and learning from failures

@@ -205,7 +205,7 @@ if __name__ == "__main__":
 
     # Test cases
     test_prompts = [
-        "Update the NAS config at Z:\\\\AI_MEMORY\\\\config.json",
+        "Update the NAS config at /data/memory/config.json",
         "What's my NAS IP address?",
         "How do I configure the MCP server with Docker?",
         "The cerebral-interface project has a bug in the Python code",
