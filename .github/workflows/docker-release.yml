@@ -74,7 +74,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: electron-win
-          path: dist/Cerebro-Setup-*.exe
+          path: |
+            dist/Cerebro-Installer.exe
+            dist/latest.yml
           retention-days: 1
 
   build-electron-linux:
@@ -93,8 +95,9 @@ jobs:
         with:
           name: electron-linux
           path: |
-            dist/Cerebro-Setup-*.AppImage
-            dist/Cerebro-Setup-*.deb
+            dist/Cerebro-Installer.AppImage
+            dist/Cerebro-Installer.deb
+            dist/latest-linux.yml
           retention-days: 1
 
   # --- Create GitHub Release ---

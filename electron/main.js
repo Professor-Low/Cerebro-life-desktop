@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const { autoUpdater } = require('electron-updater');
 const { DockerManager } = require('./docker-manager');
 const { LicenseManager } = require('./license-manager');
 const { createTray, updateTrayStatus } = require('./tray');
@@ -31,6 +32,8 @@ let mainWindow = null;
 let splashWindow = null;
 let tray = null;
 let isQuitting = false;
+let electronUpdateReady = false;
+let isAutoUpdating = false;
 
 function createSplashWindow() {
   splashWindow = new BrowserWindow({
@@ -173,6 +176,7 @@ async function loadFrontend() {
 
     // Check for updates in the background
     checkForUpdatesQuietly();
+    setInterval(checkForUpdatesQuietly, 30 * 60 * 1000);
   });
 
   mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
@@ -190,18 +194,22 @@ async function loadFrontend() {
 }
 
 async function checkForUpdatesQuietly() {
+  // Check Docker image updates (existing behavior)
   try {
     const result = await dockerManager.checkForUpdates();
-    if (result.updateAvailable && mainWindow) {
+    if (result.updateAvailable && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.executeJavaScript(`
         if (typeof window.__cerebroShowUpdateBanner === 'function') {
           window.__cerebroShowUpdateBanner();
         }
       `).catch(() => {});
     }
-  } catch {
-    // Silent failure for update checks
-  }
+  } catch {}
+
+  // Check Electron app updates (auto-downloads if available)
+  try {
+    await autoUpdater.checkForUpdates();
+  } catch {}
 }
 
 // --- Linux desktop integration (first launch) ---
@@ -280,6 +288,27 @@ app.whenReady().then(async () => {
 
   installDesktopIntegration();
 
+  // Configure electron auto-updater
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.logger = null;
+
+  autoUpdater.on('update-downloaded', (info) => {
+    console.log(`[Main] Electron update downloaded: v${info.version}`);
+    electronUpdateReady = true;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.executeJavaScript(`
+        if (typeof window.__cerebroShowUpdateBanner === 'function') {
+          window.__cerebroShowUpdateBanner();
+        }
+      `).catch(() => {});
+    }
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.log('[Main] Auto-updater error (non-fatal):', err.message);
+  });
+
   createSplashWindow();
   createMainWindow();
 
@@ -342,8 +371,10 @@ app.on('before-quit', async (e) => {
   if (!isQuitting) {
     isQuitting = true;
     e.preventDefault();
-    updateTrayStatus(tray, 'stopping');
-    await shutdown();
+    if (!isAutoUpdating) {
+      updateTrayStatus(tray, 'stopping');
+      await shutdown();
+    }
     app.quit();
   }
 });
@@ -465,15 +496,66 @@ ipcMain.handle('check-for-updates', async () => {
 
 ipcMain.handle('apply-update', async () => {
   try {
-    await dockerManager.applyUpdate((progress) => {
-      if (mainWindow) {
-        mainWindow.webContents.send('update-progress', progress);
+    const dockerResult = await dockerManager.checkForUpdates();
+    const needsDocker = dockerResult.updateAvailable;
+    const needsElectron = electronUpdateReady;
+
+    // Show splash screen
+    if (mainWindow) {
+      mainWindow.loadURL('data:text/html,' + encodeURIComponent(`<!DOCTYPE html>
+<html><head><style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#0a0a0f; color:#e2e8f0; font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; }
+  .spinner { width:48px; height:48px; border:3px solid rgba(139,92,246,0.2);
+    border-top-color:#8b5cf6; border-radius:50%; animation:spin 1s linear infinite; margin-bottom:24px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  h2 { color:#8b5cf6; margin-bottom:8px; font-size:1.2rem; }
+  #status { color:#94a3b8; font-size:0.85rem; }
+</style></head><body>
+  <div class="spinner"></div>
+  <h2>Updating Cerebro...</h2>
+  <p id="status">Preparing update...</p>
+</body></html>`));
+    }
+
+    // Step 1: Docker update (if needed)
+    if (needsDocker) {
+      await dockerManager.applyUpdate((progress) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          try {
+            mainWindow.webContents.executeJavaScript(
+              `var s=document.getElementById('status');if(s)s.textContent=${JSON.stringify(progress.message || progress.stage || '')};`
+            ).catch(() => {});
+          } catch {}
+        }
+      });
+    }
+
+    // Step 2: Electron update (if needed) — quits and reinstalls silently
+    if (needsElectron) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        try {
+          await mainWindow.webContents.executeJavaScript(
+            `var s=document.getElementById('status');if(s)s.textContent='Installing app update...';`
+          );
+        } catch {}
       }
-    });
-    // Reload frontend after update
-    mainWindow.loadURL('http://localhost:61000');
+      await new Promise(r => setTimeout(r, 1000));
+      isAutoUpdating = true;  // Skip Docker shutdown in before-quit
+      autoUpdater.quitAndInstall(true, true);  // silent install, force relaunch
+      return { success: true };
+    }
+
+    // Docker-only update — reload frontend
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.loadURL('http://localhost:61000');
+    }
     return { success: true };
   } catch (err) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.loadURL('http://localhost:61000');
+    }
     return { success: false, error: err.message };
   }
 });

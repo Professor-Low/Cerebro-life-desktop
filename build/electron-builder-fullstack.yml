@@ -59,4 +59,7 @@ deb:
     - libxtst6
     - libnss3
 
-publish: null
+publish:
+  provider: github
+  owner: Professor-Low
+  repo: Cerebro-life-desktop
