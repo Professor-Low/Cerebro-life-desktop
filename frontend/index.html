@@ -32003,6 +32003,7 @@
                 `<span class="agent-tool">${t}</span>`
             ).join('');
 
+            const agentTask = agent.task || '';
             const timeAgo = getTimeAgo(agent.created_at);
             const outputPreview = agent.output ?
                 agent.output.slice(-200).replace(/</g, '&lt;') : '';
@@ -32086,7 +32087,7 @@
                         <span class="agent-id">🎖️ ${displayName} ${subAgentBadge}</span>
                         <span class="agent-status ${agent.status}">${statusIcon} ${agent.status.toUpperCase()}</span>
                     </div>
-                    <div class="agent-task">${escapeHtml(agent.task.slice(0, 200))}${agent.task.length > 200 ? '...' : ''}</div>
+                    <div class="agent-task">${escapeHtml(agentTask.slice(0, 200))}${agentTask.length > 200 ? '...' : ''}</div>
                     ${toolsHtml ? `<div class="agent-tools">${toolsHtml}</div>` : ''}
                     ${agent._load_error ? `<div class="agent-output" style="color: var(--text-muted); font-style: italic;">Failed to load <button class="compact-retry-btn" onclick="event.stopPropagation(); retryLoadAgent('${agent.id}')" style="margin-left: 6px;">Retry</button></div>` : outputPreview ? `<div class="agent-output">${outputPreview}</div>` : `<div class="agent-output" style="color: var(--text-muted); font-style: italic;">${agent.status === 'running' ? 'Working...' : agent.status === 'completed' ? 'No output captured' : 'Waiting...'}</div>`}
                     ${agent.error ? `<div style="color: var(--red); font-size: 0.8rem; margin-top: 8px;">Error: ${escapeHtml(agent.error)}</div>` : ''}
@@ -34776,6 +34777,21 @@
 
                 const data = await response.json();
                 console.log('Agent spawned:', data);
+                // Add agent to local state immediately so it shows in the list
+                const agentId = data.agent_id || data.id;
+                if (agentId) {
+                    agents[agentId] = {
+                        id: agentId,
+                        task: task,
+                        status: data.status || 'queued',
+                        call_sign: data.call_sign || data.name || agentId,
+                        type: agentType,
+                        created_at: new Date().toISOString(),
+                        tools_used: [],
+                        output: '',
+                        source: 'user'
+                    };
+                }
                 switchView('agents');
             } catch (e) {
                 console.error('Failed to spawn agent:', e);
