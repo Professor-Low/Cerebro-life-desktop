@@ -34650,7 +34650,7 @@
                 card.appendChild(preview);
             }
 
-            return card;
+            return card.outerHTML;
         }
 
         function renderCompactSpecopsCard(agent, isArchived) {
@@ -34692,7 +34692,7 @@
             card.appendChild(header);
             card.appendChild(taskDiv);
             card.appendChild(footer);
-            return card;
+            return card.outerHTML;
         }
 
         async function updateSpecopsField(agentId, field, value) {
