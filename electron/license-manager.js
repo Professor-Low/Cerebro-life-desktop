@@ -5,6 +5,7 @@ const os = require('os');
 const Store = require('electron-store');
 
 const VALIDATE_URL = 'https://www.cerebro.life/api/license/validate';
+const REFRESH_URL = 'https://www.cerebro.life/api/license/refresh';
 const REDEEM_URL = 'https://www.cerebro.life/api/activation/redeem';
 const GRACE_PERIOD_DAYS = 7;
 const MAX_REDIRECTS = 3;
@@ -44,9 +45,19 @@ class LicenseManager {
     const plan = this.store.get('plan');
     const lastValidated = this.store.get('lastValidated');
     const expiresAt = this.store.get('expiresAt');
+    const cancelAtPeriodEnd = this.store.get('cancelAtPeriodEnd');
 
     if (!key) {
       return { valid: false, reason: 'no_license' };
+    }
+
+    // Hard check: if subscription has a known expiry date and it's passed, block immediately
+    if (expiresAt) {
+      const now = new Date();
+      const expiry = new Date(expiresAt);
+      if (now > expiry) {
+        return { valid: false, reason: 'subscription_expired', plan, expiresAt, cancelAtPeriodEnd };
+      }
     }
 
     if (lastValidated) {
@@ -60,6 +71,7 @@ class LicenseManager {
           plan,
           expiresAt,
           lastValidated,
+          cancelAtPeriodEnd,
           offline: daysSince > 0.5,
         };
       }
@@ -105,27 +117,50 @@ class LicenseManager {
     const key = this.store.get('licenseKey');
     if (!key) return { valid: false, reason: 'no_license' };
 
+    // Quick local check first: if subscription already expired, don't even call the server
+    const expiresAt = this.store.get('expiresAt');
+    if (expiresAt && new Date() > new Date(expiresAt)) {
+      // Still try to refresh — maybe they resubscribed
+      try {
+        const result = await this._refreshRemote(key);
+        if (result.valid) {
+          this._storeRefreshResult(result);
+          return { valid: true, plan: result.plan, refreshed: true };
+        }
+        // Server confirmed: still expired
+        return { valid: false, reason: 'subscription_expired', cancelAtPeriodEnd: result.cancel_at_period_end };
+      } catch (_err) {
+        // Can't reach server and locally expired — block
+        return { valid: false, reason: 'subscription_expired' };
+      }
+    }
+
     try {
-      const result = await this._validateRemote(key);
+      // Use the refresh endpoint — it returns { valid, plan, expires_at, refreshed, cancel_at_period_end }
+      const result = await this._refreshRemote(key);
 
       if (result.valid) {
-        this.store.set('plan', result.plan);
-        this.store.set('expiresAt', result.expires_at);
-        this.store.set('lastValidated', new Date().toISOString());
-        return { valid: true, plan: result.plan };
+        this._storeRefreshResult(result);
+        return { valid: true, plan: result.plan, refreshed: result.refreshed };
       }
 
-      const lastValidated = this.store.get('lastValidated');
-      if (lastValidated) {
-        const daysSince = (new Date() - new Date(lastValidated)) / (1000 * 60 * 60 * 24);
-        if (daysSince <= GRACE_PERIOD_DAYS) {
-          return { valid: true, plan: this.store.get('plan'), offline: true };
-        }
-      }
+      // Server explicitly says invalid — subscription cancelled/expired.
+      // NO grace period here. The server is the authority.
+      this.store.set('cancelAtPeriodEnd', result.cancel_at_period_end || false);
+      if (result.expires_at) this.store.set('expiresAt', result.expires_at);
+      return { valid: false, reason: 'subscription_cancelled', cancelAtPeriodEnd: result.cancel_at_period_end };
 
-      return { valid: false, reason: result.error || 'invalid' };
     } catch (err) {
+      // Network error — can't reach server. Use cached data with grace period.
       const lastValidated = this.store.get('lastValidated');
+      const cachedExpiresAt = this.store.get('expiresAt');
+
+      // If we have a cached expiry and it's still in the future, allow use
+      if (cachedExpiresAt && new Date() < new Date(cachedExpiresAt)) {
+        return { valid: true, plan: this.store.get('plan'), offline: true };
+      }
+
+      // Fall back to grace period from last successful validation
       if (lastValidated) {
         const daysSince = (new Date() - new Date(lastValidated)) / (1000 * 60 * 60 * 24);
         if (daysSince <= GRACE_PERIOD_DAYS) {
@@ -135,6 +170,13 @@ class LicenseManager {
 
       return { valid: false, reason: 'offline_grace_expired' };
     }
+  }
+
+  _storeRefreshResult(result) {
+    this.store.set('plan', result.plan);
+    this.store.set('expiresAt', result.expires_at);
+    this.store.set('lastValidated', new Date().toISOString());
+    this.store.set('cancelAtPeriodEnd', result.cancel_at_period_end || false);
   }
 
   /**
@@ -198,6 +240,11 @@ class LicenseManager {
   _validateRemote(licenseKey) {
     const body = JSON.stringify({ license_key: licenseKey });
     return this._requestWithRedirects(VALIDATE_URL, body);
+  }
+
+  _refreshRemote(licenseKey) {
+    const body = JSON.stringify({ license_key: licenseKey });
+    return this._requestWithRedirects(REFRESH_URL, body);
   }
 
   _redeemActivationCode(code) {

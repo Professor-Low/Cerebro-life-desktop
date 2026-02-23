@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
   // License
   getLicenseStatus: () => ipcRenderer.invoke('get-license-status'),
   activateLicense: (key) => ipcRenderer.invoke('activate-license', key),
+  refreshLicense: () => ipcRenderer.invoke('refresh-license'),
 
   // Docker prerequisites
   checkDocker: () => ipcRenderer.invoke('check-docker'),
@@ -84,6 +85,18 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
   onResumeAfterRestart: (callback) => {
     ipcRenderer.removeAllListeners('resume-after-restart');
     ipcRenderer.on('resume-after-restart', (_event, state) => callback(state));
+  },
+
+  // License expiry event (subscription cancelled mid-session)
+  onLicenseExpired: (callback) => {
+    ipcRenderer.removeAllListeners('license-expired');
+    ipcRenderer.on('license-expired', (_event, data) => callback(data));
+  },
+
+  // License failure reason (sent to activation page on startup)
+  onLicenseFailure: (callback) => {
+    ipcRenderer.removeAllListeners('license-failure');
+    ipcRenderer.on('license-failure', (_event, data) => callback(data));
   },
 
   // Credential events

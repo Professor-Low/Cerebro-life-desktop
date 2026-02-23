@@ -461,15 +461,21 @@
         <div class="dot"></div>
         <div class="dot"></div>
       </div>
-      <h2>Activate Cerebro</h2>
-      <div class="subtitle">Enter your license key or activation code</div>
+      <h2 id="activate-title">Activate Cerebro</h2>
+      <div class="subtitle" id="activate-subtitle">Enter your license key or activation code</div>
+      <!-- Expired banner (hidden by default) -->
+      <div id="expired-banner" style="display:none; background:rgba(248,113,113,0.08); border:1px solid rgba(248,113,113,0.25); border-radius:10px; padding:16px; margin-bottom:20px; text-align:left;">
+        <div style="font-size:14px; font-weight:500; color:#f87171; margin-bottom:6px;" id="expired-banner-title">Subscription Expired</div>
+        <div style="font-size:13px; color:rgba(226,232,240,0.5); line-height:1.5;" id="expired-banner-body">Your Cerebro Pro subscription has ended. Renew to get a new license key and continue using Cerebro.</div>
+      </div>
       <div class="form-group">
         <label for="license-input">License Key / Activation Code</label>
         <input type="text" id="license-input" placeholder="CPRP-XXXXXXXX-... or KPWDH7PY" autocomplete="off" spellcheck="false">
         <div class="input-hint">Accepts license keys (CPRO/CPRP-...) or 8-character activation codes</div>
       </div>
       <button class="btn btn-primary" id="activate-btn" onclick="activateLicense()">Activate</button>
-      <button class="btn btn-secondary" onclick="window.open('https://cerebro.life/pricing', '_blank')">Buy a License</button>
+      <button class="btn btn-secondary" id="renew-btn" style="display:none;" onclick="window.open('https://cerebro.life/dashboard', '_blank')">Go to Dashboard &amp; Renew</button>
+      <button class="btn btn-secondary" id="buy-btn" onclick="window.open('https://cerebro.life/pricing', '_blank')">Buy a License</button>
       <div class="status" id="activate-status"></div>
     </div>
 
@@ -1096,6 +1102,42 @@
 
     function delay(ms) {
       return new Promise(function(resolve) { setTimeout(resolve, ms); });
+    }
+
+    // Handle license failure reason from main process (expired/cancelled users)
+    if (window.cerebroDesktop.onLicenseFailure) {
+      window.cerebroDesktop.onLicenseFailure(function(status) {
+        if (!status || !status.reason) return;
+
+        var isExpired = status.reason === 'subscription_expired' ||
+                        status.reason === 'subscription_cancelled' ||
+                        status.reason === 'grace_expired';
+
+        if (isExpired) {
+          // Skip welcome, go straight to activate step
+          goToStep(2);
+
+          // Update the activate step messaging
+          document.getElementById('activate-title').textContent = 'Subscription Expired';
+          document.getElementById('activate-subtitle').textContent = 'Renew your subscription to get a fresh license key';
+
+          // Show the expired banner
+          var banner = document.getElementById('expired-banner');
+          banner.style.display = 'block';
+
+          if (status.reason === 'subscription_cancelled') {
+            document.getElementById('expired-banner-title').textContent = 'Subscription Cancelled';
+            document.getElementById('expired-banner-body').textContent = 'Your Cerebro Pro subscription was cancelled. Visit your dashboard to resubscribe and get a new license key.';
+          } else if (status.reason === 'grace_expired') {
+            document.getElementById('expired-banner-title').textContent = 'License Expired';
+            document.getElementById('expired-banner-body').textContent = 'Your license could not be verified. Please check your internet connection or renew your subscription.';
+          }
+
+          // Show the dashboard/renew button, hide the buy button
+          document.getElementById('renew-btn').style.display = 'block';
+          document.getElementById('buy-btn').style.display = 'none';
+        }
+      });
     }
   </script>
 </body>

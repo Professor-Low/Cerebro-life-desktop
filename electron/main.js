@@ -41,6 +41,7 @@ let tray = null;
 let isQuitting = false;
 let electronUpdateReady = false;
 let isAutoUpdating = false;
+let licenseRefreshTimer = null;
 
 function createSplashWindow() {
   splashWindow = new BrowserWindow({
@@ -112,6 +113,48 @@ async function checkLicense() {
 
   console.log(`[Main] License invalid: ${result.reason}`);
   return false;
+}
+
+function startLicenseRefreshTimer() {
+  if (licenseRefreshTimer) clearInterval(licenseRefreshTimer);
+
+  // Re-check license every 4 hours while app is running
+  licenseRefreshTimer = setInterval(async () => {
+    console.log('[Main] Periodic license refresh check...');
+    const result = await licenseManager.revalidate();
+
+    if (!result.valid) {
+      console.log(`[Main] License no longer valid: ${result.reason}`);
+
+      // Notify the renderer that license died mid-session
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('license-expired', {
+          reason: result.reason,
+          cancelAtPeriodEnd: result.cancelAtPeriodEnd,
+        });
+      }
+
+      // Give the renderer 3 seconds to show a message, then lock the app
+      setTimeout(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          showSetupWizard();
+          // Send the failure reason to the activation page once it loads
+          mainWindow.webContents.once('did-finish-load', () => {
+            mainWindow.webContents.send('license-failure', {
+              valid: false,
+              reason: result.reason,
+              cancelAtPeriodEnd: result.cancelAtPeriodEnd,
+            });
+          });
+        }
+      }, 3000);
+
+      clearInterval(licenseRefreshTimer);
+      licenseRefreshTimer = null;
+    } else if (result.offline) {
+      console.log('[Main] License valid (offline mode)');
+    }
+  }, 4 * 60 * 60 * 1000); // 4 hours
 }
 
 function showSetupWizard() {
@@ -346,7 +389,12 @@ app.whenReady().then(async () => {
   // License gate
   const licensed = await checkLicense();
   if (!licensed) {
+    const licenseStatus = licenseManager.getStatus();
     showSetupWizard();
+    // Tell the activation page WHY the user is here (expired vs first-time)
+    mainWindow.webContents.once('did-finish-load', () => {
+      mainWindow.webContents.send('license-failure', licenseStatus);
+    });
     return;
   }
 
@@ -369,6 +417,7 @@ app.whenReady().then(async () => {
 
   await loadFrontend();
   updateTrayStatus(tray, 'running');
+  startLicenseRefreshTimer();
 });
 
 app.on('window-all-closed', () => {
@@ -406,6 +455,16 @@ ipcMain.handle('activate-license', async (_event, key) => {
   const result = await licenseManager.activate(key);
   if (result.success) {
     console.log(`[Main] License activated (plan: ${result.plan})`);
+  }
+  return result;
+});
+
+ipcMain.handle('refresh-license', async () => {
+  const result = await licenseManager.revalidate();
+  if (result.valid) {
+    console.log(`[Main] License refresh OK (plan: ${result.plan})`);
+  } else {
+    console.log(`[Main] License refresh failed: ${result.reason}`);
   }
   return result;
 });
