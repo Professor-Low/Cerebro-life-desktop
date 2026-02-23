@@ -1482,15 +1482,20 @@ class DockerManager extends EventEmitter {
     const dataDir = CEREBRO_DIR;
 
     try {
-      // Add path exclusions AND process exclusion.
+      // Add path exclusions AND process exclusion, then clear threat history.
       // The process exclusion (-ExclusionProcess) is critical because Defender's
       // behavioral detection (Behavior:Win32/LummaStealer) monitors process
       // activity, not just file paths.
+      // Clearing threat history is critical because once Defender flags an exe,
+      // it kills ALL future instances on sight until the threat is allowed.
       await this._runElevated('powershell.exe', [
         '-NoProfile', '-Command',
+        `$ErrorActionPreference = 'SilentlyContinue'; ` +
         `Add-MpPreference -ExclusionPath '${appDir}'; ` +
         `Add-MpPreference -ExclusionPath '${dataDir}'; ` +
-        `Add-MpPreference -ExclusionProcess '${exeName}'`,
+        `Add-MpPreference -ExclusionProcess '${exeName}'; ` +
+        `Get-MpThreat | Where-Object { $_.Resources -match 'Cerebro' } | ForEach-Object { ` +
+        `Add-MpPreference -ThreatIDDefaultAction_Ids $_.ThreatID -ThreatIDDefaultAction_Actions Allow }`,
       ], { timeout: 30000 });
 
       // Write marker so we don't prompt again
