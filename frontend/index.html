@@ -10138,10 +10138,251 @@
             transform: translateX(20px);
         }
         .settings-view {
-            padding: 20px;
-            gap: 20px;
-            overflow-y: auto;
+            padding: 0;
+            gap: 0;
+            overflow: hidden;
             min-height: min-content;
+        }
+
+        /* ==================== SETTINGS SIDEBAR LAYOUT ==================== */
+        .settings-layout {
+            display: flex;
+            height: 100%;
+            width: 100%;
+        }
+        .settings-sidebar {
+            width: 200px;
+            min-width: 200px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            transition: width 0.25s ease, min-width 0.25s ease;
+            overflow: hidden;
+        }
+        .settings-sidebar.collapsed {
+            width: 52px;
+            min-width: 52px;
+        }
+        .settings-sidebar-toggle {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 14px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s;
+        }
+        .settings-sidebar-toggle:hover {
+            color: var(--text-primary);
+        }
+        .settings-sidebar-nav {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            padding: 0 8px;
+            flex: 1;
+        }
+        .settings-nav-item {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            transition: background 0.15s, color 0.15s;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+        .settings-nav-item:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        .settings-nav-item.active {
+            color: var(--text-primary);
+            font-weight: 600;
+            background: rgba(139, 92, 246, 0.08);
+        }
+        .settings-nav-item.active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 6px;
+            bottom: 6px;
+            width: 3px;
+            border-radius: 0 3px 3px 0;
+            background: var(--accent);
+        }
+        .settings-nav-icon {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .settings-nav-label {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            transition: opacity 0.2s;
+        }
+        .settings-sidebar.collapsed .settings-nav-label {
+            opacity: 0;
+            width: 0;
+        }
+        .settings-sidebar.collapsed .settings-nav-item {
+            justify-content: center;
+            padding: 10px 0;
+        }
+        /* Tooltip for collapsed sidebar */
+        .settings-sidebar-tooltip {
+            position: fixed;
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            font-size: 0.78rem;
+            padding: 5px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border-light);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s;
+            z-index: 1000;
+            white-space: nowrap;
+        }
+        .settings-sidebar-tooltip.visible {
+            opacity: 1;
+        }
+
+        /* Settings content area */
+        .settings-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            min-width: 0;
+        }
+
+        /* Profile card */
+        .settings-profile-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+        .settings-profile-avatar {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: var(--accent-gradient);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #fff;
+            flex-shrink: 0;
+            text-transform: uppercase;
+        }
+        .settings-profile-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .settings-profile-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+        .settings-profile-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .settings-plan-badge {
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: rgba(139, 92, 246, 0.15);
+            color: var(--accent-light);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .settings-profile-files {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* Section panels */
+        .settings-section {
+            display: none;
+        }
+        .settings-section.active {
+            display: block;
+            animation: settingsFadeIn 0.2s ease;
+        }
+        @keyframes settingsFadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .settings-section-heading {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+            margin-top: 20px;
+        }
+        .settings-section-heading:first-child {
+            margin-top: 0;
+        }
+        .settings-group {
+            margin-bottom: 20px;
+        }
+        .settings-group-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+        .settings-divider {
+            height: 1px;
+            background: var(--border);
+            margin: 20px 0;
+        }
+        .settings-row-hint {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* Responsive: auto-collapse sidebar on narrow windows */
+        @media (max-width: 600px) {
+            .settings-sidebar:not(.force-expanded) {
+                width: 52px;
+                min-width: 52px;
+            }
+            .settings-sidebar:not(.force-expanded) .settings-nav-label {
+                opacity: 0;
+                width: 0;
+            }
+            .settings-sidebar:not(.force-expanded) .settings-nav-item {
+                justify-content: center;
+                padding: 10px 0;
+            }
+            .settings-content {
+                padding: 16px;
+            }
         }
 
         .settings-card {
@@ -23694,242 +23935,318 @@
 
                 <!-- Settings View -->
                 <div class="view settings-view" id="view-settings">
-                    <div class="section-title">Connection</div>
-                    <div class="settings-card">
-                        <div class="settings-row">
-                            <span class="settings-label">Server</span>
-                            <span class="settings-value" id="server-url">-</span>
-                        </div>
-                        <div class="settings-row">
-                            <span class="settings-label">Status</span>
-                            <span class="settings-value success" id="connection-status">Connected</span>
-                        </div>
-                        <div class="settings-row">
-                            <span class="settings-label">LLM</span>
-                            <span class="settings-value" id="settings-llm-model">Claude Opus 4.6</span>
-                        </div>
-                    </div>
-
-                    <div class="section-title">AI Memory</div>
-                    <div class="settings-card">
-                        <div class="settings-row">
-                            <span class="settings-label">Conversations</span>
-                            <span class="settings-value" id="settings-memory-count">306</span>
-                        </div>
-                        <div class="settings-row">
-                            <span class="settings-label">Storage</span>
-                            <span class="settings-value" id="data-dir-display"></span>
-                        </div>
-                        <div class="settings-row">
-                            <span class="settings-label">GPU Server</span>
-                            <span class="settings-value" id="dgx-host-display"></span>
-                        </div>
-                    </div>
-
-                    <div class="section-title">Session</div>
-                    <div class="settings-card">
-                        <div class="settings-row">
-                            <span class="settings-label">User</span>
-                            <span class="settings-value" id="username-display"></span>
-                        </div>
-                        <div class="settings-row">
-                            <span class="settings-label">Session ID</span>
-                            <span class="settings-value" id="session-id">-</span>
-                        </div>
-                    </div>
-
-                    <div class="section-title">Personality</div>
-                    <div class="settings-card">
-                        <div class="settings-row">
-                            <span class="settings-label">Response Style</span>
-                            <div id="personality-toggle" style="display:flex;gap:6px;">
-                                <button class="btn btn-secondary personality-btn" data-mode="chill" onclick="setPersonality('chill')" style="font-size:0.8rem;padding:6px 14px;">Chill</button>
-                                <button class="btn btn-secondary personality-btn" data-mode="analyst" onclick="setPersonality('analyst')" style="font-size:0.8rem;padding:6px 14px;">Analyst</button>
-                            </div>
-                        </div>
-                        <div class="settings-row">
-                            <span class="settings-label" style="font-size:0.75rem;color:var(--text-muted);">Chill = casual friend, Analyst = formal precision</span>
-                        </div>
-                    </div>
-
-                    <div class="section-title">Look Command</div>
-                    <div class="settings-card">
-                        <div class="autospeak-toggle">
-                            <div>
-                                <div style="font-weight:600;font-size:0.9rem;">Voice Screenshot</div>
-                                <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;">Say "look" to capture your screen</div>
-                            </div>
-                            <div class="toggle-switch" id="look-toggle" onclick="toggleLookDaemon()"></div>
-                        </div>
-                        <div class="settings-row" id="look-status-row" style="display:none;">
-                            <span class="settings-label" style="font-size:0.75rem;color:var(--text-muted);" id="look-status-text">Checking...</span>
-                        </div>
-                    </div>
-
-                    <div class="section-title" style="display:flex;align-items:center;">File Access<span class="risk-indicator safe" id="file-access-risk">Safe</span></div>
-                    <div id="file-access-section">
-                        <!-- Explanation card -->
-                        <div class="settings-card" style="margin-bottom:12px;">
-                            <div style="padding:16px 20px;display:flex;gap:14px;align-items:flex-start;">
-                                <div style="width:36px;height:36px;border-radius:10px;background:rgba(139,92,246,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                    <div class="settings-layout">
+                        <!-- Sidebar -->
+                        <aside class="settings-sidebar" id="settings-sidebar">
+                            <button class="settings-sidebar-toggle" onclick="toggleSettingsSidebar()" title="Toggle sidebar">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                            </button>
+                            <nav class="settings-sidebar-nav">
+                                <div class="settings-nav-item active" data-section="general" onclick="switchSettingsSection('general')">
+                                    <span class="settings-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+                                    <span class="settings-nav-label">General</span>
                                 </div>
-                                <div>
-                                    <div style="font-weight:600;font-size:0.9rem;margin-bottom:4px;">Share folders with your agents</div>
-                                    <div style="font-size:0.78rem;color:var(--text-muted);line-height:1.5;">Cerebro agents run in an isolated container and can't see your files by default. Enable folders below to let agents read (or write) files on your computer. Changes require a container restart.</div>
+                                <div class="settings-nav-item" data-section="connection" onclick="switchSettingsSection('connection')">
+                                    <span class="settings-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1"/></svg></span>
+                                    <span class="settings-nav-label">Connection</span>
+                                </div>
+                                <div class="settings-nav-item" data-section="ai-memory" onclick="switchSettingsSection('ai-memory')">
+                                    <span class="settings-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M16 14H8a4 4 0 0 0-4 4v2h16v-2a4 4 0 0 0-4-4z"/></svg></span>
+                                    <span class="settings-nav-label">AI & Memory</span>
+                                </div>
+                                <div class="settings-nav-item" data-section="voice-audio" onclick="switchSettingsSection('voice-audio')">
+                                    <span class="settings-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></span>
+                                    <span class="settings-nav-label">Voice & Audio</span>
+                                </div>
+                                <div class="settings-nav-item" data-section="file-access" onclick="switchSettingsSection('file-access')">
+                                    <span class="settings-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
+                                    <span class="settings-nav-label">File Access</span>
+                                </div>
+                                <div class="settings-nav-item" data-section="about-account" onclick="switchSettingsSection('about-account')">
+                                    <span class="settings-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
+                                    <span class="settings-nav-label">About</span>
+                                </div>
+                            </nav>
+                        </aside>
+
+                        <!-- Content Area -->
+                        <div class="settings-content" id="settings-content">
+                            <!-- Profile Card (always visible) -->
+                            <div class="settings-profile-card" id="settings-profile-card">
+                                <div class="settings-profile-avatar" id="settings-profile-avatar">?</div>
+                                <div class="settings-profile-info">
+                                    <div class="settings-profile-name" id="settings-profile-name">User</div>
+                                    <div class="settings-profile-meta">
+                                        <span class="settings-plan-badge" id="settings-plan-badge">Free</span>
+                                        <span class="settings-profile-files" id="settings-profile-files"></span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
 
-                        <div class="file-access-warning" id="file-access-warning">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                            Write access is enabled on one or more folders. Agents can modify and delete files in those directories.
-                        </div>
+                            <!-- Section: General -->
+                            <div class="settings-section active" id="settings-section-general">
+                                <div class="settings-section-heading">Response Style</div>
+                                <div class="settings-card">
+                                    <div class="settings-row">
+                                        <span class="settings-label">Personality</span>
+                                        <div id="personality-toggle" style="display:flex;gap:6px;">
+                                            <button class="btn btn-secondary personality-btn" data-mode="chill" onclick="setPersonality('chill')" style="font-size:0.8rem;padding:6px 14px;">Chill</button>
+                                            <button class="btn btn-secondary personality-btn" data-mode="analyst" onclick="setPersonality('analyst')" style="font-size:0.8rem;padding:6px 14px;">Analyst</button>
+                                        </div>
+                                    </div>
+                                    <div class="settings-row">
+                                        <span class="settings-label" style="font-size:0.75rem;color:var(--text-muted);">Chill = casual friend, Analyst = formal precision</span>
+                                    </div>
+                                </div>
 
-                        <!-- Quick presets -->
-                        <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:6px;padding-left:2px;">Quick Presets</div>
-                        <div class="settings-card" id="file-access-presets-card">
-                            <div id="file-access-presets-list">
-                                <!-- Populated by JS -->
+                                <div class="settings-divider"></div>
+
+                                <div class="settings-section-heading">Look Command</div>
+                                <div class="settings-card">
+                                    <div class="autospeak-toggle">
+                                        <div>
+                                            <div style="font-weight:600;font-size:0.9rem;">Voice Screenshot</div>
+                                            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;">Say "look" to capture your screen</div>
+                                        </div>
+                                        <div class="toggle-switch" id="look-toggle" onclick="toggleLookDaemon()"></div>
+                                    </div>
+                                    <div class="settings-row" id="look-status-row" style="display:none;">
+                                        <span class="settings-label" style="font-size:0.75rem;color:var(--text-muted);" id="look-status-text">Checking...</span>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
 
-                        <!-- Custom folders -->
-                        <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:6px;margin-top:14px;padding-left:2px;">Custom Folders</div>
-                        <div class="settings-card">
-                            <div id="custom-mounts-list">
-                                <!-- Populated by JS -->
+                            <!-- Section: Connection -->
+                            <div class="settings-section" id="settings-section-connection">
+                                <div class="settings-section-heading">Server</div>
+                                <div class="settings-card">
+                                    <div class="settings-row">
+                                        <span class="settings-label">Server</span>
+                                        <span class="settings-value" id="server-url">-</span>
+                                    </div>
+                                    <div class="settings-row">
+                                        <span class="settings-label">Status</span>
+                                        <span class="settings-value success" id="connection-status">Connected</span>
+                                    </div>
+                                    <div class="settings-row">
+                                        <span class="settings-label">LLM</span>
+                                        <span class="settings-value" id="settings-llm-model">Claude Opus 4.6</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div style="padding:12px 20px;">
-                                <button class="btn btn-secondary btn-block" onclick="addCustomMount()" style="font-size:0.8rem;padding:10px 16px;">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                                    Add Folder
+
+                            <!-- Section: AI & Memory -->
+                            <div class="settings-section" id="settings-section-ai-memory">
+                                <div class="settings-section-heading">AI Memory</div>
+                                <div class="settings-card">
+                                    <div class="settings-row">
+                                        <span class="settings-label">Conversations</span>
+                                        <span class="settings-value" id="settings-memory-count">306</span>
+                                    </div>
+                                    <div class="settings-row">
+                                        <span class="settings-label">Storage</span>
+                                        <span class="settings-value" id="data-dir-display"></span>
+                                    </div>
+                                    <div class="settings-row">
+                                        <span class="settings-label">GPU Server</span>
+                                        <span class="settings-value" id="dgx-host-display"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Section: Voice & Audio -->
+                            <div class="settings-section" id="settings-section-voice-audio">
+                                <div class="settings-section-heading">Voice</div>
+                                <div class="voice-settings-card">
+                                    <div id="voice-options-list">
+                                        <div class="voice-option selected" data-voice="af_heart" onclick="selectVoice('af_heart')">
+                                            <div class="voice-option-radio"></div>
+                                            <div class="voice-option-info">
+                                                <div class="voice-option-name">Heart</div>
+                                                <div class="voice-option-desc">Confident & Sharp</div>
+                                            </div>
+                                            <button class="voice-preview-btn" onclick="event.stopPropagation(); previewVoice('af_heart', this)" title="Preview">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                            </button>
+                                        </div>
+                                        <div class="voice-option" data-voice="af_bella" onclick="selectVoice('af_bella')">
+                                            <div class="voice-option-radio"></div>
+                                            <div class="voice-option-info">
+                                                <div class="voice-option-name">Bella</div>
+                                                <div class="voice-option-desc">Warm & Smooth</div>
+                                            </div>
+                                            <button class="voice-preview-btn" onclick="event.stopPropagation(); previewVoice('af_bella', this)" title="Preview">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                            </button>
+                                        </div>
+                                        <div class="voice-option" data-voice="af_sarah" onclick="selectVoice('af_sarah')">
+                                            <div class="voice-option-radio"></div>
+                                            <div class="voice-option-info">
+                                                <div class="voice-option-name">Sarah</div>
+                                                <div class="voice-option-desc">Balanced & Clear</div>
+                                            </div>
+                                            <button class="voice-preview-btn" onclick="event.stopPropagation(); previewVoice('af_sarah', this)" title="Preview">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                            </button>
+                                        </div>
+                                        <div class="voice-option" data-voice="af_sky" onclick="selectVoice('af_sky')">
+                                            <div class="voice-option-radio"></div>
+                                            <div class="voice-option-info">
+                                                <div class="voice-option-name">Sky</div>
+                                                <div class="voice-option-desc">Bright & Energetic</div>
+                                            </div>
+                                            <button class="voice-preview-btn" onclick="event.stopPropagation(); previewVoice('af_sky', this)" title="Preview">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="voice-settings-card">
+                                    <div class="settings-row">
+                                        <span class="settings-label">Speed</span>
+                                    </div>
+                                    <div class="speed-slider-container">
+                                        <span style="font-size:0.75rem;color:var(--text-muted);">0.5x</span>
+                                        <input type="range" class="speed-slider" id="voice-speed-slider" min="0.5" max="2.0" step="0.1" value="1.0" oninput="updateVoiceSpeed(this.value)">
+                                        <span style="font-size:0.75rem;color:var(--text-muted);">2.0x</span>
+                                        <span class="speed-value" id="voice-speed-display">1.0x</span>
+                                    </div>
+                                </div>
+
+                                <div class="settings-divider"></div>
+
+                                <div class="settings-section-heading">Audio Devices</div>
+                                <div class="settings-card">
+                                    <div class="settings-row">
+                                        <span class="settings-label">Microphone</span>
+                                        <select id="mic-select" class="settings-select" onchange="selectMicrophone(this.value)">
+                                            <option value="">Default Microphone</option>
+                                        </select>
+                                    </div>
+                                    <div class="settings-row">
+                                        <span class="settings-label">Speaker</span>
+                                        <select id="speaker-select" class="settings-select" onchange="selectSpeaker(this.value)">
+                                            <option value="">Default Speaker</option>
+                                        </select>
+                                    </div>
+                                    <div class="settings-row">
+                                        <span class="settings-label">Voice Status</span>
+                                        <span class="settings-value" id="voice-status">Not initialized</span>
+                                    </div>
+                                </div>
+
+                                <div class="settings-divider"></div>
+
+                                <div class="voice-settings-card">
+                                    <div class="autospeak-toggle">
+                                        <div>
+                                            <div style="font-weight:600;font-size:0.9rem;">Auto-Speak</div>
+                                            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;">Narrations auto-play when Cerebro finishes thinking</div>
+                                        </div>
+                                        <div class="toggle-switch" id="autospeak-toggle" onclick="toggleAutoSpeak()"></div>
+                                    </div>
+                                </div>
+
+                                <div style="display:flex;gap:8px;margin-top:12px;">
+                                    <button class="btn btn-secondary" style="flex:1;" onclick="testMicrophone()">Test Mic</button>
+                                    <button class="btn btn-secondary" style="flex:1;" onclick="testSpeaker()">Test Speaker</button>
+                                    <button class="btn btn-secondary" style="flex:1;" onclick="testCurrentVoice()">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;vertical-align:middle;">
+                                            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                                        </svg>
+                                        Test Voice
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Section: File Access -->
+                            <div class="settings-section" id="settings-section-file-access">
+                                <div class="settings-section-heading" style="display:flex;align-items:center;">File Access<span class="risk-indicator safe" id="file-access-risk">Safe</span></div>
+                                <div id="file-access-section">
+                                    <!-- Explanation card -->
+                                    <div class="settings-card" style="margin-bottom:12px;">
+                                        <div style="padding:16px 20px;display:flex;gap:14px;align-items:flex-start;">
+                                            <div style="width:36px;height:36px;border-radius:10px;background:rgba(139,92,246,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;">
+                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                                            </div>
+                                            <div>
+                                                <div style="font-weight:600;font-size:0.9rem;margin-bottom:4px;">Share folders with your agents</div>
+                                                <div style="font-size:0.78rem;color:var(--text-muted);line-height:1.5;">Cerebro agents run in an isolated container and can't see your files by default. Enable folders below to let agents read (or write) files on your computer. Changes require a container restart.</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="file-access-warning" id="file-access-warning">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                        Write access is enabled on one or more folders. Agents can modify and delete files in those directories.
+                                    </div>
+
+                                    <!-- Quick presets -->
+                                    <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:6px;padding-left:2px;">Quick Presets</div>
+                                    <div class="settings-card" id="file-access-presets-card">
+                                        <div id="file-access-presets-list">
+                                            <!-- Populated by JS -->
+                                        </div>
+                                    </div>
+
+                                    <!-- Custom folders -->
+                                    <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:6px;margin-top:14px;padding-left:2px;">Custom Folders</div>
+                                    <div class="settings-card">
+                                        <div id="custom-mounts-list">
+                                            <!-- Populated by JS -->
+                                        </div>
+                                        <div style="padding:12px 20px;">
+                                            <button class="btn btn-secondary btn-block" onclick="addCustomMount()" style="font-size:0.8rem;padding:10px 16px;">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                                Add Folder
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="file-access-not-available" id="file-access-not-available" style="display:none;">
+                                    <div style="margin-bottom:8px;">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                                    </div>
+                                    File access settings are only available in the Cerebro desktop app.
+                                </div>
+                            </div>
+
+                            <!-- Section: About & Account -->
+                            <div class="settings-section" id="settings-section-about-account">
+                                <div class="settings-section-heading">About</div>
+                                <div class="settings-card">
+                                    <div class="settings-row">
+                                        <span class="settings-label">Version</span>
+                                        <span class="settings-value" id="app-version">--</span>
+                                    </div>
+                                    <div class="settings-row">
+                                        <span class="settings-label">Cost</span>
+                                        <span class="settings-value success" id="settings-cost-display">Included (Claude Code subscription)</span>
+                                    </div>
+                                </div>
+
+                                <div class="settings-divider"></div>
+
+                                <div class="settings-section-heading">Session</div>
+                                <div class="settings-card">
+                                    <div class="settings-row">
+                                        <span class="settings-label">User</span>
+                                        <span class="settings-value" id="username-display"></span>
+                                    </div>
+                                    <div class="settings-row">
+                                        <span class="settings-label">Session ID</span>
+                                        <span class="settings-value" id="session-id">-</span>
+                                    </div>
+                                </div>
+
+                                <button class="btn btn-danger btn-block" style="margin-top: 24px;" onclick="logout()">
+                                    Sign Out
                                 </button>
                             </div>
                         </div>
                     </div>
-                    <div class="file-access-not-available" id="file-access-not-available" style="display:none;">
-                        <div style="margin-bottom:8px;">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-                        </div>
-                        File access settings are only available in the Cerebro desktop app.
-                    </div>
-
-                    <div class="section-title">Audio</div>
-                    <div class="settings-card">
-                        <div class="settings-row">
-                            <span class="settings-label">Microphone</span>
-                            <select id="mic-select" class="settings-select" onchange="selectMicrophone(this.value)">
-                                <option value="">Default Microphone</option>
-                            </select>
-                        </div>
-                        <div class="settings-row">
-                            <span class="settings-label">Speaker</span>
-                            <select id="speaker-select" class="settings-select" onchange="selectSpeaker(this.value)">
-                                <option value="">Default Speaker</option>
-                            </select>
-                        </div>
-                        <div class="settings-row">
-                            <span class="settings-label">Voice Status</span>
-                            <span class="settings-value" id="voice-status">Not initialized</span>
-                        </div>
-                        <div class="settings-row">
-                            <button class="btn btn-secondary" onclick="testMicrophone()">Test Mic</button>
-                            <button class="btn btn-secondary" onclick="testSpeaker()">Test Speaker</button>
-                        </div>
-                    </div>
-
-
-                    <div class="section-title">Voice</div>
-                    <div class="voice-settings-card">
-                        <div id="voice-options-list">
-                            <div class="voice-option selected" data-voice="af_heart" onclick="selectVoice('af_heart')">
-                                <div class="voice-option-radio"></div>
-                                <div class="voice-option-info">
-                                    <div class="voice-option-name">Heart</div>
-                                    <div class="voice-option-desc">Confident & Sharp</div>
-                                </div>
-                                <button class="voice-preview-btn" onclick="event.stopPropagation(); previewVoice('af_heart', this)" title="Preview">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                                </button>
-                            </div>
-                            <div class="voice-option" data-voice="af_bella" onclick="selectVoice('af_bella')">
-                                <div class="voice-option-radio"></div>
-                                <div class="voice-option-info">
-                                    <div class="voice-option-name">Bella</div>
-                                    <div class="voice-option-desc">Warm & Smooth</div>
-                                </div>
-                                <button class="voice-preview-btn" onclick="event.stopPropagation(); previewVoice('af_bella', this)" title="Preview">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                                </button>
-                            </div>
-                            <div class="voice-option" data-voice="af_sarah" onclick="selectVoice('af_sarah')">
-                                <div class="voice-option-radio"></div>
-                                <div class="voice-option-info">
-                                    <div class="voice-option-name">Sarah</div>
-                                    <div class="voice-option-desc">Balanced & Clear</div>
-                                </div>
-                                <button class="voice-preview-btn" onclick="event.stopPropagation(); previewVoice('af_sarah', this)" title="Preview">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                                </button>
-                            </div>
-                            <div class="voice-option" data-voice="af_sky" onclick="selectVoice('af_sky')">
-                                <div class="voice-option-radio"></div>
-                                <div class="voice-option-info">
-                                    <div class="voice-option-name">Sky</div>
-                                    <div class="voice-option-desc">Bright & Energetic</div>
-                                </div>
-                                <button class="voice-preview-btn" onclick="event.stopPropagation(); previewVoice('af_sky', this)" title="Preview">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="voice-settings-card">
-                        <div class="settings-row">
-                            <span class="settings-label">Speed</span>
-                        </div>
-                        <div class="speed-slider-container">
-                            <span style="font-size:0.75rem;color:var(--text-muted);">0.5x</span>
-                            <input type="range" class="speed-slider" id="voice-speed-slider" min="0.5" max="2.0" step="0.1" value="1.0" oninput="updateVoiceSpeed(this.value)">
-                            <span style="font-size:0.75rem;color:var(--text-muted);">2.0x</span>
-                            <span class="speed-value" id="voice-speed-display">1.0x</span>
-                        </div>
-                    </div>
-
-                    <div class="voice-settings-card">
-                        <div class="autospeak-toggle">
-                            <div>
-                                <div style="font-weight:600;font-size:0.9rem;">Auto-Speak</div>
-                                <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;">Narrations auto-play when Cerebro finishes thinking</div>
-                            </div>
-                            <div class="toggle-switch" id="autospeak-toggle" onclick="toggleAutoSpeak()"></div>
-                        </div>
-                    </div>
-
-                    <button class="btn btn-secondary btn-block" style="margin-top:8px;" onclick="testCurrentVoice()">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;vertical-align:middle;">
-                            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
-                        </svg>
-                        Test Voice
-                    </button>
-                    <div class="section-title">About</div>
-                    <div class="settings-card">
-                        <div class="settings-row">
-                            <span class="settings-label">Version</span>
-                            <span class="settings-value" id="app-version">--</span>
-                        </div>
-                        <div class="settings-row">
-                            <span class="settings-label">Cost</span>
-                            <span class="settings-value success" id="settings-cost-display">Included (Claude Code subscription)</span>
-                        </div>
-                    </div>
-
-                    <button class="btn btn-danger btn-block" style="margin-top: 20px;" onclick="logout()">
-                        Sign Out
-                    </button>
                 </div>
             </main>
 
@@ -30309,6 +30626,123 @@
             document.body.appendChild(overlay);
         }
 
+        // ==================== SETTINGS SIDEBAR ====================
+        function switchSettingsSection(name) {
+            // Update nav items
+            document.querySelectorAll('.settings-nav-item').forEach(function(item) {
+                item.classList.toggle('active', item.dataset.section === name);
+            });
+            // Show/hide sections
+            document.querySelectorAll('.settings-section').forEach(function(sec) {
+                sec.classList.toggle('active', sec.id === 'settings-section-' + name);
+            });
+            // Scroll content to top
+            var content = document.getElementById('settings-content');
+            if (content) content.scrollTop = 0;
+        }
+
+        function toggleSettingsSidebar() {
+            var sidebar = document.getElementById('settings-sidebar');
+            if (!sidebar) return;
+            var isCollapsed = sidebar.classList.toggle('collapsed');
+            // On narrow screens, toggle force-expanded if un-collapsing
+            if (!isCollapsed && window.innerWidth <= 600) {
+                sidebar.classList.add('force-expanded');
+            } else {
+                sidebar.classList.remove('force-expanded');
+            }
+            localStorage.setItem('cerebro_settings_sidebar_collapsed', isCollapsed ? '1' : '0');
+        }
+
+        function restoreSettingsSidebarState() {
+            var sidebar = document.getElementById('settings-sidebar');
+            if (!sidebar) return;
+            var saved = localStorage.getItem('cerebro_settings_sidebar_collapsed');
+            if (saved === '1') {
+                sidebar.classList.add('collapsed');
+            } else if (window.innerWidth <= 600) {
+                sidebar.classList.add('collapsed');
+            } else {
+                sidebar.classList.remove('collapsed');
+            }
+            sidebar.classList.remove('force-expanded');
+            // Tooltip handlers for collapsed mode
+            _initSettingsSidebarTooltips(sidebar);
+        }
+
+        var _settingsSidebarTooltipEl = null;
+        function _initSettingsSidebarTooltips(sidebar) {
+            if (_settingsSidebarTooltipEl) return; // already initialized
+            _settingsSidebarTooltipEl = document.createElement('div');
+            _settingsSidebarTooltipEl.className = 'settings-sidebar-tooltip';
+            document.body.appendChild(_settingsSidebarTooltipEl);
+
+            sidebar.querySelectorAll('.settings-nav-item').forEach(function(item) {
+                item.addEventListener('mouseenter', function(e) {
+                    if (!sidebar.classList.contains('collapsed')) return;
+                    var label = item.querySelector('.settings-nav-label');
+                    if (!label) return;
+                    _settingsSidebarTooltipEl.textContent = label.textContent;
+                    var rect = item.getBoundingClientRect();
+                    _settingsSidebarTooltipEl.style.top = rect.top + rect.height / 2 - 12 + 'px';
+                    _settingsSidebarTooltipEl.style.left = rect.right + 8 + 'px';
+                    _settingsSidebarTooltipEl.classList.add('visible');
+                });
+                item.addEventListener('mouseleave', function() {
+                    _settingsSidebarTooltipEl.classList.remove('visible');
+                });
+            });
+        }
+
+        function updateSettingsProfileCard() {
+            var nameEl = document.getElementById('settings-profile-name');
+            var avatarEl = document.getElementById('settings-profile-avatar');
+            var badgeEl = document.getElementById('settings-plan-badge');
+            var filesEl = document.getElementById('settings-profile-files');
+
+            // Name and avatar
+            var username = (typeof CEREBRO_USERNAME !== 'undefined' && CEREBRO_USERNAME) ? CEREBRO_USERNAME : 'User';
+            if (nameEl) nameEl.textContent = username;
+            if (avatarEl) {
+                var initials = username.split(' ').map(function(w) { return w[0]; }).join('').substring(0, 2).toUpperCase();
+                avatarEl.textContent = initials || '?';
+            }
+
+            // Plan badge from cost display
+            if (badgeEl) {
+                var costEl = document.getElementById('settings-cost-display');
+                var costText = costEl ? costEl.textContent : '';
+                if (costText.toLowerCase().includes('claude code')) {
+                    badgeEl.textContent = 'Claude Code';
+                } else if (costText.toLowerCase().includes('pro')) {
+                    badgeEl.textContent = 'Pro';
+                } else if (costText.toLowerCase().includes('free')) {
+                    badgeEl.textContent = 'Free';
+                } else {
+                    badgeEl.textContent = 'Active';
+                }
+            }
+
+            // File access summary
+            if (filesEl) {
+                try {
+                    var mounts = (typeof _fileAccessConfig !== 'undefined' && _fileAccessConfig.fileMounts) ? _fileAccessConfig.fileMounts : [];
+                    if (mounts.length === 0) {
+                        filesEl.textContent = 'No folders shared';
+                    } else {
+                        var ro = mounts.filter(function(m) { return m.readOnly; }).length;
+                        var rw = mounts.length - ro;
+                        var parts = [];
+                        if (ro > 0) parts.push(ro + ' read-only');
+                        if (rw > 0) parts.push(rw + ' read-write');
+                        filesEl.textContent = mounts.length + ' folder' + (mounts.length !== 1 ? 's' : '') + ' (' + parts.join(', ') + ')';
+                    }
+                } catch (e) {
+                    filesEl.textContent = '';
+                }
+            }
+        }
+
         // ==================== PERSONALITY TOGGLE ====================
         function setPersonality(mode) {
             localStorage.setItem('cerebro_personality', mode);
@@ -30534,6 +30968,8 @@
                 const hasWrite = _fileAccessConfig.fileMounts.some(m => !m.readOnly);
                 warning.style.display = hasWrite ? '' : 'none';
             }
+            // Update profile card file summary
+            if (typeof updateSettingsProfileCard === 'function') updateSettingsProfileCard();
         }
 
         function getFileAccessRiskLevel() {
@@ -36460,6 +36896,13 @@ Please proceed with implementing this recommendation. You have full permissions.
             if (viewName === 'automation') {
                 loadSchedules();
                 loadExecutionHistory();
+            }
+
+            // Initialize settings sidebar when switching to settings view
+            if (viewName === 'settings') {
+                restoreSettingsSidebarState();
+                updateSettingsProfileCard();
+                switchSettingsSection('general');
             }
         }
 
