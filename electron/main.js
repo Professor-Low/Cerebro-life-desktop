@@ -1100,6 +1100,22 @@ function openAuthWindow(url) {
   });
 }
 
+// Chrome CDP launch (called by frontend when user clicks "Launch Chrome")
+ipcMain.handle('launch-chrome-cdp', async () => {
+  try {
+    if (await isCdpAvailable()) {
+      return { success: true, alreadyRunning: true };
+    }
+    cdpChromeProcess = await ensureChromeWithCDP();
+    if (cdpChromeProcess || await isCdpAvailable()) {
+      return { success: true };
+    }
+    return { success: false, error: 'Chrome failed to start' };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
 // Restart & setup state
 ipcMain.handle('needs-restart', async () => {
   return dockerManager.checkNeedsRestart();

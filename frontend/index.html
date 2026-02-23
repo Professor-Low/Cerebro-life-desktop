@@ -44754,6 +44754,15 @@ Please proceed with implementing this recommendation. You have full permissions.
 
         async function launchBrowser() {
             try {
+                // If running inside Electron, ask the host to launch Chrome first
+                if (window.cerebroDesktop && window.cerebroDesktop.launchChromeCDP) {
+                    const cdpResult = await window.cerebroDesktop.launchChromeCDP();
+                    if (!cdpResult.success) {
+                        showToast('Failed to start Chrome: ' + (cdpResult.error || 'Unknown error'), 'error');
+                        return;
+                    }
+                }
+
                 const resp = await fetch(API_URL + '/api/browser/launch', {
                     method: 'POST',
                     headers: {

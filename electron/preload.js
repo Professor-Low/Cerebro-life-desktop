@@ -57,6 +57,9 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
   clearSetupState: () => ipcRenderer.invoke('clear-setup-state'),
   restartComputer: () => ipcRenderer.invoke('restart-computer'),
 
+  // Chrome CDP
+  launchChromeCDP: () => ipcRenderer.invoke('launch-chrome-cdp'),
+
   // Claude credentials
   checkClaudeCredentials: () => ipcRenderer.invoke('check-claude-credentials'),
   refreshClaudeCredentials: () => ipcRenderer.invoke('refresh-claude-credentials'),
