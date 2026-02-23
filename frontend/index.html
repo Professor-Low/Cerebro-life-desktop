@@ -26011,6 +26011,7 @@
 
         async function loadHomepage() {
             await Promise.allSettled([
+                loadBriefing(),
                 loadSmartActions(),
                 loadLiveActivity(),
                 loadHomeGoals(),
@@ -27284,27 +27285,49 @@
 
         async function loadMemoryIntelligence() {
             try {
-                const resp = await fetch(API_URL + '/api/memory-intelligence', {
-                    headers: { 'Authorization': 'Bearer ' + token }
-                });
-                const d = await resp.json();
+                var headers = { 'Authorization': 'Bearer ' + token };
+                var [intelResp, healthResp] = await Promise.allSettled([
+                    fetch(API_URL + '/api/memory-intelligence', { headers: headers }),
+                    fetch(API_URL + '/api/memory/health', { headers: headers }),
+                ]);
 
-                const set = (id, val) => {
-                    const el = document.getElementById(id);
+                var set = function(id, val) {
+                    var el = document.getElementById(id);
                     animateValueChange(el, val);
                 };
 
+                // Parse memory-intelligence response
+                var d = {};
+                if (intelResp.status === 'fulfilled' && intelResp.value.ok) {
+                    d = await intelResp.value.json();
+                }
+
+                // Update settings-page intel tiles
                 set('intel-total-memories', (d.total_memories || 0).toLocaleString());
                 set('intel-recent-learnings', d.recent_learnings || 0);
                 set('intel-patterns', d.promoted_patterns || 0);
                 set('intel-contradictions', d.contradictions_pending || 0);
-                set('intel-health', (d.knowledge_health || 0) + '%');
                 set('intel-faiss', d.faiss_size_mb ? d.faiss_size_mb + 'MB' : '--');
 
-                // Also update hero pills
+                // Hero pills: learnings and patterns
                 set('home-learnings-count', d.total_learnings || 0);
                 set('home-patterns-count', d.promoted_patterns || 0);
-                set('system-health', (d.knowledge_health || 0) + '%');
+
+                // Health: prefer memory-intelligence score, fall back to /api/memory/health
+                var healthPct = d.knowledge_health || 0;
+                if (!healthPct && healthResp.status === 'fulfilled' && healthResp.value.ok) {
+                    var healthData = await healthResp.value.json();
+                    if (healthData.components) {
+                        var total = 0, healthy = 0;
+                        Object.values(healthData.components).forEach(function(comp) {
+                            total++;
+                            if (comp.status === 'online') healthy++;
+                        });
+                        if (total > 0) healthPct = Math.round((healthy / total) * 100);
+                    }
+                }
+                set('system-health', healthPct + '%');
+                set('intel-health', healthPct + '%');
             } catch (e) {
                 // Silently fail - tiles will show --
             }
@@ -37007,6 +37030,11 @@ Please proceed with implementing this recommendation. You have full permissions.
             } else {
                 if (chatInput) chatInput.style.display = 'none';
                 if (chatFab) { chatFab.classList.remove('visible'); closeChatFab(); }
+            }
+
+            // Refresh homepage stats when switching to home view
+            if (viewName === 'home') {
+                loadHomepage();
             }
 
             // Load agents when switching to agents view
