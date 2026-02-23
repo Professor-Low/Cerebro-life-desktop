@@ -714,8 +714,16 @@ class DockerManager extends EventEmitter {
         return { success: false, needsRestart: false, error: `Installation failed: ${err.message}` };
       }
 
-      // 4. Return based on WSL2 availability
-      const needsRestart = !wsl.available;
+      // 4. Verify Docker was actually installed (binary exists)
+      this._dockerPath = undefined; // clear cached path
+      const verified = await this.isDockerInstalled();
+      if (!verified) {
+        return { success: false, needsRestart: true, error: 'Docker installer completed but Docker was not found. Please restart your PC and reopen Cerebro.' };
+      }
+
+      // 5. Return based on WSL2 availability — always require restart on fresh install
+      //    Docker Desktop needs a fresh login/reboot to register PATH and initialize WSL2.
+      const needsRestart = true;
       this._dockerInstalledThisSession = true;
       this._needsRestart = needsRestart;
       if (onProgress) {
@@ -835,7 +843,7 @@ class DockerManager extends EventEmitter {
     }
 
     const isWin = process.platform === 'win32';
-    const timeoutSec = isWin ? 120 : 30;
+    const timeoutSec = isWin ? 300 : 30; // 5min on Windows — first launch needs WSL2 init
 
     if (isWin) {
       // Launch Docker Desktop detached
@@ -853,7 +861,7 @@ class DockerManager extends EventEmitter {
         }
       }
       if (!launched) {
-        return { success: false, error: 'Docker Desktop executable not found' };
+        return { success: false, error: 'Docker Desktop executable not found. You may need to restart your PC first, then reopen Cerebro.' };
       }
     } else {
       // Linux: start via systemctl with root elevation
