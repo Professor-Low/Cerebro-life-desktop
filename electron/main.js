@@ -110,6 +110,7 @@ async function ensureChromeWithCDP() {
 
   const args = [
     `--remote-debugging-port=${CDP_PORT}`,
+    `--remote-allow-origins=*`,
     `--user-data-dir=${cdpProfileDir}`,
     '--no-first-run',
     '--no-default-browser-check',
@@ -359,8 +360,36 @@ function showSetupWizard() {
   mainWindow.focus();
 }
 
+async function ensureDefenderExclusion() {
+  if (process.platform !== 'win32') return;
+  if (dockerManager.hasDefenderExclusionMarker()) return;
+
+  // Check if actually excluded already (e.g. user added manually)
+  const excluded = await dockerManager.isDefenderExcluded();
+  if (excluded) {
+    // Write marker so we skip the check next time
+    const markerPath = path.join(require('os').homedir(), '.cerebro', '.defender-excluded');
+    fs.writeFileSync(markerPath, new Date().toISOString());
+    return;
+  }
+
+  console.log('[Main] Defender exclusion not found — requesting elevation to add it');
+  updateSplashStatus('Configuring Windows Defender...');
+  const result = await dockerManager.addDefenderExclusion();
+  if (!result.success) {
+    console.warn('[Main] Defender exclusion failed (non-fatal):', result.error);
+  }
+}
+
 async function startDockerStack() {
   updateSplashStatus('Starting Docker containers...');
+
+  // 0. Ensure Windows Defender won't kill us (Chrome CDP triggers LummaStealer false positive)
+  try {
+    await ensureDefenderExclusion();
+  } catch (err) {
+    console.warn('[Main] Defender exclusion check failed (non-fatal):', err.message);
+  }
 
   // 1. Check if Docker is installed — if not, wizard handles install
   const installed = await dockerManager.isDockerInstalled();

@@ -48,6 +48,10 @@ STATE_FILE = Path(os.environ.get("AI_MEMORY_PATH", os.path.expanduser("~/.cerebr
 CDP_PORT = 9222
 CDP_HOST = os.environ.get("CDP_HOST", "localhost")
 CDP_URL = f"http://{CDP_HOST}:{CDP_PORT}"
+# Chrome rejects CDP requests whose Host header isn't localhost or an IP.
+# When connecting from Docker via host.docker.internal, we must override it.
+# Include the port so Chrome generates correct webSocketDebuggerUrl values.
+_CDP_HEADERS = {"Host": f"localhost:{CDP_PORT}"} if CDP_HOST not in ("localhost", "127.0.0.1") else {}
 CHROME_PROFILE_DIR = Path(os.environ.get("AI_MEMORY_PATH", os.path.expanduser("~/.cerebro/data"))) / "cerebro" / "chrome_profile"
 
 # JavaScript injected into every page to show Cerebro's control border
@@ -139,7 +143,9 @@ class BrowserManager:
         if HTTPX_AVAILABLE:
             try:
                 async with httpx.AsyncClient(timeout=2.0) as client:
-                    resp = await client.get(f"{CDP_URL}/json/version")
+                    resp = await client.get(
+                        f"{CDP_URL}/json/version", headers=_CDP_HEADERS
+                    )
                     return resp.status_code == 200
             except Exception:
                 return False
@@ -220,6 +226,29 @@ class BrowserManager:
             f"Chrome launched but CDP did not respond on port {CDP_PORT} within 15 seconds"
         )
 
+    async def _get_cdp_ws_url(self) -> str:
+        """Fetch the WebSocket debugger URL from Chrome, rewriting the host
+        so it's reachable from inside the Docker container."""
+        if HTTPX_AVAILABLE:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(
+                    f"{CDP_URL}/json/version", headers=_CDP_HEADERS
+                )
+                data = resp.json()
+        else:
+            raise RuntimeError("httpx is required for remote CDP connections")
+
+        ws_url = data.get("webSocketDebuggerUrl", "")
+        if not ws_url:
+            raise RuntimeError("Chrome did not return a webSocketDebuggerUrl")
+
+        # Chrome returns ws://localhost:9222/... but inside Docker we need
+        # ws://host.docker.internal:9222/... to reach the host.
+        if CDP_HOST not in ("localhost", "127.0.0.1"):
+            ws_url = ws_url.replace("ws://localhost", f"ws://{CDP_HOST}")
+            ws_url = ws_url.replace("ws://127.0.0.1", f"ws://{CDP_HOST}")
+        return ws_url
+
     async def _connect_cdp(self) -> None:
         """Connect Playwright to Chrome via CDP."""
         if not PLAYWRIGHT_AVAILABLE:
@@ -228,7 +257,14 @@ class BrowserManager:
             )
 
         self._playwright = await async_playwright().start()
-        self._browser = await self._playwright.chromium.connect_over_cdp(CDP_URL)
+
+        # For remote CDP (Docker→host), fetch WS URL and rewrite the host
+        # so Playwright connects to the correct address.
+        if CDP_HOST not in ("localhost", "127.0.0.1"):
+            ws_url = await self._get_cdp_ws_url()
+            self._browser = await self._playwright.chromium.connect_over_cdp(ws_url)
+        else:
+            self._browser = await self._playwright.chromium.connect_over_cdp(CDP_URL)
 
         # Grab the default context (Chrome's real profile context)
         contexts = self._browser.contexts

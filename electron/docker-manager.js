@@ -714,14 +714,18 @@ class DockerManager extends EventEmitter {
         return { success: false, needsRestart: false, error: `Installation failed: ${err.message}` };
       }
 
-      // 4. Verify Docker was actually installed (binary exists)
+      // 4. Add Windows Defender exclusion (while we still have elevation context)
+      if (onProgress) onProgress({ stage: 'configuring', message: 'Configuring Windows Defender...' });
+      await this.addDefenderExclusion();
+
+      // 5. Verify Docker was actually installed (binary exists)
       this._dockerPath = undefined; // clear cached path
       const verified = await this.isDockerInstalled();
       if (!verified) {
         return { success: false, needsRestart: true, error: 'Docker installer completed but Docker was not found. Please restart your PC and reopen Cerebro.' };
       }
 
-      // 5. Return based on WSL2 availability — always require restart on fresh install
+      // 6. Return based on WSL2 availability — always require restart on fresh install
       //    Docker Desktop needs a fresh login/reboot to register PATH and initialize WSL2.
       const needsRestart = true;
       this._dockerInstalledThisSession = true;
@@ -1438,6 +1442,65 @@ class DockerManager extends EventEmitter {
     }).join('\n');
 
     return composeContent.slice(0, endOfLine + 1) + mountLines + '\n' + composeContent.slice(endOfLine + 1);
+  }
+
+  // --- Windows Defender exclusion ---
+  // Cerebro's Chrome CDP launch (--remote-debugging-port) triggers
+  // Behavior:Win32/LummaStealer.CER!MTB false positive in Defender.
+  // We add an exclusion for the app install path and ~/.cerebro/ data dir.
+
+  /**
+   * Check if Windows Defender exclusion is already in place for Cerebro.
+   * Returns true if excluded (or not Windows), false if not.
+   */
+  async isDefenderExcluded() {
+    if (process.platform !== 'win32') return true;
+    try {
+      const result = await this._run('powershell.exe', [
+        '-NoProfile', '-Command',
+        '(Get-MpPreference).ExclusionPath -join "|||"',
+      ], { timeout: 10000 });
+      const exclusions = result.split('|||').map(s => s.trim().toLowerCase());
+      const appDir = path.dirname(process.execPath).toLowerCase();
+      return exclusions.some(e => appDir.startsWith(e) || e.startsWith(appDir));
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Add Windows Defender exclusion for Cerebro's install dir and data dir.
+   * Requires admin elevation — uses PowerShell Start-Process -Verb RunAs.
+   * Returns { success, error? }
+   */
+  async addDefenderExclusion() {
+    if (process.platform !== 'win32') return { success: true };
+
+    const appDir = path.dirname(process.execPath);
+    const dataDir = CEREBRO_DIR;
+
+    try {
+      await this._runElevated('powershell.exe', [
+        '-NoProfile', '-Command',
+        `Add-MpPreference -ExclusionPath '${appDir}'; Add-MpPreference -ExclusionPath '${dataDir}'`,
+      ], { timeout: 30000 });
+
+      // Write marker so we don't prompt again
+      const markerPath = path.join(CEREBRO_DIR, '.defender-excluded');
+      fs.writeFileSync(markerPath, new Date().toISOString());
+      console.log(`[Docker] Defender exclusions added: ${appDir}, ${dataDir}`);
+      return { success: true };
+    } catch (err) {
+      console.error('[Docker] Failed to add Defender exclusion:', err.message);
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Check if we've already added the Defender exclusion (marker file).
+   */
+  hasDefenderExclusionMarker() {
+    return fs.existsSync(path.join(CEREBRO_DIR, '.defender-excluded'));
   }
 
   _getDefaultComposeContent() {

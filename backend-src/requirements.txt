@@ -22,6 +22,9 @@ bcrypt>=4.0.0
 # HTTP Requests (used by MCP modules for GPU Server integration)
 requests>=2.31.0
 
+# Browser automation (CDP connection to host Chrome)
+playwright>=1.40.0
+
 # Async file I/O
 aiofiles>=23.2.0
 

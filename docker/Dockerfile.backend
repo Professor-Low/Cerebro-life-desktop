@@ -16,6 +16,9 @@ RUN npm install -g @anthropic-ai/claude-code
 COPY backend-src/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Install Playwright system deps (for CDP connection to host Chrome — no browser download needed)
+RUN playwright install-deps chromium
+
 # Copy backend source
 COPY backend-src/ .
 
