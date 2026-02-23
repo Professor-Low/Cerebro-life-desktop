@@ -264,44 +264,40 @@ function getHardcodedMcpConfig() {
 }
 
 async function writeMcpConfig(mcpServers) {
+  // Use `claude mcp add-json` CLI to register servers in the correct location
+  // (~/.claude.json user-level config, NOT ~/.claude/mcp.json)
+  const results = [];
+  for (const [name, config] of Object.entries(mcpServers)) {
+    const configJson = JSON.stringify(config);
+    try {
+      await new Promise((resolve, reject) => {
+        execFile('claude', ['mcp', 'add-json', name, configJson, '-s', 'user'], {
+          shell: true,
+          timeout: 15000,
+        }, (err, stdout, stderr) => {
+          if (err) {
+            console.error(`[MCP] Failed to add ${name}:`, stderr || err.message);
+            reject(err);
+          } else {
+            console.log(`[MCP] Added server ${name}:`, stdout.trim());
+            resolve(stdout);
+          }
+        });
+      });
+      results.push(name);
+    } catch (err) {
+      console.error(`[MCP] Error adding ${name}:`, err.message);
+    }
+  }
   const os = require('os');
-  const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
-  const mcpConfigDir = path.dirname(mcpConfigPath);
-
-  if (!fs.existsSync(mcpConfigDir)) {
-    fs.mkdirSync(mcpConfigDir, { recursive: true });
-  }
-
-  let config = {};
-  if (fs.existsSync(mcpConfigPath)) {
-    config = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
-  }
-  if (!config.mcpServers) config.mcpServers = {};
-
-  Object.assign(config.mcpServers, mcpServers);
-  fs.writeFileSync(mcpConfigPath, JSON.stringify(config, null, 2));
-  return mcpConfigPath;
+  return path.join(os.homedir(), '.claude.json');
 }
 
 async function refreshMcpConfigSilently() {
   try {
     const remote = await fetchMcpConfig();
-    const os = require('os');
-    const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
-
-    if (fs.existsSync(mcpConfigPath)) {
-      const current = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
-      const currentCerebro = current.mcpServers && current.mcpServers.cerebro;
-      const remoteCerebro = remote.mcpServers && remote.mcpServers.cerebro;
-
-      if (JSON.stringify(currentCerebro) === JSON.stringify(remoteCerebro)) {
-        console.log('[MCP] Config already up to date');
-        return;
-      }
-    }
-
     await writeMcpConfig(remote.mcpServers);
-    console.log('[MCP] Config updated from remote');
+    console.log('[MCP] Config refreshed from remote');
   } catch (err) {
     console.log(`[MCP] Background refresh skipped: ${err.message}`);
   }
