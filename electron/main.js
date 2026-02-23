@@ -115,6 +115,96 @@ async function checkLicense() {
   return false;
 }
 
+// --- Dynamic MCP config from Cerebro repo ---
+const MCP_CONFIG_URL = 'https://raw.githubusercontent.com/Professor-Low/Cerebro/main/config/mcp-desktop.json';
+
+async function fetchMcpConfig() {
+  const https = require('https');
+  return new Promise((resolve, reject) => {
+    const req = https.get(MCP_CONFIG_URL, { timeout: 5000 }, (res) => {
+      if (res.statusCode !== 200) {
+        reject(new Error(`HTTP ${res.statusCode}`));
+        res.resume();
+        return;
+      }
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(data));
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')); });
+  });
+}
+
+function getHardcodedMcpConfig() {
+  return {
+    mcpServers: {
+      cerebro: {
+        command: 'docker',
+        args: [
+          'run', '--rm', '-i',
+          '-v', 'cerebro_cerebro-data:/data/memory',
+          '-e', 'AI_MEMORY_PATH=/data/memory',
+          '-e', 'CEREBRO_STANDALONE=1',
+          'ghcr.io/professor-low/cerebro-memory:latest',
+          'cerebro', 'serve',
+        ],
+        env: {},
+      },
+    },
+  };
+}
+
+async function writeMcpConfig(mcpServers) {
+  const os = require('os');
+  const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
+  const mcpConfigDir = path.dirname(mcpConfigPath);
+
+  if (!fs.existsSync(mcpConfigDir)) {
+    fs.mkdirSync(mcpConfigDir, { recursive: true });
+  }
+
+  let config = {};
+  if (fs.existsSync(mcpConfigPath)) {
+    config = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
+  }
+  if (!config.mcpServers) config.mcpServers = {};
+
+  Object.assign(config.mcpServers, mcpServers);
+  fs.writeFileSync(mcpConfigPath, JSON.stringify(config, null, 2));
+  return mcpConfigPath;
+}
+
+async function refreshMcpConfigSilently() {
+  try {
+    const remote = await fetchMcpConfig();
+    const os = require('os');
+    const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
+
+    if (fs.existsSync(mcpConfigPath)) {
+      const current = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
+      const currentCerebro = current.mcpServers && current.mcpServers.cerebro;
+      const remoteCerebro = remote.mcpServers && remote.mcpServers.cerebro;
+
+      if (JSON.stringify(currentCerebro) === JSON.stringify(remoteCerebro)) {
+        console.log('[MCP] Config already up to date');
+        return;
+      }
+    }
+
+    await writeMcpConfig(remote.mcpServers);
+    console.log('[MCP] Config updated from remote');
+  } catch (err) {
+    console.log(`[MCP] Background refresh skipped: ${err.message}`);
+  }
+}
+
 function startLicenseRefreshTimer() {
   if (licenseRefreshTimer) clearInterval(licenseRefreshTimer);
 
@@ -418,6 +508,7 @@ app.whenReady().then(async () => {
   await loadFrontend();
   updateTrayStatus(tray, 'running');
   startLicenseRefreshTimer();
+  refreshMcpConfigSilently();
 });
 
 app.on('window-all-closed', () => {
@@ -635,41 +726,24 @@ ipcMain.handle('apply-update', async () => {
 });
 
 // MCP configuration (for Claude Code integration)
+// Fetches config dynamically from the Cerebro repo; falls back to hardcoded.
 ipcMain.handle('configure-mcp', async () => {
-  const os = require('os');
-  const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
-  const mcpConfigDir = path.dirname(mcpConfigPath);
-
   try {
-    if (!fs.existsSync(mcpConfigDir)) {
-      fs.mkdirSync(mcpConfigDir, { recursive: true });
+    let mcpConfig;
+    let source;
+
+    try {
+      mcpConfig = await fetchMcpConfig();
+      source = 'remote';
+    } catch (fetchErr) {
+      console.log(`[MCP] Remote fetch failed (${fetchErr.message}), using hardcoded config`);
+      mcpConfig = getHardcodedMcpConfig();
+      source = 'hardcoded';
     }
 
-    let config = {};
-    if (fs.existsSync(mcpConfigPath)) {
-      config = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
-    }
-
-    if (!config.mcpServers) config.mcpServers = {};
-
-    // Point MCP at the Docker container's memory server
-    // Use 'docker run' instead of 'docker exec' because the memory container
-    // exits after init — it doesn't stay running as a persistent service.
-    config.mcpServers['cerebro'] = {
-      command: 'docker',
-      args: [
-        'run', '--rm', '-i',
-        '-v', 'cerebro_cerebro-data:/data/memory',
-        '-e', 'AI_MEMORY_PATH=/data/memory',
-        '-e', 'CEREBRO_STANDALONE=1',
-        'ghcr.io/professor-low/cerebro-memory:latest',
-        'cerebro', 'serve',
-      ],
-      env: {},
-    };
-
-    fs.writeFileSync(mcpConfigPath, JSON.stringify(config, null, 2));
-    return { success: true, configPath: mcpConfigPath };
+    const configPath = await writeMcpConfig(mcpConfig.mcpServers);
+    console.log(`[MCP] Config written from ${source} source`);
+    return { success: true, configPath };
   } catch (err) {
     return { success: false, error: err.message };
   }
