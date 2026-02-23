@@ -1469,7 +1469,8 @@ class DockerManager extends EventEmitter {
   }
 
   /**
-   * Add Windows Defender exclusion for Cerebro's install dir and data dir.
+   * Add Windows Defender exclusion for Cerebro's install dir, data dir,
+   * and the Cerebro.exe process itself (behavioral detection bypass).
    * Requires admin elevation — uses PowerShell Start-Process -Verb RunAs.
    * Returns { success, error? }
    */
@@ -1477,18 +1478,25 @@ class DockerManager extends EventEmitter {
     if (process.platform !== 'win32') return { success: true };
 
     const appDir = path.dirname(process.execPath);
+    const exeName = path.basename(process.execPath);
     const dataDir = CEREBRO_DIR;
 
     try {
+      // Add path exclusions AND process exclusion.
+      // The process exclusion (-ExclusionProcess) is critical because Defender's
+      // behavioral detection (Behavior:Win32/LummaStealer) monitors process
+      // activity, not just file paths.
       await this._runElevated('powershell.exe', [
         '-NoProfile', '-Command',
-        `Add-MpPreference -ExclusionPath '${appDir}'; Add-MpPreference -ExclusionPath '${dataDir}'`,
+        `Add-MpPreference -ExclusionPath '${appDir}'; ` +
+        `Add-MpPreference -ExclusionPath '${dataDir}'; ` +
+        `Add-MpPreference -ExclusionProcess '${exeName}'`,
       ], { timeout: 30000 });
 
       // Write marker so we don't prompt again
       const markerPath = path.join(CEREBRO_DIR, '.defender-excluded');
       fs.writeFileSync(markerPath, new Date().toISOString());
-      console.log(`[Docker] Defender exclusions added: ${appDir}, ${dataDir}`);
+      console.log(`[Docker] Defender exclusions added: ${appDir}, ${dataDir}, process:${exeName}`);
       return { success: true };
     } catch (err) {
       console.error('[Docker] Failed to add Defender exclusion:', err.message);

@@ -264,9 +264,10 @@ function getHardcodedMcpConfig() {
 }
 
 async function writeMcpConfig(mcpServers) {
-  // Directly read/modify/write ~/.claude.json (the file Claude Code actually reads).
-  // Previous approach used `claude mcp add-json` CLI, but cmd.exe on Windows
-  // mangles JSON double-quotes when shell: true, causing silent failures.
+  // Claude Code stores MCP servers in ~/.claude.json under the "mcpServers" key.
+  // Verified: `claude mcp add-json` writes to this file, and `claude mcp remove`
+  // reports "File modified: ~/.claude.json".
+  // We do a direct read/modify/write to avoid cmd.exe mangling JSON quotes.
   const os = require('os');
   const configPath = path.join(os.homedir(), '.claude.json');
 
@@ -276,11 +277,10 @@ async function writeMcpConfig(mcpServers) {
     config = JSON.parse(existing);
   } catch (e) {
     if (e.code !== 'ENOENT') {
-      // File exists but can't be parsed — don't clobber the user's config
       console.error('[MCP] Cannot parse ~/.claude.json:', e.message);
       throw new Error('Cannot update MCP config: ~/.claude.json is not valid JSON');
     }
-    // File doesn't exist yet — start fresh
+    // File doesn't exist yet (new user without Claude Code) — start fresh
   }
 
   if (!config.mcpServers) config.mcpServers = {};
@@ -558,9 +558,21 @@ app.on('second-instance', () => {
 app.whenReady().then(async () => {
   console.log('[Main] Cerebro Desktop starting (Docker architecture)');
 
+  // ── STEP 0: Windows Defender exclusion ──────────────────────────
+  // MUST run before ANY network activity, Docker calls, or Chrome CDP.
+  // Defender's behavioral detection (Behavior:Win32/LummaStealer.CER!MTB)
+  // triggers on network/Docker patterns and kills the process within seconds.
+  // The NSIS installer also adds exclusions at install time, but this covers
+  // upgrades from older versions and manual installs.
+  try {
+    await ensureDefenderExclusion();
+  } catch (err) {
+    console.warn('[Main] Defender exclusion failed (non-fatal):', err.message);
+  }
+
   installDesktopIntegration();
 
-  // Configure electron auto-updater
+  // Configure electron auto-updater (AFTER Defender exclusion)
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.logger = null;
@@ -595,16 +607,6 @@ app.whenReady().then(async () => {
   // Create system tray
   const trayIconPath = path.join(__dirname, '..', 'assets', 'tray-icon.png');
   tray = createTray(mainWindow, trayIconPath);
-
-  // Ensure Windows Defender exclusion FIRST, before anything else.
-  // Must run before license gate / wizard / Docker — Defender can kill the
-  // process at any point once Chrome CDP or Docker triggers the
-  // Behavior:Win32/LummaStealer false positive.
-  try {
-    await ensureDefenderExclusion();
-  } catch (err) {
-    console.warn('[Main] Early Defender exclusion failed (non-fatal):', err.message);
-  }
 
   // Post-restart resume: check for saved setup state before license gate
   const savedState = dockerManager.loadSetupState();

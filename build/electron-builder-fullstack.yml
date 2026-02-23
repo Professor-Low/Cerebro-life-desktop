@@ -28,6 +28,7 @@ win:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+  allowElevation: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: Cerebro
@@ -35,6 +36,7 @@ nsis:
   installerIcon: assets/icon.ico
   uninstallerIcon: assets/icon.ico
   installerHeaderIcon: assets/icon.ico
+  include: build/installer.nsh
   runAfterFinish: true
 
 linux:
