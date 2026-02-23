@@ -264,11 +264,18 @@ function getHardcodedMcpConfig() {
 }
 
 async function writeMcpConfig(mcpServers) {
-  // Use `claude mcp add-json` CLI to register servers in the correct location
+  // Use `claude mcp` CLI to register servers in the correct location
   // (~/.claude.json user-level config, NOT ~/.claude/mcp.json)
-  const results = [];
   for (const [name, config] of Object.entries(mcpServers)) {
     const configJson = JSON.stringify(config);
+    // Remove existing entry first (fails silently if not present)
+    await new Promise((resolve) => {
+      execFile('claude', ['mcp', 'remove', name, '-s', 'user'], {
+        shell: true,
+        timeout: 10000,
+      }, () => resolve());
+    });
+    // Add the latest config
     try {
       await new Promise((resolve, reject) => {
         execFile('claude', ['mcp', 'add-json', name, configJson, '-s', 'user'], {
@@ -284,7 +291,6 @@ async function writeMcpConfig(mcpServers) {
           }
         });
       });
-      results.push(name);
     } catch (err) {
       console.error(`[MCP] Error adding ${name}:`, err.message);
     }
