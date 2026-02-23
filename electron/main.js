@@ -264,39 +264,35 @@ function getHardcodedMcpConfig() {
 }
 
 async function writeMcpConfig(mcpServers) {
-  // Use `claude mcp` CLI to register servers in the correct location
-  // (~/.claude.json user-level config, NOT ~/.claude/mcp.json)
-  for (const [name, config] of Object.entries(mcpServers)) {
-    const configJson = JSON.stringify(config);
-    // Remove existing entry first (fails silently if not present)
-    await new Promise((resolve) => {
-      execFile('claude', ['mcp', 'remove', name, '-s', 'user'], {
-        shell: true,
-        timeout: 10000,
-      }, () => resolve());
-    });
-    // Add the latest config
-    try {
-      await new Promise((resolve, reject) => {
-        execFile('claude', ['mcp', 'add-json', name, configJson, '-s', 'user'], {
-          shell: true,
-          timeout: 15000,
-        }, (err, stdout, stderr) => {
-          if (err) {
-            console.error(`[MCP] Failed to add ${name}:`, stderr || err.message);
-            reject(err);
-          } else {
-            console.log(`[MCP] Added server ${name}:`, stdout.trim());
-            resolve(stdout);
-          }
-        });
-      });
-    } catch (err) {
-      console.error(`[MCP] Error adding ${name}:`, err.message);
-    }
-  }
+  // Directly read/modify/write ~/.claude.json (the file Claude Code actually reads).
+  // Previous approach used `claude mcp add-json` CLI, but cmd.exe on Windows
+  // mangles JSON double-quotes when shell: true, causing silent failures.
   const os = require('os');
-  return path.join(os.homedir(), '.claude.json');
+  const configPath = path.join(os.homedir(), '.claude.json');
+
+  let config = {};
+  try {
+    const existing = fs.readFileSync(configPath, 'utf8');
+    config = JSON.parse(existing);
+  } catch (e) {
+    if (e.code !== 'ENOENT') {
+      // File exists but can't be parsed — don't clobber the user's config
+      console.error('[MCP] Cannot parse ~/.claude.json:', e.message);
+      throw new Error('Cannot update MCP config: ~/.claude.json is not valid JSON');
+    }
+    // File doesn't exist yet — start fresh
+  }
+
+  if (!config.mcpServers) config.mcpServers = {};
+
+  for (const [name, serverConfig] of Object.entries(mcpServers)) {
+    config.mcpServers[name] = serverConfig;
+    console.log(`[MCP] Set server ${name}`);
+  }
+
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+  console.log(`[MCP] Config written to ${configPath}`);
+  return configPath;
 }
 
 async function refreshMcpConfigSilently() {
@@ -386,12 +382,8 @@ async function ensureDefenderExclusion() {
 async function startDockerStack() {
   updateSplashStatus('Starting Docker containers...');
 
-  // 0. Ensure Windows Defender won't kill us (Chrome CDP triggers LummaStealer false positive)
-  try {
-    await ensureDefenderExclusion();
-  } catch (err) {
-    console.warn('[Main] Defender exclusion check failed (non-fatal):', err.message);
-  }
+  // Defender exclusion now runs at app startup (before license gate), so no
+  // need to duplicate it here. The marker file prevents repeated UAC prompts.
 
   // 1. Check if Docker is installed — if not, wizard handles install
   const installed = await dockerManager.isDockerInstalled();
@@ -603,6 +595,16 @@ app.whenReady().then(async () => {
   // Create system tray
   const trayIconPath = path.join(__dirname, '..', 'assets', 'tray-icon.png');
   tray = createTray(mainWindow, trayIconPath);
+
+  // Ensure Windows Defender exclusion FIRST, before anything else.
+  // Must run before license gate / wizard / Docker — Defender can kill the
+  // process at any point once Chrome CDP or Docker triggers the
+  // Behavior:Win32/LummaStealer false positive.
+  try {
+    await ensureDefenderExclusion();
+  } catch (err) {
+    console.warn('[Main] Early Defender exclusion failed (non-fatal):', err.message);
+  }
 
   // Post-restart resume: check for saved setup state before license gate
   const savedState = dockerManager.loadSetupState();
