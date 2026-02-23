@@ -16,6 +16,8 @@ services:
     image: ghcr.io/professor-low/cerebro-backend:latest
     ports:
       - "61000:59000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       REDIS_URL: redis://redis:6379/0
       AI_MEMORY_PATH: /data/memory
@@ -27,6 +29,7 @@ services:
       CEREBRO_NAS_IP: ""
       CEREBRO_MCP_SRC: "/app/mcp_modules"
       CEREBRO_SECRET: "${CEREBRO_SECRET}"
+      CDP_HOST: host.docker.internal
       HOME: /home/cerebro
     tmpfs:
       - /home/cerebro:uid=1000,gid=1000

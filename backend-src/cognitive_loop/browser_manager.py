@@ -13,6 +13,7 @@ import json
 import base64
 import os
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Dict, Any, List
@@ -45,7 +46,8 @@ except ImportError:
 
 STATE_FILE = Path(os.environ.get("AI_MEMORY_PATH", os.path.expanduser("~/.cerebro/data"))) / "cerebro" / "browser_state.json"
 CDP_PORT = 9222
-CDP_URL = f"http://localhost:{CDP_PORT}"
+CDP_HOST = os.environ.get("CDP_HOST", "localhost")
+CDP_URL = f"http://{CDP_HOST}:{CDP_PORT}"
 CHROME_PROFILE_DIR = Path(os.environ.get("AI_MEMORY_PATH", os.path.expanduser("~/.cerebro/data"))) / "cerebro" / "chrome_profile"
 
 # JavaScript injected into every page to show Cerebro's control border
@@ -69,6 +71,14 @@ CHROME_PATHS = [
     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
     r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
     os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+]
+
+# Common Chromium/Chrome install locations on Linux
+CHROME_PATHS_LINUX = [
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
 ]
 
 
@@ -110,10 +120,14 @@ class BrowserManager:
 
     @staticmethod
     def find_chrome_path() -> Optional[str]:
-        """Locate chrome.exe on the system. Returns path or None."""
-        for path in CHROME_PATHS:
-            if os.path.isfile(path):
-                return path
+        """Locate Chrome/Chromium on the system. Returns path or None."""
+        if sys.platform.startswith("linux"):
+            for p in CHROME_PATHS_LINUX:
+                if os.path.isfile(p):
+                    return p
+        for p in CHROME_PATHS:
+            if os.path.isfile(p):
+                return p
         return None
 
     # ------------------------------------------------------------------
@@ -133,7 +147,7 @@ class BrowserManager:
             # Fallback: try a raw TCP connection
             try:
                 _, writer = await asyncio.wait_for(
-                    asyncio.open_connection("127.0.0.1", CDP_PORT), timeout=2.0
+                    asyncio.open_connection(CDP_HOST, CDP_PORT), timeout=2.0
                 )
                 writer.close()
                 await writer.wait_closed()
@@ -146,12 +160,30 @@ class BrowserManager:
     # ------------------------------------------------------------------
 
     async def _launch_chrome(self) -> None:
-        """Launch real Chrome with remote debugging enabled."""
+        """Launch real Chrome with remote debugging enabled.
+
+        If CDP_HOST points to a remote host (not localhost), skip the local
+        launch and poll for the remote CDP endpoint to become available.
+        """
+        # Remote CDP mode: Chrome runs on the host, container just connects
+        if CDP_HOST not in ("localhost", "127.0.0.1"):
+            print(f"[BrowserManager] Remote CDP mode — waiting for Chrome on {CDP_HOST}:{CDP_PORT}")
+            for _ in range(30):
+                if await self._check_cdp_available():
+                    print(f"[BrowserManager] Remote CDP available at {CDP_URL}")
+                    return
+                await asyncio.sleep(0.5)
+            raise RuntimeError(
+                f"Remote Chrome CDP did not respond at {CDP_URL} within 15 seconds. "
+                "Ensure Chrome is running on the host with --remote-debugging-port=9222"
+            )
+
         chrome_path = self.find_chrome_path()
         if chrome_path is None:
+            searched = CHROME_PATHS_LINUX if sys.platform.startswith("linux") else CHROME_PATHS
             raise RuntimeError(
                 "Chrome not found. Searched:\n  "
-                + "\n  ".join(CHROME_PATHS)
+                + "\n  ".join(searched)
             )
 
         CHROME_PROFILE_DIR.mkdir(parents=True, exist_ok=True)

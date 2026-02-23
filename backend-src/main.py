@@ -4871,7 +4871,7 @@ Use the Read tool to get your full previous output before proceeding."""
     }
 
 
-async def run_agent_continuation(agent_id: str, call_sign: str, task: str, agent_file: str, agent_data: dict):
+async def run_agent_continuation(agent_id: str, call_sign: str, task: str, agent_file: str, agent_data: dict, is_specops_cycle: bool = False, system_context: str = ""):
     """Run a continuation of an existing agent.
     Uses subprocess.Popen with threaded I/O (same as run_agent) because
     asyncio.create_subprocess_exec doesn't work on Windows SelectorEventLoop.
@@ -4900,6 +4900,10 @@ async def run_agent_continuation(agent_id: str, call_sign: str, task: str, agent
 
         # Use a SHORT prompt for continuations - the task already has all the instructions
         full_prompt = f"You are Agent {call_sign} continuing your previous work.\n\n{task}"
+
+        # Prepend system context (capabilities, etc.) if provided
+        if system_context:
+            full_prompt = system_context + "\n\n" + full_prompt
 
         print(f"[Agent {call_sign}] Prompt length: {len(full_prompt)} chars")
         print(f"[Agent {call_sign}] Starting continuation #{agent_data.get('continuation_count', 1)}")
@@ -5076,17 +5080,20 @@ async def run_agent_continuation(agent_id: str, call_sign: str, task: str, agent
             with open(index_file, 'w', encoding='utf-8') as f:
                 json.dump(index, f, indent=2, ensure_ascii=False)
 
-        # Process agent queue - continuation completion frees a slot
-        await _process_agent_queue()
+        # Skip queue processing and notification for specops cycles
+        # (the mission supervisor manages the lifecycle)
+        if not is_specops_cycle:
+            # Process agent queue - continuation completion frees a slot
+            await _process_agent_queue()
 
-        # Create notification
-        await create_notification(
-            notif_type="agent_complete",
-            title=f"Agent {call_sign} Continuation Complete",
-            message=f"Continuation #{agent_data.get('continuation_count', 1)} finished",
-            link=f"/agents/{agent_id}",
-            agent_id=agent_id
-        )
+            # Create notification
+            await create_notification(
+                notif_type="agent_complete",
+                title=f"Agent {call_sign} Continuation Complete",
+                message=f"Continuation #{agent_data.get('continuation_count', 1)} finished",
+                link=f"/agents/{agent_id}",
+                agent_id=agent_id
+            )
 
     except Exception as e:
         print(f"[Agent {call_sign}] Continuation failed: {e}")
@@ -5110,7 +5117,8 @@ async def run_agent_continuation(agent_id: str, call_sign: str, task: str, agent
 
     # Broadcast final state
     await sio.emit("agent_update", sanitize_agent_for_emit(agent_data), room=os.environ.get("CEREBRO_ROOM", "default"))
-    await sio.emit("agent_completed", sanitize_agent_for_emit(agent_data), room=os.environ.get("CEREBRO_ROOM", "default"))
+    if not is_specops_cycle:
+        await sio.emit("agent_completed", sanitize_agent_for_emit(agent_data), room=os.environ.get("CEREBRO_ROOM", "default"))
 
 
 # ============================================================================
@@ -5187,7 +5195,10 @@ async def run_specops_mission(agent_id: str):
 
     print(f"[SpecOps] Mission supervisor started for {agent_id} — {agent.get('mission_name', 'Unnamed')}")
 
+    consecutive_failures = 0
+
     while True:
+      try:
         # === Wait for current cycle to complete ===
         final_status = await _wait_for_agent_completion(agent_id)
         agent = active_agents.get(agent_id)
@@ -5341,15 +5352,107 @@ Remember to output a [MISSION STATUS] block at the end of this cycle."""
             except Exception:
                 pass
 
+        # Build capabilities context so continuation cycles have access to HTTP tools
+        agent_token = create_token("agent:" + agent_id)
+        if not _IS_STANDALONE:
+            capabilities_context = f"""
+---
+
+## Cerebro Capabilities (HTTP API at localhost:59000)
+You have access to these Cerebro backend tools via curl. Use them when relevant to the task.
+
+**Your auth token (use in all API calls):**
+`TOKEN={agent_token}`
+
+### Trading (Alpaca - Paper Account, ~$100K)
+- **Get positions:** `curl -s http://localhost:59000/api/trading/positions -H "Authorization: Bearer $TOKEN"`
+- **Close a position:** `curl -s -X DELETE http://localhost:59000/api/trading/position/SYMBOL -H "Authorization: Bearer $TOKEN"`
+- **Place order:** `curl -s -X POST http://localhost:59000/api/trading/order -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"symbol":"AAPL","qty":1,"side":"buy","type":"market","time_in_force":"day"}}'`
+- **Get account:** `curl -s http://localhost:59000/api/trading/account -H "Authorization: Bearer $TOKEN"`
+- **Get orders:** `curl -s http://localhost:59000/api/trading/orders -H "Authorization: Bearer $TOKEN"`
+- **Cancel order:** `curl -s -X DELETE http://localhost:59000/api/trading/order/ORDER_ID -H "Authorization: Bearer $TOKEN"`
+
+### Wallet (Financial Activity Log)
+- **Log activity:** `curl -s -X POST http://localhost:59000/api/wallet/log -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"category":"trade","description":"...","pnl":0.0,"symbol":"BTC/USD","source":"agent"}}'`
+  Categories: trade, backtest, bet, other
+
+### Browser Control (shared Chrome)
+- **Page state:** `curl -s http://localhost:59000/api/browser/page_state -H "Authorization: Bearer $TOKEN"`
+- **Navigate:** `curl -s -X POST http://localhost:59000/api/browser/agent/navigate -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"url":"https://..."}}'`
+- **Click:** `curl -s -X POST http://localhost:59000/api/browser/click -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"element_index":5}}'`
+
+### Ask User (blocks until response)
+- `curl -s -X POST http://localhost:59000/api/agent/ask -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"question":"Should I proceed?","options":["Yes","No"],"agent_id":"AGENT_ID"}}'`
+
+When the user mentions trades, positions, buying, selling, crypto, stocks — USE the trading endpoints above. Do NOT say you cannot trade.
+
+### Remote Machines (SSH Access)
+- Devices listed in /data/memory/network_config.json (if configured)
+- Use `cat /data/memory/network_config.json` to discover available SSH targets and their aliases
+- Shared data storage is mounted locally (read/write) at the configured AI_MEMORY_PATH
+"""
+        else:
+            capabilities_context = f"""
+---
+
+## Cerebro Capabilities (HTTP API at localhost:59000)
+
+**Your auth token (use in all API calls):**
+`TOKEN={agent_token}`
+
+### Browser Control (shared Chrome)
+- **Page state:** `curl -s http://localhost:59000/api/browser/page_state -H "Authorization: Bearer $TOKEN"`
+- **Navigate:** `curl -s -X POST http://localhost:59000/api/browser/agent/navigate -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"url":"https://..."}}'`
+- **Click:** `curl -s -X POST http://localhost:59000/api/browser/click -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"element_index":5}}'`
+- **Fill:** `curl -s -X POST http://localhost:59000/api/browser/fill -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"element_index":3,"value":"text"}}'`
+- **Scroll:** `curl -s -X POST http://localhost:59000/api/browser/scroll -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"direction":"down","amount":500}}'`
+- **Screenshot:** `curl -s http://localhost:59000/api/browser/screenshot/file -H "Authorization: Bearer $TOKEN"`
+
+### Ask User (blocks until response, 5min timeout)
+- `curl -s -X POST http://localhost:59000/api/agent/ask -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"question":"Should I proceed?","options":["Yes","No"],"agent_id":"AGENT_ID"}}'`
+
+### Spawn Child Agent
+- `curl -s -X POST http://localhost:59000/internal/spawn-child-agent -H "Content-Type: application/json" -d '{{"task":"...","type":"worker"}}'`
+
+You are running inside a Docker container. Do NOT assume external servers, NAS, or SSH targets exist.
+Use `hostname`, `uname -a`, `ip addr` to discover this system.
+"""
+
         # Launch the continuation (this blocks until the cycle completes)
         await run_agent_continuation(
             agent_id=agent_id,
             call_sign=agent.get("call_sign", agent_id),
             task=continuation_prompt,
             agent_file=agent_file,
-            agent_data=agent
+            agent_data=agent,
+            is_specops_cycle=True,
+            system_context=capabilities_context
         )
+        # Cycle completed successfully — reset failure counter
+        consecutive_failures = 0
         # Loop back to wait for completion
+
+      except Exception as e:
+        consecutive_failures += 1
+        print(f"[SpecOps] Exception in mission loop for {agent_id} (failure {consecutive_failures}/3): {e}")
+        import traceback
+        traceback.print_exc()
+
+        if consecutive_failures >= 3:
+            print(f"[SpecOps] 3 consecutive failures — marking mission FAILED for {agent_id}")
+            agent = active_agents.get(agent_id)
+            if agent:
+                agent["status"] = AgentStatus.FAILED
+                agent["error"] = f"Mission failed after 3 consecutive errors: {e}"
+                await sio.emit("agent_update", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
+                await _emit_specops_update(agent)
+            _specops_locks.pop(agent_id, None)
+            return
+
+        backoff_times = [60, 300, 900]
+        backoff = backoff_times[min(consecutive_failures - 1, len(backoff_times) - 1)]
+        print(f"[SpecOps] Backing off {backoff}s before retry...")
+        await asyncio.sleep(backoff)
 
 
 # ============================================================================
@@ -11065,15 +11168,34 @@ class BrowserPressKeyRequest(BaseModel):
 _last_page_state = {"state": None, "elements": []}
 
 
+class BrowserUnavailableError(Exception):
+    """Raised when the browser cannot be connected to."""
+    pass
+
+
 async def _ensure_browser_running():
-    """Auto-launch the browser if not already running. Returns (mgr, page)."""
+    """Auto-launch the browser if not already running. Returns (mgr, page).
+
+    Raises BrowserUnavailableError with a user-friendly message if the
+    browser cannot be started or connected to.
+    """
     from cognitive_loop.browser_manager import get_browser_manager
     mgr = get_browser_manager()
     if not mgr.is_alive():
         print("[v2.0] Browser not running - auto-launching for agent...")
-        await mgr.ensure_running()
+        try:
+            await mgr.ensure_running()
+        except Exception as e:
+            raise BrowserUnavailableError(
+                f"Browser not available: {e}. Agent can use WebSearch tool as a fallback."
+            )
         await sio.emit("browser_launched", await mgr.get_status(), room=os.environ.get("CEREBRO_ROOM", "default"))
-    page = await mgr.get_page()
+    try:
+        page = await mgr.get_page()
+    except Exception as e:
+        raise BrowserUnavailableError(
+            f"Browser connected but failed to get page: {e}. Agent can use WebSearch tool as a fallback."
+        )
     return mgr, page
 
 
@@ -11092,6 +11214,8 @@ async def browser_page_state(user: str = Depends(verify_token)):
         _last_page_state["elements"] = state.interactable_elements
 
         return {"state": compressed, "url": state.url, "title": state.title}
+    except BrowserUnavailableError as e:
+        return {"error": str(e), "state": "", "browser_available": False, "fallback": "Use WebSearch tool instead"}
     except Exception as e:
         return {"error": str(e), "state": ""}
 

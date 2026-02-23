@@ -1,7 +1,8 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { spawn } = require('child_process');
+const net = require('net');
+const { spawn, execFile } = require('child_process');
 const { autoUpdater } = require('electron-updater');
 const { DockerManager } = require('./docker-manager');
 const { LicenseManager } = require('./license-manager');
@@ -42,6 +43,106 @@ let isQuitting = false;
 let electronUpdateReady = false;
 let isAutoUpdating = false;
 let licenseRefreshTimer = null;
+let cdpChromeProcess = null;
+
+// --- Chrome CDP for Docker browser access ---
+
+const CDP_PORT = 9222;
+
+const CHROME_PATHS_WIN = [
+  path.join(process.env['PROGRAMFILES'] || 'C:\\Program Files', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+  path.join(process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+  path.join(process.env.LOCALAPPDATA || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+];
+
+const CHROME_PATHS_LINUX = [
+  '/usr/bin/google-chrome',
+  '/usr/bin/google-chrome-stable',
+  '/usr/bin/chromium',
+  '/usr/bin/chromium-browser',
+];
+
+function findChromePath() {
+  const paths = process.platform === 'win32' ? CHROME_PATHS_WIN : CHROME_PATHS_LINUX;
+  for (const p of paths) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
+function isCdpAvailable() {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    socket.setTimeout(2000);
+    socket.once('connect', () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.once('error', () => {
+      socket.destroy();
+      resolve(false);
+    });
+    socket.once('timeout', () => {
+      socket.destroy();
+      resolve(false);
+    });
+    socket.connect(CDP_PORT, '127.0.0.1');
+  });
+}
+
+async function ensureChromeWithCDP() {
+  // Check if CDP is already available (user's Chrome or previous launch)
+  if (await isCdpAvailable()) {
+    console.log('[CDP] Chrome already listening on port', CDP_PORT);
+    return null;
+  }
+
+  const chromePath = findChromePath();
+  if (!chromePath) {
+    console.log('[CDP] Chrome not found, Docker agents will not have browser access');
+    return null;
+  }
+
+  const cdpProfileDir = path.join(app.getPath('userData'), 'cerebro-chrome-cdp');
+  if (!fs.existsSync(cdpProfileDir)) {
+    fs.mkdirSync(cdpProfileDir, { recursive: true });
+  }
+
+  const args = [
+    `--remote-debugging-port=${CDP_PORT}`,
+    `--user-data-dir=${cdpProfileDir}`,
+    '--no-first-run',
+    '--no-default-browser-check',
+  ];
+
+  console.log(`[CDP] Launching Chrome for CDP: ${chromePath}`);
+  const proc = spawn(chromePath, args, {
+    stdio: 'ignore',
+    detached: false,
+  });
+
+  proc.on('error', (err) => {
+    console.error('[CDP] Failed to launch Chrome:', err.message);
+  });
+
+  proc.on('exit', (code) => {
+    console.log(`[CDP] Chrome CDP process exited (code ${code})`);
+    if (cdpChromeProcess === proc) cdpChromeProcess = null;
+  });
+
+  // Wait up to 10 seconds for CDP to become available
+  for (let i = 0; i < 20; i++) {
+    if (await isCdpAvailable()) {
+      console.log('[CDP] Chrome CDP ready on port', CDP_PORT);
+      return proc;
+    }
+    await new Promise(r => setTimeout(r, 500));
+  }
+
+  console.error('[CDP] Chrome launched but CDP not responding after 10s');
+  try { proc.kill(); } catch (_) {}
+  return null;
+}
 
 function createSplashWindow() {
   splashWindow = new BrowserWindow({
@@ -281,13 +382,21 @@ async function startDockerStack() {
     }
   }
 
-  // 3. Write/refresh config (always refresh compose to fix volume mounts)
+  // 3. Launch Chrome with CDP so Docker containers can access the browser
+  updateSplashStatus('Starting browser for agents...');
+  try {
+    cdpChromeProcess = await ensureChromeWithCDP();
+  } catch (err) {
+    console.error('[Main] Chrome CDP launch failed (non-fatal):', err.message);
+  }
+
+  // 4. Write/refresh config (always refresh compose to fix volume mounts)
   updateSplashStatus('Writing configuration...');
   await dockerManager.writeComposeFile();
   dockerManager.writeEnvFile();
   await dockerManager.setClaudeCliPath();
 
-  // 4. Start the compose stack
+  // 5. Start the compose stack
   try {
     updateSplashStatus('Starting containers...');
     await dockerManager.startStack();
@@ -529,6 +638,11 @@ app.on('before-quit', async (e) => {
     if (!isAutoUpdating) {
       updateTrayStatus(tray, 'stopping');
       await shutdown();
+    }
+    // Kill CDP Chrome process if we launched it
+    if (cdpChromeProcess) {
+      try { cdpChromeProcess.kill(); } catch (_) {}
+      cdpChromeProcess = null;
     }
     app.quit();
   }

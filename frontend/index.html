@@ -10141,14 +10141,21 @@
             padding: 0;
             gap: 0;
             overflow: hidden;
-            min-height: min-content;
+            min-height: 0 !important;
+            height: calc(100vh - 56px - var(--nav-height, 70px) - var(--safe-bottom, 0px));
+            height: calc(100dvh - 56px - var(--nav-height, 70px) - var(--safe-bottom, 0px));
+        }
+        .main-content:has(.settings-view.active) {
+            overflow: hidden !important;
+            padding-bottom: 0 !important;
         }
 
         /* ==================== SETTINGS SIDEBAR LAYOUT ==================== */
         .settings-layout {
             display: flex;
-            height: 100%;
+            flex: 1;
             width: 100%;
+            min-height: 0;
         }
         .settings-sidebar {
             width: 200px;
@@ -10262,7 +10269,7 @@
         .settings-content {
             flex: 1;
             overflow-y: auto;
-            padding: 24px;
+            padding: 24px 32px;
             min-width: 0;
         }
 
@@ -25734,7 +25741,7 @@
         const CEREBRO_DGX_HOST = CEREBRO_CONFIG.dgxHost || '';
         const CEREBRO_DATA_DIR = CEREBRO_CONFIG.dataDir || '';
         const CEREBRO_CDP_URL = CEREBRO_CONFIG.cdpUrl || 'http://localhost:9222';
-        const CEREBRO_USERNAME = CEREBRO_CONFIG.username || '';
+        let CEREBRO_USERNAME = CEREBRO_CONFIG.username || '';
 
         console.log('Cerebro connecting to:', API_URL);
 
@@ -25771,6 +25778,7 @@
 
                 const data = await response.json();
                 token = data.token;
+                if (data.user) CEREBRO_USERNAME = data.user;
                 localStorage.setItem('cerebro_token', token);
                 showApp();
             } catch (e) {
@@ -46926,6 +46934,7 @@ Please proceed with implementing this recommendation. You have full permissions.
                     if (!res.ok) throw new Error((await res.json()).detail || 'Setup failed');
                     const data = await res.json();
                     token = data.token;
+                    if (data.user) CEREBRO_USERNAME = data.user;
                     localStorage.setItem('cerebro_token', token);
                     document.getElementById('onboarding-view').classList.add('hidden');
                     showApp();
@@ -46960,6 +46969,9 @@ Please proceed with implementing this recommendation. You have full permissions.
                 const statusRes = await fetch(`${API_URL}/auth/status`);
                 if (statusRes.ok) {
                     const status = await statusRes.json();
+                    if (status.username) {
+                        CEREBRO_USERNAME = status.username;
+                    }
                     if (!status.setup_complete) {
                         // First-time user — show onboarding
                         document.getElementById('login-view').classList.add('hidden');
