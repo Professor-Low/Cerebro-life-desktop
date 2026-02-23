@@ -23101,6 +23101,7 @@
                         <span class="selection-count" id="selection-count">0 selected</span>
                         <button class="btn btn-primary" onclick="showMergeSpawnModal()">Merge &amp; Spawn</button>
                         <button class="btn btn-secondary" onclick="showBulkAssignGroupModal()">Move to Group</button>
+                        <button class="btn btn-secondary" onclick="deleteSelectedAgents()" style="color: #ff6b6b;">&#128465; Delete</button>
                         <button class="btn btn-secondary" onclick="clearAgentSelection()">Clear</button>
                     </div>
 
@@ -24431,6 +24432,9 @@
                     <span class="agent-status-badge" id="panel-status-badge" style="display:none;">RUNNING</span>
                     <button class="modal-close-btn" onclick="closeAgentPanel()" title="Close">&times;</button>
                 </div>
+
+                <!-- Agent lineage breadcrumb -->
+                <div class="agent-chain-nav" id="panel-chain-nav" style="display: none;"></div>
 
                 <div class="agent-panel-body">
                     <!-- ===== LEFT PANEL ===== -->
@@ -28239,7 +28243,7 @@
 
             } catch (e) {
                 console.error('Error spawning workflow:', e);
-                alert('Failed to launch workflow: ' + e.message);
+                cerebroAlert('Failed to launch workflow: ' + e.message, { title: 'Error', danger: true });
             }
         }
 
@@ -32242,6 +32246,7 @@
                 });
                 const data = await response.json();
                 data.agents.forEach(agent => {
+                    if (deletedAgentIds.has(agent.id)) return;
                     agents[agent.id] = agent;
                 });
 
@@ -32258,8 +32263,9 @@
                         ...(historyData.archived || [])
                     ];
 
-                    // Merge history agents (don't overwrite active ones)
+                    // Merge history agents (don't overwrite active ones, skip deleted)
                     for (const agent of allHistoryAgents) {
+                        if (deletedAgentIds.has(agent.id)) continue;
                         if (!agents[agent.id]) {
                             // Load full details for history agents
                             try {
@@ -33221,7 +33227,7 @@
 
             } catch (e) {
                 console.error('Failed to spawn agent:', e);
-                alert('Failed to spawn agent');
+                cerebroAlert('Failed to spawn agent', { title: 'Error', danger: true });
             }
         }
 
@@ -33240,6 +33246,8 @@
         // NOTE: Using var so inline onclick handlers can access these from window scope
         var agentSelectMode = false;
         var selectedAgentIds = new Set();
+        // Persist deleted agent IDs so they don't reappear on reload
+        var deletedAgentIds = new Set(JSON.parse(localStorage.getItem('cerebro_deleted_agents') || '[]'));
         let mergeSelectedRole = 'worker';
         let mergeTimeout = 3600;
 
@@ -33279,6 +33287,8 @@
                 rightEmpty.classList.add('active');
                 footer.style.display = 'flex';
                 statusBadge.style.display = 'none';
+                var chainNavCreate = document.getElementById('panel-chain-nav');
+                if (chainNavCreate) chainNavCreate.style.display = 'none';
                 titleEl.textContent = 'Spawn New Agent';
                 renderTemplateGallery();
             } else if (state === 'running') {
@@ -33294,7 +33304,12 @@
                         populateLeftDetailPanel(agentId);
                         document.getElementById('panel-running-task').textContent = agent.task.slice(0, 120) + (agent.task.length > 120 ? '...' : '');
                         var typeEmoji = (agent.type || 'worker') === 'researcher' ? '\uD83D\uDD0D' : (agent.type || 'worker') === 'coder' ? '\uD83D\uDCBB' : (agent.type || 'worker') === 'analyst' ? '\uD83D\uDCCA' : '\u26A1';
-                        titleEl.textContent = typeEmoji + ' Agent ' + (agent.call_sign || agent.id);
+                        var parentSuffix = '';
+                        if (agent.parent_agent_id && agents[agent.parent_agent_id]) {
+                            parentSuffix = ' (\u21B3 from ' + (agents[agent.parent_agent_id].call_sign || agent.parent_agent_id) + ')';
+                        }
+                        titleEl.textContent = typeEmoji + ' Agent ' + (agent.call_sign || agent.id) + parentSuffix;
+                        buildPanelChainNav(agent);
                     }
                     // Start elapsed timer
                     _panelElapsedStart = Date.now();
@@ -33320,7 +33335,12 @@
                         statusBadge.textContent = statusText;
                         statusBadge.className = 'agent-status-badge ' + agent.status;
                         var typeEmoji = (agent.type || 'worker') === 'researcher' ? '\uD83D\uDD0D' : (agent.type || 'worker') === 'coder' ? '\uD83D\uDCBB' : (agent.type || 'worker') === 'analyst' ? '\uD83D\uDCCA' : '\u26A1';
-                        titleEl.textContent = typeEmoji + ' Agent ' + (agent.call_sign || agent.id);
+                        var parentSuffix = '';
+                        if (agent.parent_agent_id && agents[agent.parent_agent_id]) {
+                            parentSuffix = ' (\u21B3 from ' + (agents[agent.parent_agent_id].call_sign || agent.parent_agent_id) + ')';
+                        }
+                        titleEl.textContent = typeEmoji + ' Agent ' + (agent.call_sign || agent.id) + parentSuffix;
+                        buildPanelChainNav(agent);
                         populateLeftDetailPanel(agentId);
                         populateRightOutputPanel(agentId);
 
@@ -33395,6 +33415,8 @@
         function closeAgentPanel() {
             document.body.classList.remove('modal-open');
             document.getElementById('agent-panel').classList.remove('active');
+            var chainNavClose = document.getElementById('panel-chain-nav');
+            if (chainNavClose) chainNavClose.style.display = 'none';
             if (_panelElapsedTimer) { clearInterval(_panelElapsedTimer); _panelElapsedTimer = null; }
             agentPanelState = null;
             agentPanelAgentId = null;
@@ -33571,9 +33593,17 @@
             if (!agent) return;
             var instructions = (document.getElementById('panel-followup-instructions') || {}).value;
             instructions = instructions ? instructions.trim() : '';
-            var task = instructions || ('Continue the work of agent ' + (agent.call_sign || agent.id));
-            spawnAgentEnhanced(task, agent.type || 'worker', 'Previous agent output:\n' + (agent.output || '').slice(0, 3000), null, 'normal', null, 3600, agent.model || 'sonnet');
+            if (!instructions) {
+                showToast('Enter a command for the follow-up agent', 'warning');
+                var el = document.getElementById('panel-followup-instructions');
+                if (el) el.focus();
+                return;
+            }
+            // Link to parent (spawnAgent reads this and passes parent_agent_id)
+            window.pendingFollowUpParent = agent;
             closeAgentPanel();
+            showToast('Spawning follow-up agent linked to ' + (agent.call_sign || agent.id) + '...', 'info');
+            spawnAgent(instructions, agent.type || 'worker', agent.model || 'sonnet');
         }
 
         function panelRerunAgent() {
@@ -34140,8 +34170,8 @@
             name = name ? name.trim() : '';
             task = task ? task.trim() : '';
 
-            if (!name) { alert('Template name is required.'); return; }
-            if (!task) { alert('Task description is required.'); return; }
+            if (!name) { cerebroAlert('Template name is required.', { title: 'Missing Field' }); return; }
+            if (!task) { cerebroAlert('Task description is required.', { title: 'Missing Field' }); return; }
 
             var role = (document.getElementById('tmpl-edit-role') || {}).value || 'worker';
             var context = ((document.getElementById('tmpl-edit-context') || {}).value || '').trim();
@@ -34311,6 +34341,38 @@
             updateAgentSelectionUI();
         }
 
+        async function deleteSelectedAgents() {
+            var count = selectedAgentIds.size;
+            if (count === 0) return;
+            var names = Array.from(selectedAgentIds).map(function(id) {
+                return agents[id] ? (agents[id].call_sign || id) : id;
+            }).join(', ');
+            if (!(await cerebroConfirm('Delete ' + count + ' agent(s)?\n\n' + names + '\n\nThis cannot be undone.', { title: 'Delete Agents', confirmText: 'Delete', danger: true }))) return;
+
+            var deleted = 0;
+            for (var agentId of selectedAgentIds) {
+                // Try to stop/delete on backend (best-effort)
+                try {
+                    await fetch(API_URL + '/agents/' + agentId, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                } catch (e) {
+                    console.warn('Backend delete failed for ' + agentId + ':', e);
+                }
+                // Always remove locally and persist the deletion
+                delete agents[agentId];
+                deletedAgentIds.add(agentId);
+                deleted++;
+            }
+            localStorage.setItem('cerebro_deleted_agents', JSON.stringify(Array.from(deletedAgentIds)));
+            selectedAgentIds.clear();
+            agentSelectMode = false;
+            updateAgentSelectionUI();
+            renderAgentsList();
+            showToast('Deleted ' + deleted + ' agent(s)', 'success');
+        }
+
         function showMergeSpawnModal() {
             // Populate the selected agents list using safe DOM methods
             const listEl = document.getElementById('merge-agent-list');
@@ -34377,11 +34439,11 @@
         async function submitMergeSpawn() {
             const task = document.getElementById('merge-task-input').value.trim();
             if (!task) {
-                alert('Please enter a task description.');
+                cerebroAlert('Please enter a task description.', { title: 'Missing Field' });
                 return;
             }
             if (selectedAgentIds.size === 0) {
-                alert('No agents selected.');
+                cerebroAlert('No agents selected.', { title: 'Missing Selection' });
                 return;
             }
 
@@ -34411,7 +34473,7 @@
                 switchView('agents');
             } catch (e) {
                 console.error('Failed to spawn merged agent:', e);
-                alert('Failed to spawn merged agent');
+                cerebroAlert('Failed to spawn merged agent', { title: 'Error', danger: true });
             }
         }
 
@@ -34691,7 +34753,7 @@
             var agentCount = Object.values(agents).filter(function(a) { return a.project_id === projectId; }).length;
             var msg = 'Delete group "' + projName + '"?';
             if (agentCount > 0) msg += '\n\n' + agentCount + ' agent(s) will be moved to Uncategorized.';
-            if (!confirm(msg)) return;
+            if (!(await cerebroConfirm(msg, { title: 'Delete Group', confirmText: 'Delete', danger: true }))) return;
 
             try {
                 var response = await fetch(API_URL + '/agents/projects/' + encodeURIComponent(projectId), {
@@ -34843,7 +34905,7 @@
             if (protectedCount > 0) {
                 msg += '\n\n' + protectedCount + ' starred agent(s) will be preserved.';
             }
-            if (!confirm(msg)) return;
+            if (!(await cerebroConfirm(msg, { title: 'Clear Agents', confirmText: 'Clear', danger: true }))) return;
 
             try {
                 var response = await fetch(API_URL + '/agents/clear', {
@@ -35306,7 +35368,7 @@
                 switchView('agents');
             } catch (e) {
                 console.error('Failed to spawn agent:', e);
-                alert('Failed to spawn agent');
+                cerebroAlert('Failed to spawn agent', { title: 'Error', danger: true });
             }
         }
 
@@ -35321,7 +35383,7 @@
             const agentComposition = getTeamComposition();
 
             if (agentComposition.length === 0) {
-                alert('Please select at least one team member');
+                cerebroAlert('Please select at least one team member', { title: 'Missing Selection' });
                 return;
             }
 
@@ -35345,7 +35407,7 @@
                 switchView('agents');
             } catch (e) {
                 console.error('Failed to deploy workflow:', e);
-                alert('Failed to deploy workflow');
+                cerebroAlert('Failed to deploy workflow', { title: 'Error', danger: true });
             }
         }
 
@@ -35976,7 +36038,7 @@
             }
 
             if (!agent) {
-                alert('Agent not found');
+                cerebroAlert('Agent not found', { title: 'Error', danger: true });
                 return;
             }
 
@@ -36805,6 +36867,63 @@ Please proceed with implementing this recommendation. You have full permissions.
             chainNav.style.display = hasChain ? 'flex' : 'none';
         }
 
+        function buildPanelChainNav(agent) {
+            var chainNav = document.getElementById('panel-chain-nav');
+            if (!chainNav) return;
+            chainNav.textContent = '';
+            var hasChain = false;
+
+            // Walk up parent chain
+            var ancestors = [];
+            var current = agent;
+            while (current.parent_agent_id && agents[current.parent_agent_id]) {
+                ancestors.unshift(agents[current.parent_agent_id]);
+                current = agents[current.parent_agent_id];
+                if (ancestors.length > 10) break;
+            }
+
+            ancestors.forEach(function(ancestor) {
+                var item = document.createElement('span');
+                item.className = 'chain-nav-item';
+                item.textContent = ancestor.call_sign || ancestor.id;
+                item.onclick = function() { openAgentPanel('detail', ancestor.id); };
+                chainNav.appendChild(item);
+                var sep = document.createElement('span');
+                sep.className = 'chain-nav-separator';
+                sep.textContent = '\u203A';
+                chainNav.appendChild(sep);
+                hasChain = true;
+            });
+
+            // Current agent
+            var currentItem = document.createElement('span');
+            currentItem.className = 'chain-nav-item current';
+            currentItem.textContent = agent.call_sign || agent.id;
+            chainNav.appendChild(currentItem);
+
+            // Children
+            var children = Object.values(agents).filter(function(a) {
+                return a.parent_agent_id === agent.id;
+            });
+            if (children.length > 0) {
+                children.sort(function(a, b) { return new Date(a.created_at) - new Date(b.created_at); });
+                children.forEach(function(child) {
+                    var sep = document.createElement('span');
+                    sep.className = 'chain-nav-separator';
+                    sep.textContent = '\u203A';
+                    chainNav.appendChild(sep);
+                    var childItem = document.createElement('span');
+                    childItem.className = 'chain-nav-item';
+                    childItem.textContent = child.call_sign || child.id;
+                    childItem.onclick = function() { openAgentPanel('detail', child.id); };
+                    chainNav.appendChild(childItem);
+                    hasChain = true;
+                });
+            }
+
+            chainNav.style.display = hasChain ? 'flex' : 'none';
+        }
+
         function formatDuration(ms) {
             const seconds = Math.floor(ms / 1000);
             if (seconds < 60) return `${seconds}s`;
@@ -36828,7 +36947,7 @@ Please proceed with implementing this recommendation. You have full permissions.
         function copyAgentOutput() {
             const agent = agents[currentDetailAgentId];
             if (!agent || !agent.output) {
-                alert('No output to copy');
+                cerebroAlert('No output to copy', { title: 'Nothing to Copy' });
                 return;
             }
 
@@ -43552,11 +43671,11 @@ Please proceed with implementing this recommendation. You have full permissions.
             return Math.floor(hours / 24) + 'd ago';
         }
 
-        function closeHeartbeatModal() {
+        async function closeHeartbeatModal() {
             const modal = document.getElementById('heartbeat-modal');
             if (!modal) return;
             if (_hbDirty) {
-                if (!confirm('You have unsaved changes. Discard?')) return;
+                if (!(await cerebroConfirm('You have unsaved changes. Discard?', { title: 'Unsaved Changes', confirmText: 'Discard', danger: true }))) return;
             }
             modal.classList.remove('active');
             // Collapse raw editor
@@ -46516,7 +46635,7 @@ Please proceed with implementing this recommendation. You have full permissions.
             const prompt = document.getElementById('automation-prompt').value.trim();
 
             if (!name || !prompt) {
-                alert('Please enter a name and task/prompt');
+                cerebroAlert('Please enter a name and task/prompt', { title: 'Missing Field' });
                 return;
             }
 
@@ -46550,11 +46669,11 @@ Please proceed with implementing this recommendation. You have full permissions.
                     loadExecutionHistory();
                 } else {
                     const err = await response.json();
-                    alert('Failed to create automation: ' + (err.detail || 'Unknown error'));
+                    cerebroAlert('Failed to create automation: ' + (err.detail || 'Unknown error'), { title: 'Error', danger: true });
                 }
             } catch (error) {
                 console.error('Failed to create automation:', error);
-                alert('Failed to create automation');
+                cerebroAlert('Failed to create automation', { title: 'Error', danger: true });
             }
         }
 
@@ -46643,7 +46762,7 @@ Please proceed with implementing this recommendation. You have full permissions.
             const prompt = document.getElementById('automation-prompt').value.trim();
 
             if (!name || !prompt) {
-                alert('Please enter a name and task/prompt');
+                cerebroAlert('Please enter a name and task/prompt', { title: 'Missing Field' });
                 return;
             }
 
@@ -46676,11 +46795,11 @@ Please proceed with implementing this recommendation. You have full permissions.
                     loadSchedules();
                 } else {
                     const err = await response.json();
-                    alert('Failed to update automation: ' + (err.detail || 'Unknown error'));
+                    cerebroAlert('Failed to update automation: ' + (err.detail || 'Unknown error'), { title: 'Error', danger: true });
                 }
             } catch (error) {
                 console.error('Failed to update automation:', error);
-                alert('Failed to update automation');
+                cerebroAlert('Failed to update automation', { title: 'Error', danger: true });
             }
         }
 
@@ -47090,8 +47209,14 @@ Please proceed with implementing this recommendation. You have full permissions.
                 const iconEl = document.getElementById('cerebro-confirm-icon');
 
                 titleEl.textContent = options.title || 'Are you sure?';
-                bodyEl.textContent = message;
+                // Support line breaks in message
+                bodyEl.textContent = '';
+                message.split('\n').forEach(function(line, i) {
+                    if (i > 0) bodyEl.appendChild(document.createElement('br'));
+                    bodyEl.appendChild(document.createTextNode(line));
+                });
                 okBtn.textContent = options.confirmText || 'Confirm';
+                cancelBtn.style.display = '';
                 cancelBtn.textContent = options.cancelText || 'Cancel';
 
                 // Danger style
@@ -47126,6 +47251,61 @@ Please proceed with implementing this recommendation. You have full permissions.
                 okBtn.focus();
             });
         }
+
+        // Custom alert dialog - replaces browser alert()
+        function cerebroAlert(message, options = {}) {
+            return cerebroConfirm(message, {
+                title: options.title || 'Notice',
+                confirmText: options.buttonText || 'OK',
+                cancelText: '',
+                danger: options.danger || false
+            }).then(function() {
+                // Hide cancel button for alerts (single-button)
+                return true;
+            });
+        }
+        // Override: hide cancel for alerts by wrapping cerebroConfirm
+        var _origCerebroConfirm = cerebroConfirm;
+        cerebroAlert = function(message, options) {
+            options = options || {};
+            return new Promise(function(resolve) {
+                var overlay = document.getElementById('cerebro-confirm-overlay');
+                var titleEl = document.getElementById('cerebro-confirm-title');
+                var bodyEl = document.getElementById('cerebro-confirm-body');
+                var okBtn = document.getElementById('cerebro-confirm-ok');
+                var cancelBtn = document.getElementById('cerebro-confirm-cancel');
+                var iconEl = document.getElementById('cerebro-confirm-icon');
+
+                titleEl.textContent = options.title || 'Notice';
+                bodyEl.textContent = '';
+                message.split('\n').forEach(function(line, i) {
+                    if (i > 0) bodyEl.appendChild(document.createElement('br'));
+                    bodyEl.appendChild(document.createTextNode(line));
+                });
+                okBtn.textContent = options.buttonText || 'OK';
+                cancelBtn.style.display = 'none';
+                iconEl.className = options.danger ? 'cerebro-confirm-icon danger' : 'cerebro-confirm-icon warn';
+                okBtn.className = options.danger ? 'cerebro-confirm-btn confirm danger' : 'cerebro-confirm-btn confirm';
+
+                overlay.classList.add('active');
+
+                function cleanup() {
+                    overlay.classList.remove('active');
+                    okBtn.removeEventListener('click', onOk);
+                    overlay.removeEventListener('click', onBackdrop);
+                    document.removeEventListener('keydown', onKey);
+                    resolve(true);
+                }
+                function onOk() { cleanup(); }
+                function onBackdrop(e) { if (e.target === overlay) cleanup(); }
+                function onKey(e) { if (e.key === 'Escape' || e.key === 'Enter') cleanup(); }
+
+                okBtn.addEventListener('click', onOk);
+                overlay.addEventListener('click', onBackdrop);
+                document.addEventListener('keydown', onKey);
+                okBtn.focus();
+            });
+        };
     </script>
 
     <!-- Voice Screenshot Overlay -->
