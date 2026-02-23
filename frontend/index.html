@@ -23919,7 +23919,7 @@
                     <div class="settings-card">
                         <div class="settings-row">
                             <span class="settings-label">Version</span>
-                            <span class="settings-value">1.0.0</span>
+                            <span class="settings-value" id="app-version">--</span>
                         </div>
                         <div class="settings-row">
                             <span class="settings-label">Cost</span>
@@ -25479,6 +25479,15 @@
         async function initApp() {
             updateDateTime();
             setInterval(updateDateTime, 60000);
+
+            // Display app version from Electron
+            if (window.cerebroDesktop && window.cerebroDesktop.getVersion) {
+                try {
+                    const ver = await window.cerebroDesktop.getVersion();
+                    const el = document.getElementById('app-version');
+                    if (el && ver) el.textContent = ver;
+                } catch (_e) {}
+            }
 
             // Restore auto-awake checkbox state from localStorage
             const autoAwakeCheckbox = document.getElementById('auto-awake-checkbox');
