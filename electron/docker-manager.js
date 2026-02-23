@@ -627,12 +627,9 @@ class DockerManager extends EventEmitter {
 
     const url = 'https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe';
     return new Promise((resolve, reject) => {
-      const file = fs.createWriteStream(installerPath);
       const request = https.get(url, (response) => {
         // Follow redirects
         if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
-          file.close();
-          fs.unlinkSync(installerPath);
           https.get(response.headers.location, (res) => {
             this._pipeDownload(res, installerPath, onProgress, resolve, reject);
           }).on('error', reject);
@@ -668,10 +665,14 @@ class DockerManager extends EventEmitter {
       }
     });
 
+    // Wait for 'close' event — this fires after the OS file handle is fully released,
+    // preventing "file in use" errors when Start-Process tries to execute the installer.
+    file.on('close', () => {
+      resolve({ path: filePath, cached: false });
+    });
+
     response.on('end', () => {
-      file.end(() => {
-        resolve({ path: filePath, cached: false });
-      });
+      file.end();
     });
 
     response.on('error', (err) => {
