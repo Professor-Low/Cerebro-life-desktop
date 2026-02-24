@@ -1471,15 +1471,20 @@ class DockerManager extends EventEmitter {
     const homeDir = os.homedir();
     const isWin = process.platform === 'win32';
     const presets = [
-      { id: 'desktop', label: 'Desktop', folder: 'Desktop' },
-      { id: 'documents', label: 'Documents', folder: 'Documents' },
-      { id: 'downloads', label: 'Downloads', folder: 'Downloads' },
+      { id: 'desktop', label: 'Desktop', folder: 'Desktop', containerPath: '/mounts/desktop' },
+      { id: 'documents', label: 'Documents', folder: 'Documents', containerPath: '/mounts/documents' },
+      { id: 'downloads', label: 'Downloads', folder: 'Downloads', containerPath: '/mounts/downloads' },
     ];
+    // Only offer Devices preset if user has an .ssh folder
+    const sshDir = path.join(homeDir, '.ssh');
+    if (fs.existsSync(sshDir)) {
+      presets.push({ id: 'devices', label: 'Devices', folder: '.ssh', containerPath: '/home/cerebro/.ssh' });
+    }
     return presets.map(p => ({
       id: p.id,
       label: p.label,
-      hostPath: isWin ? path.join(homeDir, p.folder) : path.join(homeDir, p.folder),
-      containerPath: `/mounts/${p.id}`,
+      hostPath: path.join(homeDir, p.folder),
+      containerPath: p.containerPath,
       readOnly: true,
       preset: true,
     }));
@@ -1500,15 +1505,34 @@ class DockerManager extends EventEmitter {
     const endOfLine = composeContent.indexOf('\n', anchorIdx);
     if (endOfLine === -1) return composeContent;
 
+    // Check if Devices (.ssh) preset is enabled — needs special handling
+    const hasDevicesMount = config.fileMounts.some(m => m.id === 'devices');
+
     const mountLines = config.fileMounts.map(m => {
       const suffix = m.readOnly ? ':ro' : '';
-      // Convert Windows backslashes to forward slashes — YAML double-quoted
-      // strings interpret \U, \t etc. as escape sequences, breaking the parse.
       const hostPath = m.hostPath.replace(/\\/g, '/');
+      if (m.id === 'devices') {
+        // Mount SSH keys to staging dir; entrypoint copies with correct permissions
+        return `      - "${hostPath}:/tmp/.ssh-keys:ro"`;
+      }
       return `      - "${hostPath}:${m.containerPath}${suffix}"`;
     }).join('\n');
 
-    return composeContent.slice(0, endOfLine + 1) + mountLines + '\n' + composeContent.slice(endOfLine + 1);
+    let result = composeContent.slice(0, endOfLine + 1) + mountLines + '\n' + composeContent.slice(endOfLine + 1);
+
+    // If Devices mount is active, inject entrypoint wrapper to install ssh + fix perms
+    if (hasDevicesMount) {
+      const entrypointLine = `    entrypoint:\n      - /bin/sh\n      - -c\n      - |\n        mkdir -p /home/cerebro/.ssh && cp /tmp/.ssh-keys/* /home/cerebro/.ssh/ 2>/dev/null\n        chmod 700 /home/cerebro/.ssh && chmod 600 /home/cerebro/.ssh/id_* 2>/dev/null && chmod 644 /home/cerebro/.ssh/*.pub 2>/dev/null\n        chown -R cerebro:cerebro /home/cerebro/.ssh 2>/dev/null\n        (if ! command -v ssh >/dev/null 2>&1; then apt-get update -qq && apt-get install -y -qq openssh-client >/dev/null 2>&1; fi) &\n        exec /entrypoint.sh uvicorn main:socket_app --host 0.0.0.0 --port 59000`;
+      // Insert entrypoint after the 'restart: unless-stopped' line for the backend service
+      const restartAnchor = '    restart: unless-stopped';
+      const restartIdx = result.indexOf(restartAnchor, result.indexOf('backend:'));
+      if (restartIdx !== -1) {
+        const restartEnd = result.indexOf('\n', restartIdx);
+        result = result.slice(0, restartEnd + 1) + entrypointLine + '\n' + result.slice(restartEnd + 1);
+      }
+    }
+
+    return result;
   }
 
   // --- Windows Defender exclusion ---

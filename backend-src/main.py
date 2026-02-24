@@ -12482,14 +12482,18 @@ async def _execute_ssh_command(device: dict, device_id: str, command: str, timeo
         raise HTTPException(status_code=400, detail="SSH not configured: host and username required")
 
     port = str(ssh_config.get("port", 22))
-    key_path = ssh_config.get("key_path", "").strip()
+    key_path = os.path.expanduser(ssh_config.get("key_path", "").strip())
+
+    # Validate key file exists before attempting SSH
+    if key_path and not os.path.isfile(key_path):
+        raise HTTPException(status_code=400, detail=f"SSH key not found: {key_path}. Enable the Devices preset in Settings > File Access.")
 
     # Using create_subprocess_exec (no shell) - safe from injection
     ssh_args = [
         "ssh",
         "-o", "BatchMode=yes",
         "-o", "ConnectTimeout=5",
-        "-o", "StrictHostKeyChecking=no",
+        "-o", "StrictHostKeyChecking=accept-new",
         "-p", port,
     ]
     if key_path:
@@ -12841,25 +12845,28 @@ async def ping_device(device_id: str, user: str = Depends(verify_token)):
 
     # SSH auth test (only if key_path provided and port is open)
     ssh_username = ssh_config.get("username", "")
-    ssh_key_path = ssh_config.get("key_path", "")
+    ssh_key_path = os.path.expanduser(ssh_config.get("key_path", ""))
     if ssh_username and ssh_key_path and results.get("ssh_port", {}).get("open"):
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=3",
-                "-o", "StrictHostKeyChecking=no",
-                "-i", ssh_key_path, "-p", str(ssh_port),
-                ssh_username + "@" + host, "echo", "ok",
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=5)
-            results["ssh_auth"] = {
-                "success": proc.returncode == 0,
-                "output": (stdout.decode().strip() if stdout else stderr.decode().strip())[:100]
-            }
-        except asyncio.TimeoutError:
-            results["ssh_auth"] = {"success": False, "error": "SSH auth timed out"}
-        except Exception as e:
-            results["ssh_auth"] = {"success": False, "error": str(e)}
+        if not os.path.isfile(ssh_key_path):
+            results["ssh_auth"] = {"success": False, "error": f"Key not found: {ssh_key_path}. Enable Devices in Settings > File Access."}
+        else:
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=3",
+                    "-o", "StrictHostKeyChecking=accept-new",
+                    "-i", ssh_key_path, "-p", str(ssh_port),
+                    ssh_username + "@" + host, "echo", "ok",
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+                )
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=5)
+                results["ssh_auth"] = {
+                    "success": proc.returncode == 0,
+                    "output": (stdout.decode().strip() if stdout else stderr.decode().strip())[:100]
+                }
+            except asyncio.TimeoutError:
+                results["ssh_auth"] = {"success": False, "error": "SSH auth timed out"}
+            except Exception as e:
+                results["ssh_auth"] = {"success": False, "error": str(e)}
 
     # Update last_seen on successful ping
     if results.get("ping", {}).get("reachable"):
