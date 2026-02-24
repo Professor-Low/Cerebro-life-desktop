@@ -832,6 +832,17 @@ ipcMain.handle('apply-update', async () => {
     }
     const needsElectron = electronUpdateReady;
 
+    // Set update suppression timestamp BEFORE navigating away from the frontend.
+    // The frontend's own localStorage.setItem never runs because we replace the page
+    // with a splash screen, destroying the JS context that was awaiting the IPC result.
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      try {
+        await mainWindow.webContents.executeJavaScript(
+          `try{localStorage.setItem('cerebro_last_update_ts',String(Date.now()))}catch(e){}`
+        );
+      } catch {}
+    }
+
     // Show splash screen
     if (mainWindow) {
       mainWindow.loadURL('data:text/html,' + encodeURIComponent(`<!DOCTYPE html>
@@ -881,9 +892,16 @@ ipcMain.handle('apply-update', async () => {
       return { success: true };
     }
 
-    // Docker-only update — reload frontend
+    // Docker-only update — reload frontend and re-inject suppression timestamp
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.loadURL('http://localhost:61000');
+      mainWindow.webContents.once('did-finish-load', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.executeJavaScript(
+            `try{localStorage.setItem('cerebro_last_update_ts',String(Date.now()))}catch(e){}`
+          ).catch(() => {});
+        }
+      });
     }
     return { success: true };
   } catch (err) {

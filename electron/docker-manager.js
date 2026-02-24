@@ -552,6 +552,19 @@ class DockerManager extends EventEmitter {
         }
       } catch {}
 
+      // No state file means first run — the installer pulled the latest image,
+      // so bootstrap the state file and report no update (prevents false positive banner)
+      if (!fs.existsSync(DOCKER_UPDATE_STATE)) {
+        try {
+          fs.writeFileSync(DOCKER_UPDATE_STATE, JSON.stringify({
+            timestamp: Date.now(),
+            imageId: localIdTrimmed,
+            manifestHash: remoteManifestHash,
+          }));
+        } catch {}
+        return { updateAvailable: false, reason: 'baseline_created' };
+      }
+
       return {
         updateAvailable: true,
         currentId: localIdTrimmed.slice(0, 16),
