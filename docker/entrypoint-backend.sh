@@ -32,20 +32,42 @@ secret = os.environ['CEREBRO_SECRET']
 payload = {'sub': 'claude-code', 'iat': time.time(), 'exp': time.time() + 86400 * 365}
 print(jwt.encode(payload, secret, algorithm='HS256'))
 ")
+export CEREBRO_TOKEN
+
+# Persist token to file so agents can always read it
+TOKEN_FILE="/data/memory/.cerebro_token"
+echo "$CEREBRO_TOKEN" > "$TOKEN_FILE"
 
 # Fix ownership if running as root (first boot with fresh volume)
 if [ "$(id -u)" = "0" ]; then
   chown -R cerebro:cerebro /data/memory
+
   # Fix bind-mounted Claude config permissions (host may have different ownership)
   if [ -d /home/cerebro/.claude ]; then
     chown -R cerebro:cerebro /home/cerebro/.claude 2>/dev/null || true
   fi
-  # Inject standalone CLAUDE.md into Claude config with token
+
+  # Inject standalone CLAUDE.md into Claude config with real token
   if [ -f /app/standalone-claude.md ] && [ -d /home/cerebro/.claude ]; then
     sed "s|__CEREBRO_TOKEN__|${CEREBRO_TOKEN}|g" /app/standalone-claude.md \
       > /home/cerebro/.claude/CLAUDE.md 2>/dev/null || true
+    # Verify the replacement actually worked
+    if grep -q "__CEREBRO_TOKEN__" /home/cerebro/.claude/CLAUDE.md 2>/dev/null; then
+      echo "[WARN] Token placeholder not replaced, writing directly"
+      # Fallback: write the file directly with Python
+      python3 -c "
+import os
+token = os.environ.get('CEREBRO_TOKEN', '')
+with open('/app/standalone-claude.md') as f:
+    content = f.read()
+content = content.replace('__CEREBRO_TOKEN__', token)
+with open('/home/cerebro/.claude/CLAUDE.md', 'w') as f:
+    f.write(content)
+"
+    fi
     chown cerebro:cerebro /home/cerebro/.claude/CLAUDE.md 2>/dev/null || true
   fi
+
   # Create hooks.json for auto-syncing memory after agent conversations
   HOOKS_DIR="/home/cerebro/.claude"
   if [ -d "$HOOKS_DIR" ]; then
@@ -63,8 +85,9 @@ if [ "$(id -u)" = "0" ]; then
 HOOKEOF
     chown cerebro:cerebro "${HOOKS_DIR}/hooks.json" 2>/dev/null || true
   fi
-  # Persist the secret file permissions
-  chown cerebro:cerebro "$SECRET_FILE" 2>/dev/null || true
+
+  # Persist file permissions
+  chown cerebro:cerebro "$SECRET_FILE" "$TOKEN_FILE" 2>/dev/null || true
   exec gosu cerebro "$@"
 else
   exec "$@"
