@@ -1967,6 +1967,20 @@ async def _extract_agent_to_memory(agent: dict):
             print(f"[Agent {agent['id']}] Extracted to structured memory: {result.get('conversation_id')}")
         else:
             print(f"[Agent {agent['id']}] Memory extraction failed: {result.get('error')}")
+
+        # Also run the LearningExtractor to create structured learning files
+        # These are what /api/learnings can find — the save_conversation pipeline
+        # only writes to facts.jsonl which /api/learnings doesn't search
+        try:
+            learning_result = await mcp_bridge.analyze_and_save_learnings(
+                messages=messages,
+                conversation_id=f"agent_{agent['id']}",
+            )
+            if learning_result.get("saved"):
+                print(f"[Agent {agent['id']}] Learnings extracted: {learning_result.get('count', 0)} items")
+        except Exception as le:
+            print(f"[Agent {agent['id']}] Learning extraction skipped: {le}")
+
     except Exception as e:
         print(f"[Agent {agent['id']}] Memory extraction error (non-fatal): {e}")
 
@@ -7223,66 +7237,133 @@ async def get_system_status(user: str = Depends(verify_token)):
 
 @app.get("/memory/search")
 async def search_memory(q: str, limit: int = 10, user: str = Depends(verify_token)):
-    """Search through AI Memory."""
+    """Search through AI Memory — searches learnings, knowledge base, conversations, and quick facts.
+    Uses multi-word matching: results are scored by how many query words they contain."""
     results = []
+    query_words = [w.lower() for w in q.split() if len(w) > 2]
+    q_lower = q.lower()
+
+    def score_match(text: str) -> int:
+        """Score how well text matches the query. Higher = more relevant."""
+        text_lower = text.lower()
+        # Exact phrase match is best
+        if q_lower in text_lower:
+            return 100 + len(q_lower)
+        # Otherwise count matching words
+        return sum(1 for w in query_words if w in text_lower)
 
     try:
         memory_path = Path(config.AI_MEMORY_PATH)
 
-        # Search conversations
+        # 1. Search learnings (most useful for agents)
+        learn_path = memory_path / "learnings"
+        if learn_path.exists():
+            for learn_file in sorted(learn_path.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True)[:50]:
+                try:
+                    with open(learn_file, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    s = score_match(content)
+                    if s > 0:
+                        data = json.loads(content)
+                        # Build a useful snippet from structured fields
+                        snippet = ""
+                        if isinstance(data, dict):
+                            if data.get("problem"):
+                                snippet += f"Problem: {data['problem'][:100]}. "
+                            if data.get("solution"):
+                                snippet += f"Solution: {data['solution'][:100]}. "
+                            for learn in data.get("learnings", [])[:2]:
+                                if isinstance(learn, dict):
+                                    snippet += f"{learn.get('type', '')}: {learn.get('content', learn.get('problem', ''))[:80]}. "
+                        if not snippet:
+                            snippet = content[:200]
+                        results.append({
+                            "type": "learning",
+                            "id": learn_file.stem,
+                            "title": data.get("problem", data.get("id", learn_file.stem))[:100] if isinstance(data, dict) else learn_file.stem,
+                            "date": datetime.fromtimestamp(learn_file.stat().st_mtime).isoformat(),
+                            "snippet": snippet.strip(),
+                            "_score": s,
+                        })
+                except Exception:
+                    pass
+
+        # 2. Search facts knowledge base (facts.jsonl written by save_conversation)
+        facts_file = memory_path / "embeddings" / "chunks" / "facts.jsonl"
+        if not facts_file.exists():
+            facts_file = memory_path / "facts" / "facts.jsonl"
+        if facts_file.exists():
+            try:
+                with open(facts_file, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        s = score_match(line)
+                        if s > 0:
+                            try:
+                                entry = json.loads(line)
+                                fact_text = entry.get("content", entry.get("learning", entry.get("fact", "")))
+                                fact_type = entry.get("type", "fact")
+                                results.append({
+                                    "type": f"knowledge:{fact_type}",
+                                    "id": entry.get("fact_id", entry.get("conversation_id", "")),
+                                    "title": fact_text[:100],
+                                    "date": entry.get("timestamp", ""),
+                                    "snippet": fact_text[:300],
+                                    "_score": s,
+                                })
+                            except json.JSONDecodeError:
+                                pass
+            except Exception:
+                pass
+
+        # 3. Search conversations
         conv_path = memory_path / "conversations"
         if conv_path.exists():
             for conv_file in sorted(conv_path.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True)[:50]:
                 try:
                     with open(conv_file, 'r', encoding='utf-8') as f:
                         content = f.read()
-                        if q.lower() in content.lower():
-                            conv = json.load(open(conv_file, 'r', encoding='utf-8'))
-                            results.append({
-                                "type": "conversation",
-                                "id": conv_file.stem,
-                                "title": conv.get("summary", conv_file.stem)[:100] if isinstance(conv, dict) else conv_file.stem,
-                                "date": datetime.fromtimestamp(conv_file.stat().st_mtime).isoformat(),
-                                "snippet": content[:200] + "..." if len(content) > 200 else content
-                            })
-                            if len(results) >= limit:
-                                break
-                except:
+                    s = score_match(content)
+                    if s > 0:
+                        conv = json.loads(content)
+                        title = conv_file.stem
+                        if isinstance(conv, dict):
+                            title = conv.get("summary", conv.get("metadata", {}).get("summary", conv_file.stem))[:100]
+                        results.append({
+                            "type": "conversation",
+                            "id": conv_file.stem,
+                            "title": title,
+                            "date": datetime.fromtimestamp(conv_file.stat().st_mtime).isoformat(),
+                            "snippet": content[:200] + "...",
+                            "_score": s,
+                        })
+                except Exception:
                     pass
 
-        # Search learnings
-        learn_path = memory_path / "learnings"
-        if learn_path.exists() and len(results) < limit:
-            for learn_file in sorted(learn_path.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True)[:30]:
-                try:
-                    with open(learn_file, 'r', encoding='utf-8') as f:
-                        content = f.read()
-                        if q.lower() in content.lower():
-                            results.append({
-                                "type": "learning",
-                                "id": learn_file.stem,
-                                "title": learn_file.stem,
-                                "date": datetime.fromtimestamp(learn_file.stat().st_mtime).isoformat(),
-                                "snippet": content[:200] + "..."
-                            })
-                            if len(results) >= limit:
-                                break
-                except:
-                    pass
-
-        # Search quick_facts
+        # 4. Search quick_facts
         qf_path = memory_path / "quick_facts.json"
-        if qf_path.exists() and len(results) < limit:
+        if qf_path.exists():
             with open(qf_path, 'r', encoding='utf-8') as f:
                 content = f.read()
-                if q.lower() in content.lower():
-                    results.append({
-                        "type": "quick_facts",
-                        "id": "quick_facts",
-                        "title": "Quick Facts",
-                        "date": datetime.fromtimestamp(qf_path.stat().st_mtime).isoformat(),
-                        "snippet": "Contains matching content in quick facts"
-                    })
+            s = score_match(content)
+            if s > 0:
+                results.append({
+                    "type": "quick_facts",
+                    "id": "quick_facts",
+                    "title": "Quick Facts",
+                    "date": datetime.fromtimestamp(qf_path.stat().st_mtime).isoformat(),
+                    "snippet": content[:300],
+                    "_score": s,
+                })
+
+        # Sort by relevance score (best matches first), then trim
+        results.sort(key=lambda r: r.get("_score", 0), reverse=True)
+        results = results[:limit]
+        # Remove internal score from output
+        for r in results:
+            r.pop("_score", None)
 
     except Exception as e:
         print(f"Search error: {e}")

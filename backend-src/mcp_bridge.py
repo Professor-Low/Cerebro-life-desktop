@@ -798,6 +798,50 @@ class MCPBridge:
             print(f"[MCP Bridge] Save conversation error: {e}")
             return {"error": str(e), "success": False}
 
+    async def analyze_and_save_learnings(self, messages: list,
+                                          conversation_id: str = None) -> Dict[str, Any]:
+        """Run LearningExtractor on messages and save structured learnings.
+
+        This creates files in learnings/ that /api/learnings can search.
+        The save_conversation pipeline writes to facts.jsonl, but /api/learnings
+        only reads from learnings/ — this bridges that gap.
+        """
+        await self._ensure_initialized()
+        if not self._learning_extractor:
+            return {"error": "Learning extractor not available", "saved": False}
+
+        loop = asyncio.get_event_loop()
+        try:
+            def _analyze():
+                conversation = {
+                    "id": conversation_id or "unknown",
+                    "messages": messages,
+                }
+                extracted = self._learning_extractor.analyze_conversation(conversation)
+
+                # Only save if we found something meaningful
+                has_content = (
+                    extracted.get("learnings")
+                    or extracted.get("problems_found")
+                    or extracted.get("solutions_found")
+                )
+                if has_content:
+                    filepath = self._learning_extractor.save_learnings(extracted)
+                    return {
+                        "saved": True,
+                        "filepath": filepath,
+                        "count": len(extracted.get("learnings", [])),
+                        "problems": len(extracted.get("problems_found", [])),
+                        "solutions": len(extracted.get("solutions_found", [])),
+                    }
+                return {"saved": False, "count": 0, "reason": "No learnings detected"}
+
+            result = await loop.run_in_executor(_executor, _analyze)
+            return result
+        except Exception as e:
+            print(f"[MCP Bridge] Analyze learnings error: {e}")
+            return {"error": str(e), "saved": False}
+
 
 # Singleton instance
 _bridge_instance = None
