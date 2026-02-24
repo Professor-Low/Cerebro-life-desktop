@@ -1929,6 +1929,48 @@ async def save_agent_to_memory(agent: dict):
         print(f"[Agent {agent['id']}] Failed to save to memory: {e}")
 
 
+async def _extract_agent_to_memory(agent: dict):
+    """Feed agent output through the memory extraction pipeline.
+    Extracts facts, learnings, entities, goals into structured memory."""
+    try:
+        output = (agent.get("output") or "").strip()
+        if not output:
+            return
+
+        # Truncate very large outputs to protect extraction pipeline
+        max_chars = 15000
+        if len(output) > max_chars:
+            output = output[:max_chars] + f"\n\n[... truncated, {len(output) - max_chars} chars omitted ...]"
+
+        task_text = agent.get("task", "Unknown task")
+        call_sign = agent.get("call_sign", agent["id"])
+        agent_type = agent.get("type", "worker")
+
+        messages = [
+            {"role": "user", "content": f"[Agent task for {call_sign} ({agent_type})]: {task_text}"},
+            {"role": "assistant", "content": output},
+        ]
+        metadata = {
+            "source": "cerebro_agent",
+            "session_type": "agent_execution",
+            "agent_id": agent["id"],
+            "agent_type": agent_type,
+            "call_sign": call_sign,
+        }
+
+        result = await mcp_bridge.save_conversation(
+            messages=messages,
+            session_id=f"agent_{agent['id']}",
+            metadata=metadata,
+        )
+        if result.get("success"):
+            print(f"[Agent {agent['id']}] Extracted to structured memory: {result.get('conversation_id')}")
+        else:
+            print(f"[Agent {agent['id']}] Memory extraction failed: {result.get('error')}")
+    except Exception as e:
+        print(f"[Agent {agent['id']}] Memory extraction error (non-fatal): {e}")
+
+
 def _get_progress_enrichment(directive_id: str, step_counter: int, directive_text: str) -> dict:
     """Get progress enrichment fields for cerebro_progress events.
     Tries narration engine first, falls back to local step counter."""
@@ -2094,6 +2136,16 @@ You have access to these Cerebro backend tools via curl. Use them when relevant 
 
 When the user mentions trades, positions, buying, selling, crypto, stocks — USE the trading endpoints above. Do NOT say you cannot trade.
 
+### Memory & Knowledge (search past work, record learnings)
+- **Search memory:** `curl -s "http://localhost:59000/memory/search?q=QUERY&limit=5" -H "Authorization: Bearer $TOKEN"`
+- **Get user profile:** `curl -s http://localhost:59000/api/user-profile -H "Authorization: Bearer $TOKEN"`
+- **List goals:** `curl -s http://localhost:59000/api/goals -H "Authorization: Bearer $TOKEN"`
+- **Find learnings:** `curl -s "http://localhost:59000/api/learnings?problem=DESCRIPTION&limit=5" -H "Authorization: Bearer $TOKEN"`
+- **Record a learning:** `curl -s -X POST http://localhost:59000/api/learnings -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"type":"solution","problem":"...","solution":"...","tags":["agent"]}}'`
+- **Get corrections (avoid known mistakes):** `curl -s http://localhost:59000/api/corrections -H "Authorization: Bearer $TOKEN"`
+
+Use memory search at the START of complex tasks to check for prior work. Record learnings when you discover something useful.
+
 ### Remote Machines (SSH Access)
 - Devices listed in /data/memory/network_config.json (if configured)
 - Use `cat /data/memory/network_config.json` to discover available SSH targets and their aliases
@@ -2121,6 +2173,16 @@ When the user mentions trades, positions, buying, selling, crypto, stocks — US
 
 ### Spawn Child Agent
 - `curl -s -X POST http://localhost:59000/internal/spawn-child-agent -H "Content-Type: application/json" -d '{{"task":"...","type":"worker"}}'`
+
+### Memory & Knowledge (search past work, record learnings)
+- **Search memory:** `curl -s "http://localhost:59000/memory/search?q=QUERY&limit=5" -H "Authorization: Bearer $TOKEN"`
+- **Get user profile:** `curl -s http://localhost:59000/api/user-profile -H "Authorization: Bearer $TOKEN"`
+- **List goals:** `curl -s http://localhost:59000/api/goals -H "Authorization: Bearer $TOKEN"`
+- **Find learnings:** `curl -s "http://localhost:59000/api/learnings?problem=DESCRIPTION&limit=5" -H "Authorization: Bearer $TOKEN"`
+- **Record a learning:** `curl -s -X POST http://localhost:59000/api/learnings -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"type":"solution","problem":"...","solution":"...","tags":["agent"]}}'`
+- **Get corrections (avoid known mistakes):** `curl -s http://localhost:59000/api/corrections -H "Authorization: Bearer $TOKEN"`
+
+Use memory search at the START of complex tasks to check for prior work. Record learnings when you discover something useful.
 
 You are running inside a Docker container. Do NOT assume external servers, NAS, or SSH targets exist.
 Use `hostname`, `uname -a`, `ip addr` to discover this system.
@@ -2513,6 +2575,9 @@ Use `hostname`, `uname -a`, `ip addr` to discover this system.
 
             # Auto-categorize into project (non-blocking)
             asyncio.create_task(auto_categorize_agent(agent))
+
+            # Extract structured memory from agent output (non-blocking)
+            asyncio.create_task(_extract_agent_to_memory(agent))
 
             # Create notification for completed agent
             await create_notification(
