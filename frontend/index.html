@@ -27318,9 +27318,12 @@
                 set('intel-contradictions', d.contradictions_pending || 0);
                 set('intel-faiss', d.faiss_size_mb ? d.faiss_size_mb + 'MB' : '--');
 
-                // Hero pills: learnings and patterns
+                // Hero pills: memories, learnings, patterns, goals
+                var memTotal = (d.total_memories || 0) + (d.fact_count || 0);
+                set('memory-count', memTotal.toLocaleString());
                 set('home-learnings-count', d.total_learnings || 0);
                 set('home-patterns-count', d.promoted_patterns || 0);
+                if (d.active_goals) set('home-goals-count', d.active_goals);
 
                 // Health: prefer memory-intelligence score, fall back to /api/memory/health
                 var healthPct = d.knowledge_health || 0;
