@@ -50,6 +50,13 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
   browseFolder: () => ipcRenderer.invoke('browse-folder'),
   restartDockerStack: () => ipcRenderer.invoke('restart-docker-stack'),
 
+  // Memory storage
+  getMemoryConfig: () => ipcRenderer.invoke('get-memory-config'),
+  browseStorageFolder: () => ipcRenderer.invoke('browse-storage-folder'),
+  setStoragePath: (path) => ipcRenderer.invoke('set-storage-path', path),
+  getStorageStats: (path) => ipcRenderer.invoke('get-storage-stats', path),
+  migrateStorage: (destPath) => ipcRenderer.invoke('migrate-storage', destPath),
+
   // Restart & setup state
   needsRestart: () => ipcRenderer.invoke('needs-restart'),
   saveSetupState: (state) => ipcRenderer.invoke('save-setup-state', state),

@@ -2167,10 +2167,28 @@ When the user mentions trades, positions, buying, selling, crypto, stocks — US
 Use memory search at the START of complex tasks to check for prior work. Record learnings when you discover something useful.
 
 ### Remote Machines (SSH Access)
-- Devices listed in /data/memory/network_config.json (if configured)
-- Use `cat /data/memory/network_config.json` to discover available SSH targets and their aliases
-- Shared data storage is mounted locally (read/write) at the configured AI_MEMORY_PATH
+Your SSH keys are at ~/.ssh/ and ssh is available. Devices registered with Cerebro:
 """)
+        # Inject live device info so agent knows what SSH targets exist
+        try:
+            _dev_registry = _load_device_registry()
+            _dev_list = []
+            for _dhostname, _dinfo in _dev_registry.get("devices", {}).items():
+                _ssh_cfg = _dinfo.get("ssh_config")
+                if _ssh_cfg:
+                    _dev_list.append(
+                        f"- **{_dinfo.get('friendly_name', _dhostname)}** ({_dinfo.get('description', 'no description')}): "
+                        f"`ssh {_ssh_cfg.get('username', '')}@{_ssh_cfg.get('host', _dhostname)} -p {_ssh_cfg.get('port', 22)} -i {_ssh_cfg.get('key_path', '~/.ssh/id_ed25519')}`"
+                    )
+                else:
+                    _dev_list.append(f"- **{_dinfo.get('friendly_name', _dhostname)}**: no SSH config")
+            if _dev_list:
+                full_prompt_parts.append("\n".join(_dev_list) + "\n")
+            else:
+                full_prompt_parts.append("No devices registered.\n")
+        except Exception:
+            full_prompt_parts.append("Could not load device registry.\n")
+        full_prompt_parts.append("\n")
     else:
         full_prompt_parts.append(f"""
 ---
@@ -2204,9 +2222,24 @@ Use memory search at the START of complex tasks to check for prior work. Record 
 
 Use memory search at the START of complex tasks to check for prior work. Record learnings when you discover something useful.
 
-You are running inside a Docker container. Do NOT assume external servers, NAS, or SSH targets exist.
-Use `hostname`, `uname -a`, `ip addr` to discover this system.
+You are running inside a Docker container.
 """)
+        # Standalone: also inject device info if SSH keys are available
+        try:
+            _dev_registry = _load_device_registry()
+            _dev_list = []
+            for _dhostname, _dinfo in _dev_registry.get("devices", {}).items():
+                _ssh_cfg = _dinfo.get("ssh_config")
+                if _ssh_cfg:
+                    _dev_list.append(
+                        f"- **{_dinfo.get('friendly_name', _dhostname)}** ({_dinfo.get('description', 'no description')}): "
+                        f"`ssh {_ssh_cfg.get('username', '')}@{_ssh_cfg.get('host', _dhostname)} -p {_ssh_cfg.get('port', 22)} -i {_ssh_cfg.get('key_path', '~/.ssh/id_ed25519')}`"
+                    )
+            if _dev_list:
+                full_prompt_parts.append("\n### Remote Machines (SSH Access)\nSSH keys at ~/.ssh/. Available devices:\n" + "\n".join(_dev_list) + "\n")
+        except Exception:
+            pass
+        full_prompt_parts.append("\n")
 
     full_prompt_parts.append("\n---\n\n## Task Details\n")
 
@@ -2343,13 +2376,53 @@ Use `hostname`, `uname -a`, `ip addr` to discover this system.
         if _IS_STANDALONE:
             agent_env["HOME"] = "/home/cerebro"
 
-        process = sp.Popen(
-            cmd_args,
-            stdout=sp.PIPE,
-            stderr=sp.PIPE,
-            cwd=config.AI_MEMORY_PATH,
-            env=agent_env,
-        )
+        # === SSH Offload Check ===
+        _offload_cfg = _load_offload_config()
+        _offload_active = False
+        if _offload_cfg.get("enabled") and _offload_cfg.get("target_device_id"):
+            _offload_device_id = _offload_cfg["target_device_id"]
+            _offload_registry = _load_device_registry()
+            _offload_device = _offload_registry.get("devices", {}).get(_offload_device_id)
+            if _offload_device and _offload_device.get("ssh_config"):
+                _ssh = _offload_device["ssh_config"]
+                _ssh_host = _ssh.get("host", _offload_device_id)
+                _ssh_port = str(_ssh.get("port", 22))
+                _ssh_user = _ssh.get("username", "")
+                _ssh_key = _ssh.get("key_path", "")
+
+                _ssh_target = f"{_ssh_user}@{_ssh_host}" if _ssh_user else _ssh_host
+                _ssh_args = ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=10", "-p", _ssh_port]
+                if _ssh_key:
+                    _ssh_args.extend(["-i", _ssh_key])
+                _ssh_args.append(_ssh_target)
+
+                # Remote command: read stdin to temp file, run claude, clean up
+                _remote_cmd = f'cat > /tmp/.cerebro-prompt-{agent_id} && claude -p "$(cat /tmp/.cerebro-prompt-{agent_id})" --model {resolved_model} --output-format stream-json --verbose --dangerously-skip-permissions; rm -f /tmp/.cerebro-prompt-{agent_id}'
+                _ssh_args.append(_remote_cmd)
+
+                agent["offloaded_to"] = _offload_device_id
+                agent["offloaded_to_name"] = _offload_device.get("friendly_name", _offload_device.get("device_name", _offload_device_id))
+
+                process = sp.Popen(
+                    _ssh_args,
+                    stdin=sp.PIPE,
+                    stdout=sp.PIPE,
+                    stderr=sp.PIPE,
+                    cwd=config.AI_MEMORY_PATH,
+                    env=agent_env,
+                )
+                process.stdin.write(full_prompt.encode('utf-8'))
+                process.stdin.close()
+                _offload_active = True
+
+        if not _offload_active:
+            process = sp.Popen(
+                cmd_args,
+                stdout=sp.PIPE,
+                stderr=sp.PIPE,
+                cwd=config.AI_MEMORY_PATH,
+                env=agent_env,
+            )
 
         # Store process PID for emergency stop capability
         agent["pid"] = process.pid
@@ -12423,6 +12496,41 @@ MAX_COMMAND_TIMEOUT = 120
 
 _pending_remote_commands: Dict[str, dict] = {}
 
+# Safe SSH key directory with correct permissions (0600) — use home dir so
+# the uvicorn process (non-root) owns it
+_SSH_KEY_CACHE_DIR = Path(os.path.expanduser("~")) / ".ssh-safe"
+
+
+def _resolve_ssh_key(raw_path: str) -> str:
+    """Resolve an SSH key path, remap from ~/.ssh/ to Docker mount, and
+    copy to a safe directory with 0600 permissions so SSH accepts it."""
+    if not raw_path:
+        return ""
+    key_path = os.path.expanduser(raw_path.strip())
+    # Remap ~/.ssh/ to /tmp/.ssh-keys/ (Docker bind mount)
+    if not os.path.isfile(key_path):
+        for prefix in [os.path.expanduser("~/.ssh"), os.path.expanduser("~\\.ssh")]:
+            if key_path.startswith(prefix):
+                remapped = key_path.replace(prefix, "/tmp/.ssh-keys", 1)
+                if os.path.isfile(remapped):
+                    key_path = remapped
+                    break
+    if not os.path.isfile(key_path):
+        return key_path  # Return as-is; caller will handle "not found"
+    # If permissions are too open (bind mount = 0777), copy to safe dir with 0600
+    try:
+        st = os.stat(key_path)
+        if st.st_mode & 0o077:  # Group/other bits set
+            _SSH_KEY_CACHE_DIR.mkdir(mode=0o700, exist_ok=True)
+            safe_path = _SSH_KEY_CACHE_DIR / os.path.basename(key_path)
+            import shutil
+            shutil.copy2(key_path, safe_path)
+            os.chmod(str(safe_path), 0o600)
+            return str(safe_path)
+    except Exception:
+        pass
+    return key_path
+
 
 class CommandExecRequest(BaseModel):
     command: str
@@ -12482,7 +12590,7 @@ async def _execute_ssh_command(device: dict, device_id: str, command: str, timeo
         raise HTTPException(status_code=400, detail="SSH not configured: host and username required")
 
     port = str(ssh_config.get("port", 22))
-    key_path = os.path.expanduser(ssh_config.get("key_path", "").strip())
+    key_path = _resolve_ssh_key(ssh_config.get("key_path", "").strip())
 
     # Validate key file exists before attempting SSH
     if key_path and not os.path.isfile(key_path):
@@ -12703,6 +12811,123 @@ async def get_memory_health(full: bool = False, user: str = Depends(verify_token
         }
 
 
+# ============================================================================
+# Memory Stats & Offload Configuration (Phase 1 - AI & Memory Settings)
+# ============================================================================
+
+@app.get("/api/memory/stats")
+async def get_memory_stats(user: str = Depends(verify_token)):
+    """Get memory storage statistics."""
+    base_path = Path(config.AI_MEMORY_PATH)
+    total_size = 0
+    file_count = 0
+    try:
+        for f in base_path.rglob("*"):
+            if f.is_file():
+                file_count += 1
+                try:
+                    total_size += f.stat().st_size
+                except OSError:
+                    pass
+    except Exception:
+        pass
+
+    # Human-readable size
+    if total_size < 1024:
+        human_size = f"{total_size} B"
+    elif total_size < 1024 * 1024:
+        human_size = f"{total_size / 1024:.1f} KB"
+    elif total_size < 1024 * 1024 * 1024:
+        human_size = f"{total_size / (1024*1024):.1f} MB"
+    else:
+        human_size = f"{total_size / (1024*1024*1024):.2f} GB"
+
+    return {
+        "path": str(base_path),
+        "total_size": total_size,
+        "human_size": human_size,
+        "file_count": file_count,
+    }
+
+
+OFFLOAD_CONFIG_PATH = Path(config.AI_MEMORY_PATH) / "cerebro" / "offload_config.json"
+
+
+def _load_offload_config() -> dict:
+    if OFFLOAD_CONFIG_PATH.exists():
+        try:
+            with open(OFFLOAD_CONFIG_PATH, 'r') as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"enabled": False, "target_device_id": None}
+
+
+def _save_offload_config(cfg: dict):
+    OFFLOAD_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(OFFLOAD_CONFIG_PATH, 'w') as f:
+        json.dump(cfg, f, indent=2)
+
+
+@app.get("/api/offload/config")
+async def get_offload_config(user: str = Depends(verify_token)):
+    return _load_offload_config()
+
+
+@app.post("/api/offload/config")
+async def set_offload_config(request: Request, user: str = Depends(verify_token)):
+    body = await request.json()
+    enabled = body.get("enabled", False)
+    target_device_id = body.get("target_device_id")
+
+    if enabled and target_device_id:
+        # Validate device has SSH config
+        registry = _load_device_registry()
+        device = registry.get("devices", {}).get(target_device_id)
+        if not device:
+            raise HTTPException(status_code=404, detail=f"Device '{target_device_id}' not found")
+        if not device.get("ssh_config"):
+            raise HTTPException(status_code=400, detail=f"Device '{target_device_id}' has no SSH configuration")
+
+    cfg = {
+        "enabled": enabled,
+        "target_device_id": target_device_id if enabled else None,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _save_offload_config(cfg)
+    return {"success": True, "config": cfg}
+
+
+@app.get("/api/offload/eligible-devices")
+async def get_eligible_devices(user: str = Depends(verify_token)):
+    """Return devices with SSH config that are online (<1hr) or stale (<24hr)."""
+    registry = _load_device_registry()
+    eligible = []
+    now = datetime.now(timezone.utc)
+    for hostname, info in registry.get("devices", {}).items():
+        if not info.get("ssh_config"):
+            continue
+        last_seen = info.get("last_seen")
+        if not last_seen:
+            continue
+        try:
+            seen_dt = datetime.fromisoformat(last_seen.replace('Z', '+00:00'))
+            age_hours = (now - seen_dt).total_seconds() / 3600
+        except Exception:
+            continue
+        if age_hours > 24:
+            continue  # Too old
+        status = "online" if age_hours < 1 else "stale"
+        eligible.append({
+            "id": hostname,
+            "device_name": info.get("friendly_name", info.get("device_name", hostname)),
+            "status": status,
+            "last_seen": last_seen,
+            "ssh_config": info.get("ssh_config"),
+        })
+    return {"devices": eligible}
+
+
 @app.get("/api/devices")
 async def list_devices(user: str = Depends(verify_token)):
     """List all registered compute devices."""
@@ -12845,7 +13070,7 @@ async def ping_device(device_id: str, user: str = Depends(verify_token)):
 
     # SSH auth test (only if key_path provided and port is open)
     ssh_username = ssh_config.get("username", "")
-    ssh_key_path = os.path.expanduser(ssh_config.get("key_path", ""))
+    ssh_key_path = _resolve_ssh_key(ssh_config.get("key_path", ""))
     if ssh_username and ssh_key_path and results.get("ssh_port", {}).get("open"):
         if not os.path.isfile(ssh_key_path):
             results["ssh_auth"] = {"success": False, "error": f"Key not found: {ssh_key_path}. Enable Devices in Settings > File Access."}
@@ -12911,6 +13136,30 @@ async def get_device_activity(device_id: str, limit: int = 10, user: str = Depen
         pass
 
     return {"device_id": device_id, "device_tag": device_tag, "conversations": conversations, "count": len(conversations)}
+
+
+@app.get("/api/devices/{device_id}/agents")
+async def get_device_agents(device_id: str, limit: int = 10, user: str = Depends(verify_token)):
+    """Get agents that were offloaded to a specific device."""
+    registry = _load_device_registry()
+    if device_id not in registry.get("devices", {}):
+        raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
+
+    results = []
+    for aid, ainfo in active_agents.items():
+        if ainfo.get("offloaded_to") == device_id:
+            results.append({
+                "id": aid,
+                "call_sign": ainfo.get("call_sign", aid),
+                "task": (ainfo.get("task") or "")[:120],
+                "status": ainfo.get("status", "unknown"),
+                "created_at": ainfo.get("created_at"),
+                "completed_at": ainfo.get("completed_at"),
+            })
+    # Sort newest first
+    results.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+    results = results[:limit]
+    return {"device_id": device_id, "agents": results, "count": len(results)}
 
 
 # ============================================================================

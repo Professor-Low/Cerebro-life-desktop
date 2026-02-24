@@ -1519,7 +1519,7 @@
         .device-help-dropdown strong { color: var(--text-primary); }
         .device-help-path { color: var(--accent); font-weight: 600; }
 
-        .device-modal { width: 520px; max-width: 95vw; max-height: 85vh; overflow-y: auto; }
+        .device-modal { width: 900px; max-width: 95vw; max-height: 92vh; overflow-y: auto; }
         .device-modal-section {
             padding: 14px 0; border-bottom: 1px solid var(--border);
         }
@@ -1561,10 +1561,12 @@
         .terminal-output {
             background: #0a0a0f; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;
             padding: 10px 12px; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.75rem;
-            line-height: 1.5; max-height: 260px; overflow-y: auto; min-height: 80px;
+            line-height: 1.5; max-height: 400px; overflow-y: auto; min-height: 200px;
             color: #c0c0c0; white-space: pre-wrap; word-break: break-all;
+            resize: vertical; cursor: text;
         }
-        .terminal-output .term-cmd { color: #4ade80; }
+        .terminal-output .term-cmd { color: #22d3ee; }
+        .terminal-output .term-prompt { color: #64748b; user-select: none; -webkit-user-select: none; }
         .terminal-output .term-err { color: #f87171; }
         .terminal-output .term-info { color: #64748b; font-style: italic; }
         .terminal-output .term-stdout { color: #e2e8f0; }
@@ -1608,6 +1610,87 @@
             cursor: pointer; transition: all 0.15s;
         }
         .terminal-clear-btn:hover { border-color: var(--text-secondary); color: var(--text-secondary); }
+
+        /* Device Stats Bar */
+        .device-stats-bar {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 8px;
+        }
+        .device-stat-item {
+            background: var(--bg-secondary); border: 1px solid var(--border);
+            border-radius: 10px; padding: 10px 12px; text-align: center;
+        }
+        .device-stat-label {
+            font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.5px;
+            color: var(--text-muted); margin-bottom: 4px;
+        }
+        .device-stat-value {
+            font-size: 0.88rem; font-weight: 600; color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .stat-loading {
+            display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border);
+            border-top-color: var(--accent); border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Device Connection Log */
+        .device-connection-log {
+            display: flex; align-items: center; gap: 10px; margin-top: 10px;
+            padding: 8px 12px; background: var(--bg-secondary); border-radius: 8px;
+            font-size: 0.78rem;
+        }
+        .connection-log-dot {
+            width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+        }
+        .connection-log-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
+        .connection-log-dot.stale { background: var(--yellow); }
+        .connection-log-dot.offline { background: var(--red); }
+        .connection-log-text { color: var(--text-primary); }
+        .connection-log-time { color: var(--text-muted); font-size: 0.7rem; margin-left: auto; }
+
+        /* Split Activity Layout */
+        .device-activity-split {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+        }
+        .device-activity-col-title {
+            font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.5px;
+            color: var(--accent); margin-bottom: 8px; font-weight: 600;
+        }
+        .device-cmd-item, .device-agent-item {
+            padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.78rem;
+        }
+        .device-cmd-item:last-child, .device-agent-item:last-child { border-bottom: none; }
+        .device-cmd-text {
+            color: #4ade80; font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .device-cmd-meta {
+            font-size: 0.65rem; color: var(--text-muted); margin-top: 2px;
+            display: flex; gap: 8px;
+        }
+        .device-cmd-exit { font-weight: 600; }
+        .device-cmd-exit.ok { color: var(--green); }
+        .device-cmd-exit.fail { color: var(--red); }
+        .device-agent-status {
+            display: inline-block; padding: 1px 7px; border-radius: 8px;
+            font-size: 0.62rem; font-weight: 600; text-transform: uppercase;
+        }
+        .device-agent-status.completed { background: rgba(34,197,94,0.15); color: var(--green); }
+        .device-agent-status.running { background: rgba(234,179,8,0.15); color: var(--yellow); }
+        .device-agent-status.failed { background: rgba(239,68,68,0.15); color: var(--red); }
+        .device-agent-status.queued { background: rgba(99,102,241,0.15); color: var(--accent); }
+        .device-agent-name {
+            color: var(--text-primary); font-weight: 500;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .device-agent-task {
+            font-size: 0.68rem; color: var(--text-secondary); margin-top: 2px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .device-activity-empty {
+            font-size: 0.75rem; color: var(--text-muted); padding: 12px 0; text-align: center;
+        }
 
         /* Command Approval Card (in chat) */
         .cmd-approval-card {
@@ -10529,6 +10612,114 @@
         .risk-indicator.standard { background: rgba(139,92,246,0.12); color: var(--purple); }
         .risk-indicator.extended { background: rgba(234,179,8,0.12); color: var(--yellow); }
         .risk-indicator.full { background: rgba(239,68,68,0.12); color: var(--red); }
+
+        /* ===== Storage Config Styles ===== */
+        .storage-config-card {
+            background: var(--card-bg); border: 1px solid var(--border);
+            border-radius: 14px; padding: 18px 20px; margin-bottom: 14px;
+        }
+        .storage-config-card .config-card-header {
+            display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+        }
+        .storage-config-card .config-card-header svg { color: var(--purple); flex-shrink: 0; }
+        .storage-config-card .config-card-header .config-title {
+            font-size: 0.95rem; font-weight: 600; color: var(--text);
+        }
+        .storage-config-card .config-card-header .config-desc {
+            font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;
+        }
+        .storage-path-row {
+            display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+        }
+        .storage-path-display {
+            flex: 1; font-family: 'SF Mono', 'Cascadia Code', monospace;
+            font-size: 0.82rem; color: var(--text-muted); background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .storage-path-row .btn-sm {
+            padding: 6px 14px; font-size: 0.78rem; border-radius: 8px;
+            background: rgba(139,92,246,0.12); color: var(--purple); border: none;
+            cursor: pointer; font-weight: 600; transition: background 0.2s; white-space: nowrap;
+        }
+        .storage-path-row .btn-sm:hover { background: rgba(139,92,246,0.25); }
+        .storage-stats-row {
+            display: flex; gap: 20px; margin-bottom: 12px;
+        }
+        .storage-stat {
+            display: flex; flex-direction: column; gap: 2px;
+        }
+        .storage-stat .stat-label {
+            font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px;
+            color: var(--text-muted); font-weight: 600;
+        }
+        .storage-stat .stat-value {
+            font-size: 1.1rem; font-weight: 700; color: var(--text);
+        }
+        .storage-warning {
+            display: none; background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.2);
+            border-radius: 10px; padding: 10px 14px; font-size: 0.78rem; color: var(--yellow);
+            line-height: 1.4;
+        }
+        .storage-warning.visible { display: flex; gap: 8px; align-items: flex-start; }
+        .storage-warning svg { flex-shrink: 0; margin-top: 1px; }
+
+        /* ===== Offload Config Styles ===== */
+        .offload-config-card {
+            background: var(--card-bg); border: 1px solid var(--border);
+            border-radius: 14px; padding: 18px 20px; margin-bottom: 14px;
+        }
+        .offload-current {
+            display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+            background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.2);
+            border-radius: 10px; margin-bottom: 12px;
+        }
+        .offload-current .device-name { font-weight: 600; color: var(--text); flex: 1; }
+        .offload-current .btn-disable {
+            padding: 5px 12px; font-size: 0.75rem; border-radius: 8px;
+            background: rgba(239,68,68,0.1); color: var(--red); border: none;
+            cursor: pointer; font-weight: 600; transition: background 0.2s;
+        }
+        .offload-current .btn-disable:hover { background: rgba(239,68,68,0.25); }
+        .offload-device-list {
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        .offload-device-card {
+            display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+            background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+            border-radius: 10px; transition: border-color 0.2s;
+        }
+        .offload-device-card:hover { border-color: rgba(139,92,246,0.4); }
+        .offload-device-card .device-status-dot {
+            width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+        }
+        .offload-device-card .device-status-dot.online { background: var(--green); }
+        .offload-device-card .device-status-dot.stale { background: var(--yellow); }
+        .offload-device-card .device-info { flex: 1; }
+        .offload-device-card .device-info .dname { font-size: 0.88rem; font-weight: 600; color: var(--text); }
+        .offload-device-card .device-info .dhost { font-size: 0.75rem; color: var(--text-muted); font-family: monospace; }
+        .offload-select-btn {
+            padding: 5px 14px; font-size: 0.75rem; border-radius: 8px;
+            background: rgba(139,92,246,0.12); color: var(--purple); border: none;
+            cursor: pointer; font-weight: 600; transition: background 0.2s;
+        }
+        .offload-select-btn:hover { background: rgba(139,92,246,0.25); }
+        .offload-empty {
+            font-size: 0.82rem; color: var(--text-muted); padding: 12px 0; text-align: center;
+        }
+        .conversations-link-row {
+            cursor: pointer; transition: background 0.2s; border-radius: 10px;
+        }
+        .conversations-link-row:hover { background: rgba(139,92,246,0.06); }
+
+        /* ===== Offload badge on agent cards ===== */
+        .agent-offload-badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            font-size: 0.68rem; font-weight: 600; padding: 2px 8px;
+            border-radius: 12px; background: rgba(139,92,246,0.1); color: var(--purple);
+            margin-left: 6px; vertical-align: middle;
+        }
+        .agent-offload-badge svg { width: 10px; height: 10px; }
 
         .file-access-restart-bar {
             position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000;
@@ -22752,9 +22943,9 @@
                             <div class="hero-datetime" id="hero-datetime"></div>
                         </div>
                         <div class="hero-pills">
-                            <div class="stat-pill" onclick="openHomeDetail('stat', {name:'Memories', value: this.querySelector('.stat-pill-value').textContent, icon:'\u{1F9E0}', context:'Total indexed memories across all conversations.'})">
+                            <div class="stat-pill" onclick="openHomeDetail('stat', {name:'Observations', value: this.querySelector('.stat-pill-value').textContent, icon:'\u{1F9E0}', context:'Facts, entities, and insights extracted from conversations.'})">
                                 <span class="stat-pill-value" id="memory-count">0</span>
-                                <span class="stat-pill-label">Memories</span>
+                                <span class="stat-pill-label">Observations</span>
                             </div>
                             <div class="stat-pill" onclick="openHomeDetail('stat', {name:'Learnings', value: this.querySelector('.stat-pill-value').textContent, icon:'\u{1F4DA}', context:'Solutions, patterns, and insights recorded from sessions.'})">
                                 <span class="stat-pill-value" id="home-learnings-count">0</span>
@@ -22875,9 +23066,9 @@
                         </div>
                         <div class="home-section-body" id="memory-section-body">
                             <div class="mem-intel-grid" id="mem-intel-grid">
-                                <div class="mem-tile green" onclick="openHomeDetail('stat', {name:'Total Memories', value: document.getElementById('intel-total-memories').textContent, icon:'&#x1F9E0;', context:'Total indexed memories across all conversations and knowledge base entries.'})">
+                                <div class="mem-tile green" onclick="openHomeDetail('stat', {name:'Total Observations', value: document.getElementById('intel-total-memories').textContent, icon:'&#x1F9E0;', context:'Facts, entities, and insights extracted from conversations and knowledge base entries.'})">
                                     <div class="mem-tile-value" id="intel-total-memories">--</div>
-                                    <div class="mem-tile-label">Total Memories</div>
+                                    <div class="mem-tile-label">Total Observations</div>
                                 </div>
                                 <div class="mem-tile purple" onclick="openHomeDetail('stat', {name:'This Week', value: document.getElementById('intel-recent-learnings').textContent, icon:'&#x1F4DA;', context:'New learnings recorded in the past 7 days from conversations and discoveries.'})">
                                     <div class="mem-tile-value" id="intel-recent-learnings">--</div>
@@ -24079,18 +24270,52 @@
                             <!-- Section: AI & Memory -->
                             <div class="settings-section" id="settings-section-ai-memory">
                                 <div class="settings-section-heading">AI Memory</div>
-                                <div class="settings-card">
-                                    <div class="settings-row">
-                                        <span class="settings-label">Conversations</span>
-                                        <span class="settings-value" id="settings-memory-count">306</span>
+
+                                <!-- Storage config -->
+                                <div class="storage-config-card">
+                                    <div class="config-card-header">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                                        <div>
+                                            <div class="config-title">Storage <span class="risk-indicator safe" id="storage-risk-badge">Default</span></div>
+                                            <div class="config-desc">Where memory data is stored on disk</div>
+                                        </div>
                                     </div>
-                                    <div class="settings-row">
-                                        <span class="settings-label">Storage</span>
-                                        <span class="settings-value" id="data-dir-display"></span>
+                                    <div class="storage-path-row">
+                                        <div class="storage-path-display" id="storage-path-display">Docker Volume (default)</div>
+                                        <button class="btn-sm" onclick="changeStoragePath()">Change</button>
                                     </div>
-                                    <div class="settings-row">
-                                        <span class="settings-label">GPU Server</span>
-                                        <span class="settings-value" id="dgx-host-display"></span>
+                                    <div class="storage-stats-row">
+                                        <div class="storage-stat">
+                                            <span class="stat-label">Total Size</span>
+                                            <span class="stat-value" id="storage-size-display">-</span>
+                                        </div>
+                                        <div class="storage-stat">
+                                            <span class="stat-label">Files</span>
+                                            <span class="stat-value" id="storage-files-display">-</span>
+                                        </div>
+                                    </div>
+                                    <div class="storage-warning" id="storage-warning">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                        <span>Changing storage requires a container restart. Make sure the destination is always accessible.</span>
+                                    </div>
+                                </div>
+
+                                <!-- Offload config -->
+                                <div class="offload-config-card">
+                                    <div class="config-card-header">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                                        <div>
+                                            <div class="config-title">Offload <span class="risk-indicator safe" id="offload-risk-badge">Off</span></div>
+                                            <div class="config-desc">Run agents on a remote device via SSH + Claude CLI</div>
+                                        </div>
+                                    </div>
+                                    <div id="offload-current-device" style="display:none;" class="offload-current">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                                        <span class="device-name" id="offload-current-name">-</span>
+                                        <button class="btn-disable" onclick="disableOffload()">Disable</button>
+                                    </div>
+                                    <div class="offload-device-list" id="offload-device-list">
+                                        <div class="offload-empty">Loading eligible devices...</div>
                                     </div>
                                 </div>
                             </div>
@@ -25127,6 +25352,20 @@
                             <button class="btn-test-connection" id="device-test-btn" onclick="testDeviceConnection()">Test Connection</button>
                         </div>
                         <div class="ping-results" id="device-ping-results" style="display:none;"></div>
+                        <div class="device-connection-log" id="device-connection-log">
+                            <span class="connection-log-dot" id="connection-log-dot"></span>
+                            <span class="connection-log-text" id="connection-log-text"></span>
+                            <span class="connection-log-time" id="connection-log-time"></span>
+                        </div>
+                    </div>
+                    <div class="device-modal-section" id="device-stats-section" style="display:none;">
+                        <div class="device-modal-section-title">System</div>
+                        <div class="device-stats-bar">
+                            <div class="device-stat-item"><div class="device-stat-label">CPU</div><div class="device-stat-value" id="device-stat-cpu"><span class="stat-loading"></span></div></div>
+                            <div class="device-stat-item"><div class="device-stat-label">RAM</div><div class="device-stat-value" id="device-stat-ram"><span class="stat-loading"></span></div></div>
+                            <div class="device-stat-item"><div class="device-stat-label">Disk</div><div class="device-stat-value" id="device-stat-disk"><span class="stat-loading"></span></div></div>
+                            <div class="device-stat-item"><div class="device-stat-label">Uptime</div><div class="device-stat-value" id="device-stat-uptime"><span class="stat-loading"></span></div></div>
+                        </div>
                     </div>
                     <div class="device-modal-section" id="device-info-section">
                         <div class="device-modal-section-title">Device Info</div>
@@ -25151,7 +25390,16 @@
                     </div>
                     <div class="device-modal-section">
                         <div class="device-modal-section-title">Recent Activity</div>
-                        <div id="device-activity-list"><div class="live-empty">Loading...</div></div>
+                        <div class="device-activity-split">
+                            <div>
+                                <div class="device-activity-col-title">SSH Commands</div>
+                                <div id="device-cmd-list"><div class="device-activity-empty">Loading...</div></div>
+                            </div>
+                            <div>
+                                <div class="device-activity-col-title">Agent Runs</div>
+                                <div id="device-agent-list"><div class="device-activity-empty">Loading...</div></div>
+                            </div>
+                        </div>
                     </div>
                     <div class="device-modal-section terminal-section" id="terminal-section">
                         <div class="device-modal-section-title" style="display:flex; justify-content:space-between; align-items:center;">
@@ -26819,8 +27067,11 @@
             document.getElementById('device-ssh-key').value = ssh.key_path || '';
 
             modal.classList.add('active');
-            loadDeviceActivity(deviceId);
-            initTerminalSection(deviceData);
+            try { populateConnectionLog(deviceData); } catch(e) { console.error('connectionLog:', e); }
+            loadDeviceCommands(deviceId);
+            loadDeviceAgentRuns(deviceId);
+            try { initTerminalSection(deviceData); } catch(e) { console.error('terminal:', e); }
+            loadDeviceStats(deviceId, deviceData).catch(function(e) { console.error('stats:', e); });
         }
 
         function closeDeviceModal() {
@@ -26874,15 +27125,6 @@
                 });
                 const data = await resp.json();
                 resultsDiv.textContent = '';
-                var pingRow = document.createElement('div');
-                pingRow.className = 'ping-result-row';
-                var pingDot = document.createElement('span');
-                pingDot.className = 'ping-result-dot ' + (data.ping && data.ping.reachable ? 'pass' : 'fail');
-                pingRow.appendChild(pingDot);
-                var pingTxt = document.createElement('span');
-                pingTxt.textContent = 'ICMP Ping: ' + (data.ping && data.ping.reachable ? 'Reachable' : 'Unreachable');
-                pingRow.appendChild(pingTxt);
-                resultsDiv.appendChild(pingRow);
                 if (data.ssh_port) {
                     var sshRow = document.createElement('div');
                     sshRow.className = 'ping-result-row';
@@ -26920,46 +27162,169 @@
             btn.textContent = 'Test Connection';
         }
 
-        async function loadDeviceActivity(deviceId) {
-            var container = document.getElementById('device-activity-list');
+        function _emptyMsg(container, msg) {
             container.textContent = '';
-            var loading = document.createElement('div');
-            loading.className = 'live-empty';
-            loading.textContent = 'Loading activity...';
-            container.appendChild(loading);
+            var el = document.createElement('div');
+            el.className = 'device-activity-empty';
+            el.textContent = msg;
+            container.appendChild(el);
+        }
+
+        function populateConnectionLog(deviceData) {
+            var dot = document.getElementById('connection-log-dot');
+            var text = document.getElementById('connection-log-text');
+            var time = document.getElementById('connection-log-time');
+            var statusCls = getDeviceStatusClass(deviceData.last_seen);
+            dot.className = 'connection-log-dot ' + statusCls;
+            if (statusCls === 'online') {
+                text.textContent = 'Currently online';
+            } else if (statusCls === 'stale') {
+                text.textContent = 'Last seen recently';
+            } else if (deviceData.last_seen) {
+                text.textContent = 'Last seen ' + getTimeAgo(deviceData.last_seen);
+            } else {
+                text.textContent = 'Never connected';
+            }
+            var parts = [];
+            if (deviceData.last_seen) parts.push(getTimeAgo(deviceData.last_seen));
+            if (deviceData.registered_at) parts.push('Registered ' + new Date(deviceData.registered_at).toLocaleDateString());
+            time.textContent = parts.join(' \u00b7 ');
+        }
+
+        async function loadDeviceCommands(deviceId) {
+            var container = document.getElementById('device-cmd-list');
+            _emptyMsg(container, 'Loading...');
             try {
-                const resp = await fetch(API_URL + '/api/devices/' + deviceId + '/activity?limit=5', {
-                    headers: { 'Authorization': 'Bearer ' + token }
+                var resp = await fetch(API_URL + '/api/devices/' + deviceId + '/commands?limit=5', {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('cerebro_token') }
                 });
-                const data = await resp.json();
+                var data = await resp.json();
                 container.textContent = '';
-                if (!data.conversations || data.conversations.length === 0) {
-                    var empty = document.createElement('div');
-                    empty.className = 'live-empty';
-                    empty.textContent = 'No conversations from this device';
-                    container.appendChild(empty);
+                if (!data.commands || data.commands.length === 0) {
+                    _emptyMsg(container, 'No commands yet');
                 } else {
-                    data.conversations.forEach(function(c) {
+                    data.commands.forEach(function(c) {
                         var item = document.createElement('div');
-                        item.className = 'device-activity-item';
-                        var summary = document.createElement('div');
-                        summary.style.color = 'var(--text-primary)';
-                        summary.textContent = c.summary || c.id;
-                        item.appendChild(summary);
-                        var ts = document.createElement('div');
-                        ts.style.cssText = 'font-size:0.7rem; color:var(--text-muted); margin-top:2px;';
-                        ts.textContent = c.timestamp ? getTimeAgo(c.timestamp) : '';
-                        item.appendChild(ts);
+                        item.className = 'device-cmd-item';
+                        var cmdText = document.createElement('div');
+                        cmdText.className = 'device-cmd-text';
+                        cmdText.textContent = '$ ' + (c.command || c.cmd || '');
+                        item.appendChild(cmdText);
+                        var meta = document.createElement('div');
+                        meta.className = 'device-cmd-meta';
+                        var exitCode = c.exit_code !== undefined ? c.exit_code : null;
+                        if (exitCode !== null) {
+                            var exitSpan = document.createElement('span');
+                            exitSpan.className = 'device-cmd-exit ' + (exitCode === 0 ? 'ok' : 'fail');
+                            exitSpan.textContent = 'exit ' + exitCode;
+                            meta.appendChild(exitSpan);
+                        }
+                        if (c.timestamp || c.executed_at) {
+                            var ts = document.createElement('span');
+                            ts.textContent = getTimeAgo(c.timestamp || c.executed_at);
+                            meta.appendChild(ts);
+                        }
+                        item.appendChild(meta);
                         container.appendChild(item);
                     });
                 }
             } catch (e) {
-                container.textContent = '';
-                var err = document.createElement('div');
-                err.className = 'live-empty';
-                err.textContent = 'Failed to load activity';
-                container.appendChild(err);
+                _emptyMsg(container, 'Failed to load');
             }
+        }
+
+        async function loadDeviceAgentRuns(deviceId) {
+            var container = document.getElementById('device-agent-list');
+            _emptyMsg(container, 'Loading...');
+            try {
+                var resp = await fetch(API_URL + '/api/devices/' + deviceId + '/agents?limit=5', {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('cerebro_token') }
+                });
+                var data = await resp.json();
+                container.textContent = '';
+                if (!data.agents || data.agents.length === 0) {
+                    _emptyMsg(container, 'No agent runs');
+                } else {
+                    data.agents.forEach(function(a) {
+                        var item = document.createElement('div');
+                        item.className = 'device-agent-item';
+                        var nameRow = document.createElement('div');
+                        nameRow.style.cssText = 'display:flex; align-items:center; gap:6px;';
+                        var name = document.createElement('span');
+                        name.className = 'device-agent-name';
+                        name.textContent = a.call_sign || a.id;
+                        nameRow.appendChild(name);
+                        var badge = document.createElement('span');
+                        var st = (a.status || 'unknown').toLowerCase();
+                        var badgeCls = st === 'completed' ? 'completed' : st === 'running' ? 'running' : st === 'queued' ? 'queued' : 'failed';
+                        badge.className = 'device-agent-status ' + badgeCls;
+                        badge.textContent = st;
+                        nameRow.appendChild(badge);
+                        item.appendChild(nameRow);
+                        if (a.task) {
+                            var task = document.createElement('div');
+                            task.className = 'device-agent-task';
+                            task.textContent = a.task;
+                            item.appendChild(task);
+                        }
+                        if (a.created_at) {
+                            var ts = document.createElement('div');
+                            ts.style.cssText = 'font-size:0.65rem; color:var(--text-muted); margin-top:2px;';
+                            ts.textContent = getTimeAgo(a.created_at);
+                            item.appendChild(ts);
+                        }
+                        container.appendChild(item);
+                    });
+                }
+            } catch (e) {
+                _emptyMsg(container, 'Failed to load');
+            }
+        }
+
+        async function loadDeviceStats(deviceId, deviceData) {
+            var ssh = deviceData.ssh_config || {};
+            var statsSection = document.getElementById('device-stats-section');
+            if (!ssh.host || !ssh.username) {
+                statsSection.style.display = 'none';
+                return;
+            }
+            statsSection.style.display = 'block';
+            // Reset to loading spinners
+            ['cpu','ram','disk','uptime'].forEach(function(k) {
+                var el = document.getElementById('device-stat-' + k);
+                el.textContent = '';
+                var spinner = document.createElement('span');
+                spinner.className = 'stat-loading';
+                el.appendChild(spinner);
+            });
+            var cmds = {
+                cpu: "top -bn1 | grep 'Cpu(s)' | awk '{print $2\"%\"}'",
+                ram: "free -h | awk '/^Mem:/ {print $3\"/\"$2}'",
+                disk: "df -h / | awk 'NR==2 {print $3\"/\"$2\" (\"$5\")\"}'",
+                uptime: "uptime -p"
+            };
+            var keys = Object.keys(cmds);
+            var promises = keys.map(function(key) {
+                return fetch(API_URL + '/api/devices/' + deviceId + '/exec', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('cerebro_token') },
+                    body: JSON.stringify({ command: cmds[key], timeout: 5 })
+                }).then(function(r) {
+                    if (!r.ok) return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ': ' + t); });
+                    return r.json();
+                }).then(function(d) {
+                    var el = document.getElementById('device-stat-' + key);
+                    if (d.stdout && d.exit_code === 0) {
+                        el.textContent = d.stdout.trim().split('\n')[0];
+                    } else {
+                        el.textContent = '--';
+                    }
+                }).catch(function(e) {
+                    console.error('Stats fetch error [' + key + ']:', e);
+                    document.getElementById('device-stat-' + key).textContent = '--';
+                });
+            });
+            await Promise.allSettled(promises);
         }
 
         // ============================================================
@@ -26976,6 +27341,7 @@
             var output = document.getElementById('terminal-output');
             var input = document.getElementById('terminal-input');
 
+            output.onclick = function() { input.focus(); };
             if (hasSSH) {
                 warning.style.display = 'none';
                 active.style.display = 'block';
@@ -26995,7 +27361,7 @@
         async function loadCommandHistory(deviceId) {
             try {
                 var resp = await fetch(API_URL + '/api/devices/' + deviceId + '/commands?limit=10', {
-                    headers: { 'Authorization': 'Bearer ' + getToken() }
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('cerebro_token') }
                 });
                 if (!resp.ok) return;
                 var data = await resp.json();
@@ -27021,7 +27387,7 @@
             try {
                 var resp = await fetch(API_URL + '/api/devices/' + _currentDeviceId + '/exec', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('cerebro_token') },
                     body: JSON.stringify({ command: cmd, timeout: 30 })
                 });
                 var data = await resp.json();
@@ -27087,7 +27453,15 @@
             var output = document.getElementById('terminal-output');
             var line = document.createElement('div');
             line.className = 'term-' + type;
-            line.textContent = text;
+            if (type === 'cmd' && text.indexOf('$ ') === 0) {
+                var prompt = document.createElement('span');
+                prompt.className = 'term-prompt';
+                prompt.textContent = '$ ';
+                line.appendChild(prompt);
+                line.appendChild(document.createTextNode(text.substring(2)));
+            } else {
+                line.textContent = text;
+            }
             output.appendChild(line);
             output.scrollTop = output.scrollHeight;
         }
@@ -29056,7 +29430,7 @@
             try {
                 var resp = await fetch(API_URL + '/api/devices/exec/approve/' + actionId, {
                     method: 'POST',
-                    headers: { 'Authorization': 'Bearer ' + getToken() }
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('cerebro_token') }
                 });
                 var data = await resp.json();
                 if (!resp.ok) {
@@ -29073,7 +29447,7 @@
             try {
                 var resp = await fetch(API_URL + '/api/devices/exec/reject/' + actionId, {
                     method: 'POST',
-                    headers: { 'Authorization': 'Bearer ' + getToken() }
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('cerebro_token') }
                 });
                 var data = await resp.json();
                 if (!resp.ok) {
@@ -30725,6 +31099,8 @@
             // Scroll content to top
             var content = document.getElementById('settings-content');
             if (content) content.scrollTop = 0;
+            // Lazy-load AI & Memory data
+            if (name === 'ai-memory') { initStorageConfig(); initOffloadConfig(); }
         }
 
         function toggleSettingsSidebar() {
@@ -31185,6 +31561,258 @@
                 showToast('Restart failed', 'error');
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = 'Restart Now'; }
+            }
+        }
+
+        // ==================== STORAGE & OFFLOAD CONFIG ====================
+        let _storageConfigLoaded = false;
+        let _offloadConfigLoaded = false;
+
+        async function initStorageConfig() {
+            if (_storageConfigLoaded) return;
+            _storageConfigLoaded = true;
+            try {
+                const token = localStorage.getItem('cerebro_token');
+                const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+                const countRes = await fetch(API_URL + '/api/memory-intelligence', { headers });
+                if (countRes.ok) {
+                    const data = await countRes.json();
+                    const count = (data.total_memories || 0) + (data.fact_count || 0);
+                    const el = document.getElementById('memory-count-num');
+                    if (el) el.textContent = count;
+                }
+            } catch (e) { console.warn('Failed to load observation count:', e); }
+
+            try {
+                if (window.cerebroDesktop) {
+                    const cfg = await window.cerebroDesktop.getMemoryConfig();
+                    updateStorageDisplay(cfg.storagePath);
+                } else {
+                    updateStorageDisplay(null);
+                }
+                await loadStorageStats();
+            } catch (e) { console.warn('Failed to load storage config:', e); }
+        }
+
+        function updateStorageDisplay(storagePath) {
+            const pathEl = document.getElementById('storage-path-display');
+            const badge = document.getElementById('storage-risk-badge');
+            const warning = document.getElementById('storage-warning');
+            if (storagePath) {
+                if (pathEl) pathEl.textContent = storagePath;
+                if (badge) { badge.textContent = 'Custom'; badge.className = 'risk-indicator extended'; }
+                if (warning) warning.classList.add('visible');
+            } else {
+                if (pathEl) pathEl.textContent = 'Docker Volume (default)';
+                if (badge) { badge.textContent = 'Default'; badge.className = 'risk-indicator safe'; }
+                if (warning) warning.classList.remove('visible');
+            }
+        }
+
+        async function loadStorageStats() {
+            try {
+                const token = localStorage.getItem('cerebro_token');
+                const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+                const res = await fetch(API_URL + '/api/memory/stats', { headers });
+                if (res.ok) {
+                    const stats = await res.json();
+                    const sizeEl = document.getElementById('storage-size-display');
+                    const filesEl = document.getElementById('storage-files-display');
+                    if (sizeEl) sizeEl.textContent = stats.human_size || '-';
+                    if (filesEl) filesEl.textContent = stats.file_count != null ? stats.file_count.toLocaleString() : '-';
+                }
+            } catch (e) { console.warn('Failed to load storage stats:', e); }
+        }
+
+        async function changeStoragePath() {
+            if (!window.cerebroDesktop) {
+                showToast('Storage configuration requires the desktop app', 'error');
+                return;
+            }
+            const proceed = await cerebroConfirm(
+                'Changing the storage location will require a container restart. Agents will be interrupted.',
+                { title: 'Change Storage Location', confirmText: 'Choose Folder', cancelText: 'Cancel' }
+            );
+            if (!proceed) return;
+
+            const result = await window.cerebroDesktop.browseStorageFolder();
+            if (result.canceled) return;
+            const newPath = result.path;
+
+            const migrate = await cerebroConfirm(
+                'Would you like to copy your existing memory data to the new location?\n\nNew location: ' + newPath,
+                { title: 'Migrate Data?', confirmText: 'Copy Data', cancelText: 'Skip (empty start)' }
+            );
+            if (migrate) {
+                showToast('Migrating data... this may take a moment');
+                const migResult = await window.cerebroDesktop.migrateStorage(newPath);
+                if (!migResult.success) {
+                    showToast('Migration failed: ' + (migResult.error || 'Unknown error'), 'error');
+                    return;
+                }
+                showToast('Data migrated successfully');
+            }
+
+            const saveResult = await window.cerebroDesktop.setStoragePath(newPath);
+            if (!saveResult.success) {
+                showToast('Failed to save: ' + (saveResult.error || 'Unknown error'), 'error');
+                return;
+            }
+            updateStorageDisplay(newPath);
+
+            const shouldRestart = await cerebroConfirm(
+                'Storage path updated. Restart container now to apply?',
+                { title: 'Restart Required', confirmText: 'Restart Now', cancelText: 'Later' }
+            );
+            if (shouldRestart) {
+                showToast('Restarting container...');
+                const restartResult = await window.cerebroDesktop.restartDockerStack();
+                if (restartResult.success) {
+                    showToast('Container restarted with new storage path');
+                    _storageConfigLoaded = false;
+                    initStorageConfig();
+                } else {
+                    showToast('Restart failed: ' + (restartResult.error || 'Unknown error'), 'error');
+                }
+            }
+        }
+
+        async function initOffloadConfig() {
+            if (_offloadConfigLoaded) return;
+            _offloadConfigLoaded = true;
+            try {
+                const token = localStorage.getItem('cerebro_token');
+                const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+                const [cfgRes, devicesRes] = await Promise.all([
+                    fetch(API_URL + '/api/offload/config', { headers }),
+                    fetch(API_URL + '/api/offload/eligible-devices', { headers }),
+                ]);
+                const config = cfgRes.ok ? await cfgRes.json() : { enabled: false };
+                const devData = devicesRes.ok ? await devicesRes.json() : { devices: [] };
+                renderOffloadSection(config, devData.devices || []);
+            } catch (e) {
+                console.warn('Failed to load offload config:', e);
+                renderOffloadSection({ enabled: false }, []);
+            }
+        }
+
+        function renderOffloadSection(config, devices) {
+            const badge = document.getElementById('offload-risk-badge');
+            const currentDiv = document.getElementById('offload-current-device');
+            const currentName = document.getElementById('offload-current-name');
+            const listDiv = document.getElementById('offload-device-list');
+
+            if (config.enabled && config.target_device_id) {
+                if (badge) { badge.textContent = 'Active'; badge.className = 'risk-indicator extended'; }
+                if (currentDiv) currentDiv.style.display = '';
+                const targetDevice = devices.find(function(d) { return d.id === config.target_device_id; });
+                if (currentName) currentName.textContent = targetDevice ? targetDevice.device_name : config.target_device_id;
+            } else {
+                if (badge) { badge.textContent = 'Off'; badge.className = 'risk-indicator safe'; }
+                if (currentDiv) currentDiv.style.display = 'none';
+            }
+
+            if (!listDiv) return;
+            // Clear existing content
+            listDiv.textContent = '';
+
+            if (devices.length === 0) {
+                var emptyDiv = document.createElement('div');
+                emptyDiv.className = 'offload-empty';
+                emptyDiv.textContent = 'No eligible devices found. Register a device with SSH configuration on the home page.';
+                listDiv.appendChild(emptyDiv);
+                return;
+            }
+
+            devices.forEach(function(d) {
+                var isActive = config.enabled && config.target_device_id === d.id;
+                var card = document.createElement('div');
+                card.className = 'offload-device-card';
+
+                var dot = document.createElement('div');
+                dot.className = 'device-status-dot ' + d.status;
+                card.appendChild(dot);
+
+                var info = document.createElement('div');
+                info.className = 'device-info';
+                var dname = document.createElement('div');
+                dname.className = 'dname';
+                dname.textContent = d.device_name;
+                info.appendChild(dname);
+                var dhost = document.createElement('div');
+                dhost.className = 'dhost';
+                var sshHost = d.ssh_config ? (d.ssh_config.username ? d.ssh_config.username + '@' : '') + d.ssh_config.host : '';
+                dhost.textContent = sshHost;
+                info.appendChild(dhost);
+                card.appendChild(info);
+
+                if (isActive) {
+                    var currentBadge = document.createElement('span');
+                    currentBadge.className = 'risk-indicator extended';
+                    currentBadge.style.margin = '0';
+                    currentBadge.textContent = 'Current';
+                    card.appendChild(currentBadge);
+                } else {
+                    var selectBtn = document.createElement('button');
+                    selectBtn.className = 'offload-select-btn';
+                    selectBtn.textContent = 'Select';
+                    selectBtn.setAttribute('data-device-id', d.id);
+                    selectBtn.addEventListener('click', function() { selectOffloadDevice(d.id); });
+                    card.appendChild(selectBtn);
+                }
+
+                listDiv.appendChild(card);
+            });
+        }
+
+        async function selectOffloadDevice(deviceId) {
+            const proceed = await cerebroConfirm(
+                'Agents will be sent to this device via SSH. The remote device must have Claude CLI installed.',
+                { title: 'Enable Offloading?', confirmText: 'Enable', cancelText: 'Cancel' }
+            );
+            if (!proceed) return;
+            try {
+                const token = localStorage.getItem('cerebro_token');
+                const res = await fetch(API_URL + '/api/offload/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ enabled: true, target_device_id: deviceId }),
+                });
+                if (res.ok) {
+                    showToast('Offloading enabled');
+                    _offloadConfigLoaded = false;
+                    initOffloadConfig();
+                } else {
+                    const err = await res.json().catch(function() { return {}; });
+                    showToast('Failed: ' + (err.detail || 'Unknown error'), 'error');
+                }
+            } catch (e) {
+                showToast('Failed to update offload config', 'error');
+            }
+        }
+
+        async function disableOffload() {
+            const proceed = await cerebroConfirm(
+                'Agents will run locally again.',
+                { title: 'Disable Offloading?', confirmText: 'Disable', cancelText: 'Cancel', danger: true }
+            );
+            if (!proceed) return;
+            try {
+                const token = localStorage.getItem('cerebro_token');
+                const res = await fetch(API_URL + '/api/offload/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ enabled: false }),
+                });
+                if (res.ok) {
+                    showToast('Offloading disabled');
+                    _offloadConfigLoaded = false;
+                    initOffloadConfig();
+                } else {
+                    showToast('Failed to disable offloading', 'error');
+                }
+            } catch (e) {
+                showToast('Failed to update offload config', 'error');
             }
         }
 
@@ -32725,7 +33353,7 @@
                     ${toolsHtml ? `<div class="agent-tools">${toolsHtml}</div>` : ''}
                     ${agent._load_error ? `<div class="agent-output" style="color: var(--text-muted); font-style: italic;">Failed to load <button class="compact-retry-btn" onclick="event.stopPropagation(); retryLoadAgent('${agent.id}')" style="margin-left: 6px;">Retry</button></div>` : outputPreview ? `<div class="agent-output">${outputPreview}</div>` : `<div class="agent-output" style="color: var(--text-muted); font-style: italic;">${agent.status === 'running' ? 'Working...' : agent.status === 'completed' ? 'No output captured' : 'Waiting...'}</div>`}
                     ${agent.error ? `<div style="color: var(--red); font-size: 0.8rem; margin-top: 8px;">Error: ${escapeHtml(agent.error)}</div>` : ''}
-                    <div class="agent-time">${timeAgo}</div>
+                    <div class="agent-time">${timeAgo}${agent.offloaded_to_name ? ` <span class="agent-offload-badge">${escapeHtml(agent.offloaded_to_name)}</span>` : ''}</div>
                     <div class="agent-expand-hint">Tap to view details</div>
                     ${subAgentsHtml}
                 </div>
@@ -32894,6 +33522,14 @@
                 srcBadge.className = 'compact-source-badge';
                 srcBadge.textContent = getAgentSource(agent);
                 footer.appendChild(srcBadge);
+            }
+
+            // Offload badge (shows which remote device ran this agent)
+            if (agent.offloaded_to_name) {
+                const offloadBadge = document.createElement('span');
+                offloadBadge.className = 'agent-offload-badge';
+                offloadBadge.textContent = agent.offloaded_to_name;
+                footer.appendChild(offloadBadge);
             }
 
             // Return outerHTML for compatibility with existing .map().join('') patterns
@@ -47180,10 +47816,6 @@ Please proceed with implementing this recommendation. You have full permissions.
         // ==================== STARTUP ====================
         document.addEventListener('DOMContentLoaded', async () => {
             // Populate configurable display values
-            const dgxDisplay = document.getElementById('dgx-host-display');
-            if (dgxDisplay) dgxDisplay.textContent = CEREBRO_DGX_HOST || 'Not configured';
-            const dataDirDisplay = document.getElementById('data-dir-display');
-            if (dataDirDisplay) dataDirDisplay.textContent = CEREBRO_DATA_DIR || 'Not configured';
             const usernameDisplay = document.getElementById('username-display');
             if (usernameDisplay) usernameDisplay.textContent = CEREBRO_USERNAME;
             const presenceGreeting = document.getElementById('presence-greeting');

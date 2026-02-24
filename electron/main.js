@@ -1223,6 +1223,135 @@ ipcMain.handle('restart-docker-stack', async () => {
   }
 });
 
+// ---- Memory Storage Config ----
+const MEMORY_CONFIG_FILE = path.join(require('os').homedir(), '.cerebro', 'memory-config.json');
+
+function loadMemoryConfig() {
+  try {
+    if (fs.existsSync(MEMORY_CONFIG_FILE)) {
+      return JSON.parse(fs.readFileSync(MEMORY_CONFIG_FILE, 'utf-8'));
+    }
+  } catch (e) {
+    console.error('[Main] Failed to load memory config:', e.message);
+  }
+  return { storagePath: null };
+}
+
+function saveMemoryConfig(config) {
+  fs.writeFileSync(MEMORY_CONFIG_FILE, JSON.stringify(config, null, 2));
+}
+
+ipcMain.handle('get-memory-config', () => {
+  return loadMemoryConfig();
+});
+
+ipcMain.handle('browse-storage-folder', async () => {
+  try {
+    const win = BrowserWindow.getFocusedWindow() || mainWindow;
+    const result = await dialog.showOpenDialog(win, {
+      properties: ['openDirectory'],
+      title: 'Select memory storage location',
+    });
+    if (result.canceled || !result.filePaths.length) return { canceled: true };
+    return { canceled: false, path: result.filePaths[0] };
+  } catch (err) {
+    return { canceled: true, error: err.message };
+  }
+});
+
+ipcMain.handle('set-storage-path', async (_event, newPath) => {
+  try {
+    const config = loadMemoryConfig();
+    config.storagePath = newPath; // null means Docker volume default
+    saveMemoryConfig(config);
+    // Rewrite compose file with new mount
+    await dockerManager.writeComposeFile();
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('get-storage-stats', async (_event, folderPath) => {
+  try {
+    const targetPath = folderPath || path.join(require('os').homedir(), '.cerebro');
+    let totalSize = 0;
+    let fileCount = 0;
+
+    function walkDir(dir) {
+      try {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+          try {
+            if (entry.isDirectory()) {
+              walkDir(fullPath);
+            } else if (entry.isFile()) {
+              fileCount++;
+              totalSize += fs.statSync(fullPath).size;
+            }
+          } catch (e) { /* skip inaccessible files */ }
+        }
+      } catch (e) { /* skip inaccessible dirs */ }
+    }
+
+    walkDir(targetPath);
+
+    let humanSize;
+    if (totalSize < 1024) humanSize = totalSize + ' B';
+    else if (totalSize < 1024 * 1024) humanSize = (totalSize / 1024).toFixed(1) + ' KB';
+    else if (totalSize < 1024 * 1024 * 1024) humanSize = (totalSize / (1024 * 1024)).toFixed(1) + ' MB';
+    else humanSize = (totalSize / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+
+    return { totalSize, humanSize, fileCount };
+  } catch (err) {
+    return { totalSize: 0, humanSize: '0 B', fileCount: 0, error: err.message };
+  }
+});
+
+ipcMain.handle('migrate-storage', async (_event, destPath) => {
+  try {
+    const config = loadMemoryConfig();
+    const sourcePath = config.storagePath;
+
+    // Ensure destination exists
+    fs.mkdirSync(destPath, { recursive: true });
+
+    if (!sourcePath) {
+      // Extract from Docker volume
+      const { execFile: ef } = require('child_process');
+      await new Promise((resolve, reject) => {
+        ef('docker', ['cp', 'cerebro-backend-1:/data/memory/.', destPath], { timeout: 120000 }, (err) => {
+          if (err) reject(new Error('Docker copy failed: ' + err.message));
+          else resolve();
+        });
+      });
+    } else {
+      // Copy from custom path to new path
+      const { execFile: ef } = require('child_process');
+      if (process.platform === 'win32') {
+        await new Promise((resolve, reject) => {
+          ef('xcopy', [sourcePath, destPath, '/E', '/I', '/H', '/Y'], { timeout: 120000 }, (err) => {
+            if (err) reject(new Error('Copy failed: ' + err.message));
+            else resolve();
+          });
+        });
+      } else {
+        await new Promise((resolve, reject) => {
+          ef('cp', ['-r', sourcePath + '/.', destPath], { timeout: 120000 }, (err) => {
+            if (err) reject(new Error('Copy failed: ' + err.message));
+            else resolve();
+          });
+        });
+      }
+    }
+
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
 ipcMain.handle('restart-computer', () => {
   const { execFile } = require('child_process');
   if (process.platform === 'win32') {

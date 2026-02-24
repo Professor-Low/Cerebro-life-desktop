@@ -221,6 +221,7 @@ class DockerManager extends EventEmitter {
       content = this._getDefaultComposeContent();
     }
 
+    content = this._injectStorageMount(content);
     content = this._injectFileMounts(content);
     fs.writeFileSync(COMPOSE_FILE, content);
     console.log(`[Docker] Wrote docker-compose.yml to ${COMPOSE_FILE}`);
@@ -1488,6 +1489,37 @@ class DockerManager extends EventEmitter {
       readOnly: true,
       preset: true,
     }));
+  }
+
+  /**
+   * Inject custom memory storage mount if configured.
+   * Replaces the default Docker volume with a host path bind mount.
+   */
+  _injectStorageMount(composeContent) {
+    const configPath = path.join(CEREBRO_DIR, 'memory-config.json');
+    let config = { storagePath: null };
+    try {
+      if (fs.existsSync(configPath)) {
+        config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      }
+    } catch (e) {
+      console.warn('[Docker] Failed to read memory config:', e.message);
+    }
+
+    if (!config.storagePath) return composeContent;
+
+    // Replace the volume mount with a bind mount
+    const hostPath = config.storagePath.replace(/\\/g, '/');
+    const volumeMount = 'cerebro-data:/data/memory';
+    const bindMount = `"${hostPath}:/data/memory"`;
+
+    let result = composeContent.replace(volumeMount, bindMount);
+
+    // Also remove the volume declaration since we're using a bind mount
+    // The volumes section at the bottom declares cerebro-data
+    result = result.replace(/\nvolumes:\n\s+cerebro-data:\n?/g, '\n');
+
+    return result;
   }
 
   _injectFileMounts(composeContent) {
