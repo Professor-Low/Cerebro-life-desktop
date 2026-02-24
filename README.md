@@ -1,6 +1,6 @@
 # Cerebro Desktop
 
-A personal AI companion that runs entirely on your machine. Cerebro wraps a Docker-based backend (FastAPI + Ollama + Redis) inside an Electron shell with system-tray integration, giving you a local AI assistant with no cloud dependency.
+A personal AI companion that Remembers and learns from every conversation you have avoiding the stagnation that normal AI agets have. Runs entirely on your machine containerized. Cerebro wraps a Docker-based backend (FastAPI + Redis) inside an Electron shell with system tray integration, delivering a Claude-code (Opas 4.6) powered orchestration layer with unified memory across all agent assistants. Cerebro will also not Rely on API keys as consuming expensive API credits is a problem that most agets are strugeling with today. It runs through your Claude CLI subscription and will expand to support additional local model options for users with more advanced hardware.
 
 ## Prerequisites
 
