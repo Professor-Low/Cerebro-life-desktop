@@ -24,6 +24,12 @@ if (process.platform === 'linux') {
   app.commandLine.appendSwitch('disable-software-rasterizer');
 }
 
+// Windows DPI / rendering fix — prevents blurry text on scaled displays
+if (process.platform === 'win32') {
+  app.commandLine.appendSwitch('high-dpi-support', '1');
+  app.commandLine.appendSwitch('enable-use-zoom-for-dsf', 'false');
+}
+
 const isDev = process.env.CEREBRO_DEV === '1';
 const dockerManager = new DockerManager();
 const licenseManager = new LicenseManager();
@@ -844,6 +850,8 @@ ipcMain.handle('apply-update', async () => {
           } catch {}
         }
       });
+      // Re-sync frontend and env after Docker update to ensure latest files are mounted
+      try { dockerManager.writeEnvFile(); } catch {}
     }
 
     // Step 2: Electron update (if needed) — quits and reinstalls silently

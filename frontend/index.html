@@ -31147,6 +31147,9 @@
 
         window.__cerebroShowUpdateBanner = function(type) {
             if (_updateBannerDismissed) return;
+            // Suppress banner for 2 hours after a successful update
+            var lastUpdate = localStorage.getItem('cerebro_last_update_ts');
+            if (lastUpdate && (Date.now() - parseInt(lastUpdate, 10)) < 7200000) return;
             var bar = document.getElementById('update-available-bar');
             var msg = document.getElementById('update-msg-text');
             if (!bar) return;
@@ -31185,6 +31188,8 @@
             try {
                 var result = await window.cerebroDesktop.applyUpdate();
                 if (result.success) {
+                    localStorage.setItem('cerebro_last_update_ts', String(Date.now()));
+                    dismissUpdateBanner();
                     if (btn) setUpdateBtnSpinner(btn, 'Restarting\u2026');
                     showToast('Update applied — restarting!', 'success');
                 } else {
@@ -39485,10 +39490,21 @@ Please proceed with implementing this recommendation. You have full permissions.
         }
 
         // Safe markdown rendering helper - sanitized via DOMPurify
+        // Shared DOMPurify config — only allow tags that markdown generates
+        var _markdownSafeConfig = {
+            ALLOWED_TAGS: [
+                'p', 'br', 'strong', 'b', 'em', 'i', 'u', 'code', 'pre',
+                'ul', 'ol', 'li', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+                'blockquote', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+                'hr', 'img', 'del', 'sup', 'sub', 'span'
+            ],
+            ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'id']
+        };
+
         function safeMarkdown(text) {
             try {
-                const raw = typeof marked !== 'undefined' ? marked.parse(text || '') : escapeHtml(text || '');
-                return typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(raw) : escapeHtml(text || '');
+                var raw = typeof marked !== 'undefined' ? marked.parse(text || '') : escapeHtml(text || '');
+                return typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(raw, _markdownSafeConfig) : escapeHtml(text || '');
             } catch(e) {
                 return escapeHtml(text || '');
             }
@@ -39500,15 +39516,7 @@ Please proceed with implementing this recommendation. You have full permissions.
                 if (typeof marked !== 'undefined') {
                     var raw = marked.parse(text, { breaks: true, gfm: true });
                     if (typeof DOMPurify !== 'undefined') {
-                        return DOMPurify.sanitize(raw, {
-                            ALLOWED_TAGS: [
-                                'p', 'br', 'strong', 'b', 'em', 'i', 'u', 'code', 'pre',
-                                'ul', 'ol', 'li', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-                                'blockquote', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
-                                'hr', 'img', 'del', 'sup', 'sub', 'span'
-                            ],
-                            ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'id']
-                        });
+                        return DOMPurify.sanitize(raw, _markdownSafeConfig);
                     }
                     return raw;
                 }
