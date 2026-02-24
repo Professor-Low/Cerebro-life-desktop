@@ -33564,17 +33564,7 @@
             if (!agent) return;
 
             var outputText = agent.output || 'No output captured yet.';
-            var renderedOutput = '';
-            try {
-                if (typeof marked !== 'undefined') {
-                    marked.setOptions({ breaks: true, gfm: true });
-                    renderedOutput = marked.parse(outputText);
-                } else {
-                    renderedOutput = '<pre>' + escapeHtml(outputText) + '</pre>';
-                }
-            } catch (e) {
-                renderedOutput = '<pre>' + escapeHtml(outputText) + '</pre>';
-            }
+            var renderedOutput = safeAgentOutput(outputText);
 
             // Extract recommendations
             var recommendations = extractRecommendations(outputText);
@@ -33807,12 +33797,7 @@
             if (!thread) return;
 
             // Build answer HTML
-            var answerContent;
-            if (typeof marked !== 'undefined' && thread.answer) {
-                answerContent = marked.parse(thread.answer);
-            } else {
-                answerContent = escapeHtml(thread.answer || 'Waiting for response...');
-            }
+            var answerContent = thread.answer ? safeAgentOutput(thread.answer) : escapeHtml('Waiting for response...');
 
             // Build child threads HTML
             var childThreadsHtml = '';
@@ -35538,13 +35523,9 @@
             if (outputText.length === _lastStreamedOutputLen) return;
             _lastStreamedOutputLen = outputText.length;
 
-            // Update rendered output (same rendering as showAgentDetail - trusted backend content)
+            // Update rendered output — sanitized via DOMPurify to prevent raw HTML injection from agent code
             try {
-                if (typeof marked !== 'undefined') {
-                    outputDiv.innerHTML = marked.parse(outputText);
-                } else {
-                    outputDiv.textContent = outputText;
-                }
+                outputDiv.innerHTML = safeAgentOutput(outputText);
             } catch (e) {
                 outputDiv.textContent = outputText;
             }
@@ -35761,24 +35742,9 @@
                 agent.tools_used.map(t => `<span class="agent-tool-badge">${t}</span>`).join('') :
                 '<span style="color: var(--text-muted);">No tools used yet</span>';
 
-            // Get output and render as markdown
+            // Get output and render as markdown (sanitized to prevent raw HTML injection)
             const outputText = agent.output || 'No output captured yet.';
-            let renderedOutput = '';
-            try {
-                // Configure marked for safety
-                if (typeof marked !== 'undefined') {
-                    marked.setOptions({
-                        breaks: true,
-                        gfm: true
-                    });
-                    renderedOutput = marked.parse(outputText);
-                } else {
-                    renderedOutput = `<pre>${escapeHtml(outputText)}</pre>`;
-                }
-            } catch (e) {
-                console.error('Markdown parse error:', e);
-                renderedOutput = `<pre>${escapeHtml(outputText)}</pre>`;
-            }
+            let renderedOutput = safeAgentOutput(outputText);
 
             // Extract recommendations from output
             const recommendations = extractRecommendations(outputText);
@@ -36229,8 +36195,8 @@
             msgEl.setAttribute('data-message-id', msgId);
             msgEl.setAttribute('data-text', content);
             msgEl.className = `agent-chat-page-message ${role}${isThinking ? ' thinking' : ''}`;
-            const renderedContent = (role === 'assistant' && typeof marked !== 'undefined')
-                ? marked.parse(content)
+            const renderedContent = (role === 'assistant')
+                ? safeAgentOutput(content)
                 : escapeHtml(content);
             msgEl.innerHTML = `
                 <div class="chat-label">${label}</div>
@@ -36386,7 +36352,7 @@ Please proceed with implementing this recommendation. You have full permissions.
             msgDiv.setAttribute('data-text', content);
             msgDiv.innerHTML = `
                 <div class="chat-label">${label}</div>
-                <div class="chat-content">${role === 'assistant' ? (typeof marked !== 'undefined' ? marked.parse(content) : content) : escapeHtml(content)}</div>
+                <div class="chat-content">${role === 'assistant' ? safeAgentOutput(content) : escapeHtml(content)}</div>
             `;
 
             // Store in session for chunk mapping and add context menu
@@ -36547,13 +36513,8 @@ Please proceed with implementing this recommendation. You have full permissions.
             titleEl.appendChild(document.createTextNode(' Thread'));
             document.getElementById('agent-page-status').textContent = '';
 
-            // Build answer HTML (markdown-rendered)
-            let answerContent;
-            if (typeof marked !== 'undefined' && thread.answer) {
-                answerContent = marked.parse(thread.answer);
-            } else {
-                answerContent = escapeHtml(thread.answer || 'Waiting for response...');
-            }
+            // Build answer HTML (markdown-rendered, sanitized)
+            let answerContent = thread.answer ? safeAgentOutput(thread.answer) : escapeHtml('Waiting for response...');
 
             // Build child threads HTML
             let childThreadsHtml = '';
@@ -39511,6 +39472,30 @@ Please proceed with implementing this recommendation. You have full permissions.
                 return typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(raw) : escapeHtml(text || '');
             } catch(e) {
                 return escapeHtml(text || '');
+            }
+        }
+
+        function safeAgentOutput(text) {
+            if (!text) return '';
+            try {
+                if (typeof marked !== 'undefined') {
+                    var raw = marked.parse(text, { breaks: true, gfm: true });
+                    if (typeof DOMPurify !== 'undefined') {
+                        return DOMPurify.sanitize(raw, {
+                            ALLOWED_TAGS: [
+                                'p', 'br', 'strong', 'b', 'em', 'i', 'u', 'code', 'pre',
+                                'ul', 'ol', 'li', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+                                'blockquote', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+                                'hr', 'img', 'del', 'sup', 'sub', 'span'
+                            ],
+                            ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'id']
+                        });
+                    }
+                    return raw;
+                }
+                return escapeHtml(text);
+            } catch(e) {
+                return escapeHtml(text);
             }
         }
 
@@ -45676,19 +45661,8 @@ Please proceed with implementing this recommendation. You have full permissions.
                 markdownContent += `*No output data captured*\n`;
             }
 
-            // Render markdown using marked.js (like agent output does)
-            let renderedHtml = '';
-            try {
-                if (typeof marked !== 'undefined') {
-                    marked.setOptions({ breaks: true, gfm: true });
-                    renderedHtml = marked.parse(markdownContent);
-                } else {
-                    renderedHtml = `<pre>${escapeHtml(markdownContent)}</pre>`;
-                }
-            } catch (e) {
-                console.error('Markdown parse error:', e);
-                renderedHtml = `<pre>${escapeHtml(markdownContent)}</pre>`;
-            }
+            // Render markdown using marked.js (sanitized)
+            let renderedHtml = safeAgentOutput(markdownContent);
 
             // Create modal with agent-output-rendered styling
             const modal = document.createElement('div');
