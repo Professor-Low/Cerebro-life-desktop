@@ -940,9 +940,33 @@
       });
     }
 
+    var _mcpConfirmPending = false;
+    var _mcpConfirmTimer = null;
+
     function setupMcp() {
       var btn = document.getElementById('mcp-setup-btn');
+
+      // First click — ask for confirmation
+      if (!_mcpConfirmPending) {
+        _mcpConfirmPending = true;
+        btn.textContent = 'Confirm Setup';
+        btn.style.background = 'linear-gradient(135deg, #6d28d9, #7c3aed)';
+        showStatus('mcp-status', 'This will modify your ~/.claude.json. Click again to confirm.', '');
+        // Auto-reset after 5 seconds if they don't confirm
+        _mcpConfirmTimer = setTimeout(function() {
+          _mcpConfirmPending = false;
+          btn.textContent = 'Yes, Set It Up';
+          btn.style.background = '';
+          showStatus('mcp-status', '', '');
+        }, 5000);
+        return;
+      }
+
+      // Second click — confirmed, run setup
+      clearTimeout(_mcpConfirmTimer);
+      _mcpConfirmPending = false;
       btn.disabled = true;
+      btn.textContent = 'Setting Up...';
       showStatus('mcp-status', 'Configuring...', 'loading');
 
       window.cerebroDesktop.configureMcp().then(function(result) {
@@ -952,10 +976,14 @@
         } else {
           showStatus('mcp-status', result.error || 'Configuration failed', 'error');
           btn.disabled = false;
+          btn.textContent = 'Yes, Set It Up';
+          btn.style.background = '';
         }
       }).catch(function() {
         showStatus('mcp-status', 'Failed to configure MCP', 'error');
         btn.disabled = false;
+        btn.textContent = 'Yes, Set It Up';
+        btn.style.background = '';
       });
     }
 
