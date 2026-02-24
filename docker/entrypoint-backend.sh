@@ -46,22 +46,19 @@ if [ "$(id -u)" = "0" ]; then
       > /home/cerebro/.claude/CLAUDE.md 2>/dev/null || true
     chown cerebro:cerebro /home/cerebro/.claude/CLAUDE.md 2>/dev/null || true
   fi
-  # Create hooks.json for auto-saving conversations to memory
+  # Create hooks.json for auto-syncing memory after agent conversations
   HOOKS_DIR="/home/cerebro/.claude"
   if [ -d "$HOOKS_DIR" ]; then
     cat > "${HOOKS_DIR}/hooks.json" <<HOOKEOF
 {
-  "hooks": [
-    {
-      "matcher": "Notification",
-      "hooks": [
-        {
-          "type": "command",
-          "command": "if echo \"\$CLAUDE_NOTIFICATION\" | grep -q 'conversation_end'; then curl -s -X POST http://localhost:59000/api/memory/sync -H 'Authorization: Bearer ${CEREBRO_TOKEN}' -H 'Content-Type: application/json' -d '{\"source\":\"claude-code-hook\"}' > /dev/null 2>&1; fi"
-        }
-      ]
-    }
-  ]
+  "hooks": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "curl -sf -X POST http://localhost:59000/api/memory/sync -H 'Authorization: Bearer ${CEREBRO_TOKEN}' -H 'Content-Type: application/json' -d '{\"source\":\"claude-code-stop\"}' > /dev/null 2>&1 || true"
+      }
+    ]
+  }
 }
 HOOKEOF
     chown cerebro:cerebro "${HOOKS_DIR}/hooks.json" 2>/dev/null || true

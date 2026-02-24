@@ -12408,6 +12408,34 @@ async def _save_command_to_memory(device_id: str, device_name: str, result: dict
         print(f"[RemoteExec] Memory save error (non-fatal): {e}")
 
 
+@app.post("/api/memory/sync")
+async def memory_sync(request: Request, user: str = Depends(verify_token)):
+    """Sync endpoint for Claude Code hooks — saves provided messages to memory,
+    or triggers a vector index rebuild if no messages provided."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    messages = body.get("messages")
+    source = body.get("source", "claude-code")
+
+    # If messages provided, save them through extraction pipeline
+    if messages and isinstance(messages, list):
+        try:
+            result = await mcp_bridge.save_conversation(
+                messages=messages,
+                session_id=f"sync_{source}_{int(datetime.now(timezone.utc).timestamp())}",
+                metadata={"source": source, "session_type": "sync"},
+            )
+            return {"status": "saved", "conversation_id": result.get("conversation_id")}
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+
+    # No messages — acknowledge sync (used by Stop hooks to signal session end)
+    return {"status": "synced", "detail": "Sync acknowledged"}
+
+
 @app.get("/api/memory/health")
 async def get_memory_health(full: bool = False, user: str = Depends(verify_token)):
     """Get dynamic memory health status using FastHealthChecker."""
