@@ -842,6 +842,36 @@ class MCPBridge:
             print(f"[MCP Bridge] Analyze learnings error: {e}")
             return {"error": str(e), "saved": False}
 
+    # =========================================================================
+    # MAINTENANCE API - Decay & Search Index
+    # =========================================================================
+
+    async def run_decay(self, force=False):
+        """Run memory decay pipeline in thread pool."""
+        loop = asyncio.get_event_loop()
+        def _run():
+            from decay_pipeline import run_decay as _run_decay
+            return _run_decay(force=force)
+        return await loop.run_in_executor(_executor, _run)
+
+    async def rebuild_search_index(self):
+        """Rebuild FTS5 keyword search index from memory data."""
+        loop = asyncio.get_event_loop()
+        def _rebuild():
+            from keyword_index import get_keyword_index
+            idx = get_keyword_index()
+            count = idx.build_index_from_memory(self.base_path)
+            return {"indexed": count, "total": idx.get_indexed_count()}
+        return await loop.run_in_executor(_executor, _rebuild)
+
+    async def get_decay_stats(self):
+        """Get decay pipeline statistics."""
+        loop = asyncio.get_event_loop()
+        def _stats():
+            from decay_pipeline import get_decay_stats as _get_stats
+            return _get_stats()
+        return await loop.run_in_executor(_executor, _stats)
+
 
 # Singleton instance
 _bridge_instance = None

@@ -1981,6 +1981,12 @@ async def _extract_agent_to_memory(agent: dict):
         except Exception as le:
             print(f"[Agent {agent['id']}] Learning extraction skipped: {le}")
 
+        # Incrementally update search index so new data is immediately searchable
+        try:
+            await mcp_bridge.rebuild_search_index()
+        except Exception:
+            pass
+
     except Exception as e:
         print(f"[Agent {agent['id']}] Memory extraction error (non-fatal): {e}")
 
@@ -2849,6 +2855,17 @@ async def startup():
 
     # Run autonomy init in background so startup completes immediately
     asyncio.create_task(_init_autonomy())
+
+    # Build FTS5 search index in background (after other startup tasks)
+    async def _build_initial_index():
+        await asyncio.sleep(30)  # Let other startup tasks finish
+        try:
+            result = await mcp_bridge.rebuild_search_index()
+            print(f"[Startup] Search index built: {result}")
+        except Exception as e:
+            print(f"[Startup] Index build failed: {e}")
+
+    asyncio.create_task(_build_initial_index())
 
 @app.on_event("shutdown")
 async def shutdown():
@@ -7237,8 +7254,31 @@ async def get_system_status(user: str = Depends(verify_token)):
 
 @app.get("/memory/search")
 async def search_memory(q: str, limit: int = 10, user: str = Depends(verify_token)):
-    """Search through AI Memory — searches learnings, knowledge base, conversations, and quick facts.
-    Uses multi-word matching: results are scored by how many query words they contain."""
+    """Search through AI Memory — uses FTS5 index when available, falls back to file scanning.
+    FTS5 uses BM25 scoring for fast, relevance-ranked results."""
+
+    # Try FTS5 index first (fast path)
+    try:
+        from keyword_index import get_keyword_index
+        idx = get_keyword_index()
+        if idx.get_indexed_count() > 0:
+            fts_results = idx.search(q, top_k=limit)
+            if fts_results:
+                # Format FTS5 results to match the existing response shape
+                formatted = []
+                for r in fts_results:
+                    formatted.append({
+                        "type": r.get("chunk_type", "fact"),
+                        "id": r.get("chunk_id", r.get("conversation_id", "")),
+                        "title": r.get("content", "")[:100],
+                        "snippet": r.get("content", "")[:300],
+                        "score": r.get("similarity", 0),
+                    })
+                return {"query": q, "results": formatted, "count": len(formatted), "source": "fts5"}
+    except Exception as e:
+        print(f"[Search] FTS5 search failed, falling back to file scan: {e}")
+
+    # Fallback: file-scanning implementation
     results = []
     query_words = [w.lower() for w in q.split() if len(w) > 2]
     q_lower = q.lower()
@@ -7368,7 +7408,44 @@ async def search_memory(q: str, limit: int = 10, user: str = Depends(verify_toke
     except Exception as e:
         print(f"Search error: {e}")
 
-    return {"query": q, "results": results, "count": len(results)}
+    return {"query": q, "results": results, "count": len(results), "source": "file_scan"}
+
+
+# ============================================================================
+# Memory Maintenance Endpoints
+# ============================================================================
+
+@app.post("/api/memory/maintenance")
+async def trigger_maintenance(user: str = Depends(verify_token)):
+    """Manually trigger decay + index rebuild."""
+    try:
+        decay_result = await mcp_bridge.run_decay(force=True)
+        index_result = await mcp_bridge.rebuild_search_index()
+        return {
+            "success": True,
+            "decay": decay_result,
+            "index": index_result,
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/memory/decay-stats")
+async def get_decay_stats(user: str = Depends(verify_token)):
+    """Get decay pipeline statistics."""
+    try:
+        stats = await mcp_bridge.get_decay_stats()
+        return {"success": True, **stats}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.post("/api/memory/rebuild-index")
+async def rebuild_index(user: str = Depends(verify_token)):
+    """Rebuild FTS5 search index."""
+    try:
+        result = await mcp_bridge.rebuild_search_index()
+        return {"success": True, **result}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 # ============================================================================
@@ -10679,8 +10756,25 @@ async def start_scheduler():
         except Exception as e:
             print(f"Failed to register schedule from {f}: {e}")
 
+    # Memory maintenance: decay + FTS5 index rebuild (daily at 3 AM)
+    async def daily_memory_maintenance():
+        try:
+            decay_result = await mcp_bridge.run_decay()
+            print(f"[Maintenance] Decay complete: {decay_result}")
+            index_result = await mcp_bridge.rebuild_search_index()
+            print(f"[Maintenance] Index rebuilt: {index_result}")
+        except Exception as e:
+            print(f"[Maintenance] Error: {e}")
+
+    scheduler.add_job(
+        daily_memory_maintenance,
+        CronTrigger(hour=3, minute=0),
+        id="cerebro_memory_maintenance",
+        replace_existing=True
+    )
+
     scheduler.start()
-    print("Scheduler started")
+    print("Scheduler started (memory maintenance scheduled at 3:00 AM)")
 
 
 # ============================================================================

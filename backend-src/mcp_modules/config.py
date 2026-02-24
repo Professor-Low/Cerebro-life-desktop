@@ -28,7 +28,9 @@ IS_LINUX = platform.system() == "Linux"
 IS_MAC = platform.system() == "Darwin"
 
 # ============== BASE DATA DIRECTORY ==============
-DATA_DIR = Path(os.environ.get("CEREBRO_DATA_DIR", str(Path.home() / ".cerebro" / "data")))
+DATA_DIR = Path(os.environ.get("CEREBRO_DATA_DIR",
+                os.environ.get("AI_MEMORY_PATH",
+                str(Path.home() / ".cerebro" / "data"))))
 
 # Backward-compatible alias: many modules import AI_MEMORY_BASE
 AI_MEMORY_BASE = DATA_DIR
