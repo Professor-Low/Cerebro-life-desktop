@@ -10536,6 +10536,11 @@
             font-size: 0.85rem; font-weight: 500; color: var(--purple);
         }
         .update-available-bar .btn { padding: 6px 16px; font-size: 0.8rem; }
+        .update-dismiss-btn {
+            background: none; border: none; color: var(--purple); font-size: 1.2rem;
+            cursor: pointer; padding: 2px 8px; opacity: 0.7; line-height: 1;
+        }
+        .update-dismiss-btn:hover { opacity: 1; }
         @keyframes slideDown {
             from { transform: translateY(-100%); opacity: 0; }
             to { transform: translateY(0); opacity: 1; }
@@ -24276,8 +24281,9 @@
 
             <!-- Update Available Banner -->
             <div class="update-available-bar" id="update-available-bar" style="display:none;">
-                <span class="update-msg">A new version of Cerebro is available.</span>
+                <span class="update-msg" id="update-msg-text">A new version of Cerebro is available.</span>
                 <button class="btn btn-primary" id="update-apply-btn" onclick="applyAppUpdate()">Restart &amp; Update</button>
+                <button class="update-dismiss-btn" onclick="dismissUpdateBanner()" title="Dismiss">&times;</button>
             </div>
 
             <!-- Scroll to bottom button (for chat view) -->
@@ -31137,14 +31143,27 @@
         }
 
         // ==================== UPDATE BANNER ====================
-        window.__cerebroShowUpdateBanner = function() {
-            const bar = document.getElementById('update-available-bar');
-            if (bar) bar.style.display = '';
+        var _updateBannerDismissed = false;
+
+        window.__cerebroShowUpdateBanner = function(type) {
+            if (_updateBannerDismissed) return;
+            var bar = document.getElementById('update-available-bar');
+            var msg = document.getElementById('update-msg-text');
+            if (!bar) return;
+            if (type === 'docker') {
+                if (msg) msg.textContent = 'A backend update is available.';
+            } else if (type === 'electron') {
+                if (msg) msg.textContent = 'A new version of Cerebro is available.';
+            } else {
+                if (msg) msg.textContent = 'An update is available.';
+            }
+            bar.style.display = '';
         };
 
         function dismissUpdateBanner() {
-            const bar = document.getElementById('update-available-bar');
+            var bar = document.getElementById('update-available-bar');
             if (bar) bar.style.display = 'none';
+            _updateBannerDismissed = true;
         }
 
         function setUpdateBtnSpinner(btn, text) {

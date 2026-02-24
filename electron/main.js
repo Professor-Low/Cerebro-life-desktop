@@ -472,7 +472,7 @@ async function checkForUpdatesQuietly() {
     if (result.updateAvailable && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.executeJavaScript(`
         if (typeof window.__cerebroShowUpdateBanner === 'function') {
-          window.__cerebroShowUpdateBanner();
+          window.__cerebroShowUpdateBanner('docker');
         }
       `).catch(() => {});
     }
@@ -583,7 +583,7 @@ app.whenReady().then(async () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.executeJavaScript(`
         if (typeof window.__cerebroShowUpdateBanner === 'function') {
-          window.__cerebroShowUpdateBanner();
+          window.__cerebroShowUpdateBanner('electron');
         }
       `).catch(() => {});
     }
