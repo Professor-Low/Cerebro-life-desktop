@@ -13,6 +13,7 @@ const ENV_FILE = path.join(CEREBRO_DIR, '.env');
 const SETUP_STATE_FILE = path.join(CEREBRO_DIR, '.setup-state.json');
 const FILE_ACCESS_CONFIG = path.join(CEREBRO_DIR, 'file-access.json');
 const BACKEND_IMAGE = 'ghcr.io/professor-low/cerebro-backend';
+const DOCKER_UPDATE_STATE = path.join(CEREBRO_DIR, '.docker-update-state.json');
 
 class DockerManager extends EventEmitter {
   constructor() {
@@ -504,26 +505,57 @@ class DockerManager extends EventEmitter {
    */
   async checkForUpdates() {
     try {
-      const localBackend = await this._run(this._dockerCmd(), [
-        'inspect', '--format', '{{index .RepoDigests 0}}',
+      // Get local image ID (stable identifier that changes when image is updated)
+      const localId = await this._run(this._dockerCmd(), [
+        'inspect', '--format', '{{.Id}}',
         `${BACKEND_IMAGE}:latest`,
       ]).catch(() => null);
 
+      if (!localId) {
+        return { updateAvailable: false };
+      }
+
+      const localIdTrimmed = localId.trim();
+
+      // Check if we recently pulled this exact image (prevents false positives from
+      // digest comparison issues between docker inspect and docker manifest inspect)
+      try {
+        if (fs.existsSync(DOCKER_UPDATE_STATE)) {
+          const state = JSON.parse(fs.readFileSync(DOCKER_UPDATE_STATE, 'utf-8'));
+          const age = Date.now() - (state.timestamp || 0);
+          // If we pulled within the last 2 hours and the image ID hasn't changed, no update
+          if (age < 7200000 && state.imageId === localIdTrimmed) {
+            return { updateAvailable: false, reason: 'recently_updated' };
+          }
+        }
+      } catch {}
+
+      // Try docker manifest inspect to detect remote changes
       const remoteResult = await this._run(this._dockerCmd(), [
         'manifest', 'inspect', `${BACKEND_IMAGE}:latest`,
       ], { timeout: 15000 }).catch(() => null);
 
-      if (!localBackend || !remoteResult) {
+      if (!remoteResult) {
         return { updateAvailable: false };
       }
 
-      const localDigest = localBackend.split('@')[1] || '';
-      const remoteDigest = remoteResult.match(/"digest":\s*"([^"]+)"/)?.[1] || '';
+      // Compute SHA256 of the remote manifest content — this is stable and comparable
+      const remoteManifestHash = crypto.createHash('sha256').update(remoteResult.trim()).digest('hex').slice(0, 16);
+
+      // Check if we already have this exact manifest
+      try {
+        if (fs.existsSync(DOCKER_UPDATE_STATE)) {
+          const state = JSON.parse(fs.readFileSync(DOCKER_UPDATE_STATE, 'utf-8'));
+          if (state.manifestHash === remoteManifestHash) {
+            return { updateAvailable: false, reason: 'manifest_matches' };
+          }
+        }
+      } catch {}
 
       return {
-        updateAvailable: localDigest !== remoteDigest && remoteDigest !== '',
-        currentDigest: localDigest.slice(0, 16),
-        remoteDigest: remoteDigest.slice(0, 16),
+        updateAvailable: true,
+        currentId: localIdTrimmed.slice(0, 16),
+        remoteManifestHash,
       };
     } catch {
       return { updateAvailable: false };
@@ -537,6 +569,28 @@ class DockerManager extends EventEmitter {
     await this.pullImages(onProgress);
     await this.stopStack();
     await this.startStack();
+
+    // Save update state to prevent false-positive update checks
+    try {
+      const localId = await this._run(this._dockerCmd(), [
+        'inspect', '--format', '{{.Id}}',
+        `${BACKEND_IMAGE}:latest`,
+      ]).catch(() => '');
+
+      const remoteResult = await this._run(this._dockerCmd(), [
+        'manifest', 'inspect', `${BACKEND_IMAGE}:latest`,
+      ], { timeout: 15000 }).catch(() => '');
+
+      const manifestHash = remoteResult
+        ? crypto.createHash('sha256').update(remoteResult.trim()).digest('hex').slice(0, 16)
+        : '';
+
+      fs.writeFileSync(DOCKER_UPDATE_STATE, JSON.stringify({
+        timestamp: Date.now(),
+        imageId: (localId || '').trim(),
+        manifestHash,
+      }));
+    } catch {}
   }
 
   /**

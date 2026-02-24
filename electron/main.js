@@ -818,6 +818,18 @@ ipcMain.handle('apply-update', async () => {
   try {
     const dockerResult = await dockerManager.checkForUpdates();
     const needsDocker = dockerResult.updateAvailable;
+
+    // Re-check for pending Electron updates (electronUpdateReady resets on restart)
+    if (!electronUpdateReady) {
+      try {
+        const checkResult = await autoUpdater.checkForUpdates();
+        if (checkResult && checkResult.downloadPromise) {
+          await checkResult.downloadPromise;
+        }
+        // Give the update-downloaded event a moment to fire
+        await new Promise(r => setTimeout(r, 2000));
+      } catch {}
+    }
     const needsElectron = electronUpdateReady;
 
     // Show splash screen
