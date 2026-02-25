@@ -109,6 +109,12 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
     ipcRenderer.on('license-failure', (_event, data) => callback(data));
   },
 
+  // Port conflict error (sent to activation page when port 61000 is blocked)
+  onPortConflict: (callback) => {
+    ipcRenderer.removeAllListeners('port-conflict');
+    ipcRenderer.on('port-conflict', (_event, data) => callback(data));
+  },
+
   // Credential events
   onCredentialsExpired: (callback) => {
     ipcRenderer.removeAllListeners('credentials-expired');

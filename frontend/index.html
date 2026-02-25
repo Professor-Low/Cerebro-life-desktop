@@ -3785,6 +3785,237 @@
             line-height: 1.5;
         }
 
+        /* ==================== SPECOPS TABBED PANEL ==================== */
+        .specops-tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 12px;
+        }
+        .specops-tab {
+            padding: 8px 16px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-family: 'JetBrains Mono', 'SF Mono', monospace;
+        }
+        .specops-tab:hover {
+            color: var(--text-primary);
+            background: rgba(255, 45, 120, 0.05);
+        }
+        .specops-tab.active {
+            color: var(--specops-pink);
+            border-bottom-color: var(--specops-pink);
+        }
+        .specops-tab-content {
+            display: none;
+            min-height: 200px;
+            max-height: calc(100vh - 340px);
+            overflow-y: auto;
+        }
+        .specops-tab-content.active {
+            display: block;
+        }
+        .specops-live-output {
+            font-family: 'SF Mono', monospace;
+            font-size: 0.8rem;
+            line-height: 1.6;
+            padding: 12px;
+            background: var(--bg-primary);
+            border-radius: 8px;
+            min-height: 150px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            color: var(--text-secondary);
+        }
+        .specops-mission-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: rgba(255, 45, 120, 0.06);
+            border: 1px solid rgba(255, 45, 120, 0.15);
+            border-radius: 10px;
+            margin-bottom: 12px;
+        }
+        .specops-mission-header .agent-spinner {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+        .specops-mission-header-info {
+            flex: 1;
+        }
+        .specops-mission-header-name {
+            font-weight: 700;
+            font-size: 0.85rem;
+            color: var(--specops-pink);
+            font-family: 'JetBrains Mono', 'SF Mono', monospace;
+        }
+        .specops-mission-header-status {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+        .specops-countdown {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            background: rgba(255, 45, 120, 0.08);
+            border: 1px solid rgba(255, 45, 120, 0.2);
+            border-radius: 10px;
+            margin-bottom: 12px;
+        }
+        .specops-countdown-label {
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: var(--specops-pink-light);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-family: 'JetBrains Mono', 'SF Mono', monospace;
+        }
+        .specops-countdown-timer {
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: var(--specops-pink);
+            font-family: 'JetBrains Mono', 'SF Mono', monospace;
+            letter-spacing: 2px;
+        }
+        .specops-action-btns {
+            display: flex;
+            gap: 8px;
+            margin-left: auto;
+        }
+        .specops-action-btn {
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            transition: all 0.2s ease;
+            font-family: 'JetBrains Mono', 'SF Mono', monospace;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .specops-action-btn.force {
+            background: var(--specops-pink);
+            color: white;
+            border-color: var(--specops-pink);
+        }
+        .specops-action-btn.force:hover {
+            background: #e6266c;
+            transform: translateY(-1px);
+        }
+        .specops-action-btn.pause {
+            background: var(--bg-elevated);
+            color: var(--text-secondary);
+        }
+        .specops-action-btn.pause:hover {
+            background: var(--bg-secondary);
+            border-color: var(--specops-pink);
+            color: var(--specops-pink);
+        }
+        .specops-stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .specops-stat {
+            text-align: center;
+            padding: 8px;
+            background: var(--bg-elevated);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+        .specops-stat-value {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', 'SF Mono', monospace;
+        }
+        .specops-stat-label {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 2px;
+        }
+        .specops-full-output {
+            font-family: 'SF Mono', monospace;
+            font-size: 0.78rem;
+            line-height: 1.5;
+            padding: 12px;
+            background: var(--bg-primary);
+            border-radius: 8px;
+            min-height: 150px;
+            max-height: calc(100vh - 400px);
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+            color: var(--text-secondary);
+        }
+        /* Specops form redesign */
+        .specops-briefing-section {
+            border: 1px solid rgba(255, 45, 120, 0.2);
+            background: rgba(255, 45, 120, 0.03);
+            border-radius: 10px;
+            padding: 14px 16px;
+            margin-bottom: 12px;
+        }
+        .specops-briefing-header {
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: var(--specops-pink);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            font-family: 'JetBrains Mono', 'SF Mono', monospace;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .specops-role-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+        }
+        .specops-role-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            padding: 10px 6px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-elevated);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.7rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+        .specops-role-btn:hover {
+            border-color: var(--specops-pink-light);
+            background: rgba(255, 45, 120, 0.05);
+        }
+        .specops-role-btn.active {
+            border-color: var(--specops-pink);
+            background: rgba(255, 45, 120, 0.1);
+            color: var(--specops-pink);
+            font-weight: 600;
+        }
+        .specops-role-btn .role-icon {
+            font-size: 1.2rem;
+        }
+
         .agent-header {
             display: flex;
             justify-content: space-between;
@@ -24883,41 +25114,55 @@
 
                             <!-- Special Ops Form -->
                             <div id="specops-form" class="hidden">
-                                <div class="specops-form-section">
+                                <!-- Section 1: MISSION BRIEFING -->
+                                <div class="specops-briefing-section">
+                                    <div class="specops-briefing-header">&#x1F3AF; Mission Briefing</div>
                                     <div class="form-group">
-                                        <label class="form-label">Mission Name</label>
-                                        <input type="text" class="form-input" id="specops-mission-name" placeholder="Operation Nightfall" maxlength="60">
+                                        <label class="form-label" style="font-family:'JetBrains Mono','SF Mono',monospace;text-transform:uppercase;letter-spacing:1px;font-size:0.65rem;color:var(--specops-pink-light);">Operation Name</label>
+                                        <input type="text" class="form-input" id="specops-mission-name" placeholder="OPERATION NIGHTFALL" maxlength="60" style="font-family:'JetBrains Mono','SF Mono',monospace;text-transform:uppercase;">
                                     </div>
                                     <div class="form-group">
-                                        <label class="form-label">Mission Objective <span class="required">*</span></label>
-                                        <textarea class="form-input form-textarea" id="specops-task-input" placeholder="Describe the multi-day mission objective..."></textarea>
+                                        <label class="form-label" style="font-family:'JetBrains Mono','SF Mono',monospace;text-transform:uppercase;letter-spacing:1px;font-size:0.65rem;color:var(--specops-pink-light);">Objective <span class="required">*</span></label>
+                                        <textarea class="form-input form-textarea" id="specops-task-input" placeholder="Describe the multi-day mission objective..." style="min-height:70px;"></textarea>
                                     </div>
                                 </div>
 
-                                <div class="specops-form-section">
-                                    <div class="form-group">
-                                        <label class="form-label">Agent Sub-Role</label>
-                                        <div class="specops-selector" id="specops-role-selector">
-                                            <button type="button" class="sel-btn active" data-role="worker" onclick="selectSpecopsRole(this)">Worker</button>
-                                            <button type="button" class="sel-btn" data-role="researcher" onclick="selectSpecopsRole(this)">Researcher</button>
-                                            <button type="button" class="sel-btn" data-role="coder" onclick="selectSpecopsRole(this)">Coder</button>
-                                            <button type="button" class="sel-btn" data-role="analyst" onclick="selectSpecopsRole(this)">Analyst</button>
+                                <!-- Section 2: OPERATIVE CLASS -->
+                                <div class="specops-briefing-section">
+                                    <div class="specops-briefing-header">&#x1F396;&#xFE0F; Operative Class</div>
+                                    <div class="specops-role-grid" id="specops-role-selector">
+                                        <div class="specops-role-btn active" data-role="worker" onclick="selectSpecopsRole(this)">
+                                            <span class="role-icon">&#x26A1;</span>
+                                            <span>Worker</span>
+                                        </div>
+                                        <div class="specops-role-btn" data-role="researcher" onclick="selectSpecopsRole(this)">
+                                            <span class="role-icon">&#x1F50D;</span>
+                                            <span>Researcher</span>
+                                        </div>
+                                        <div class="specops-role-btn" data-role="coder" onclick="selectSpecopsRole(this)">
+                                            <span class="role-icon">&#x1F4BB;</span>
+                                            <span>Coder</span>
+                                        </div>
+                                        <div class="specops-role-btn" data-role="analyst" onclick="selectSpecopsRole(this)">
+                                            <span class="role-icon">&#x1F4CA;</span>
+                                            <span>Analyst</span>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div class="specops-form-section">
+                                <!-- Section 3: DEPLOYMENT PARAMETERS -->
+                                <div class="specops-briefing-section">
+                                    <div class="specops-briefing-header">&#x2699;&#xFE0F; Deployment Parameters</div>
                                     <div class="form-group">
-                                        <label class="form-label">Work Style</label>
+                                        <label class="form-label" style="font-family:'JetBrains Mono','SF Mono',monospace;text-transform:uppercase;letter-spacing:1px;font-size:0.65rem;color:var(--specops-pink-light);">Cadence</label>
                                         <div class="specops-selector" id="specops-work-style-selector">
                                             <button type="button" class="sel-btn active" data-value="continuous" onclick="selectWorkStyle(this)">Continuous</button>
                                             <button type="button" class="sel-btn" data-value="cycle" onclick="selectWorkStyle(this)">Cycle-Based</button>
                                             <button type="button" class="sel-btn" data-value="hybrid" onclick="selectWorkStyle(this)">Agent Decides</button>
                                         </div>
                                     </div>
-
                                     <div class="form-group" id="specops-cycle-interval-group" style="display:none;">
-                                        <label class="form-label">Cycle Interval</label>
+                                        <label class="form-label" style="font-family:'JetBrains Mono','SF Mono',monospace;text-transform:uppercase;letter-spacing:1px;font-size:0.65rem;color:var(--specops-pink-light);">Interval</label>
                                         <div class="specops-selector" id="specops-cycle-selector">
                                             <button type="button" class="sel-btn" data-value="900" onclick="selectCycleInterval(this)">15m</button>
                                             <button type="button" class="sel-btn" data-value="1800" onclick="selectCycleInterval(this)">30m</button>
@@ -24926,9 +25171,8 @@
                                             <button type="button" class="sel-btn" data-value="43200" onclick="selectCycleInterval(this)">12hr</button>
                                         </div>
                                     </div>
-
                                     <div class="form-group">
-                                        <label class="form-label">Mission Duration</label>
+                                        <label class="form-label" style="font-family:'JetBrains Mono','SF Mono',monospace;text-transform:uppercase;letter-spacing:1px;font-size:0.65rem;color:var(--specops-pink-light);">Duration</label>
                                         <div class="specops-selector" id="specops-duration-selector">
                                             <button type="button" class="sel-btn" data-value="86400" onclick="selectMissionDuration(this)">1 day</button>
                                             <button type="button" class="sel-btn" data-value="172800" onclick="selectMissionDuration(this)">2 days</button>
@@ -24939,6 +25183,26 @@
                                     </div>
                                 </div>
 
+                                <!-- Section 4: RULES OF ENGAGEMENT -->
+                                <div class="specops-briefing-section">
+                                    <div class="specops-briefing-header">&#x1F4CB; Rules of Engagement</div>
+                                    <div class="form-group">
+                                        <label class="form-label" style="font-family:'JetBrains Mono','SF Mono',monospace;text-transform:uppercase;letter-spacing:1px;font-size:0.65rem;color:var(--specops-pink-light);">Project</label>
+                                        <select class="form-input" id="specops-project-select" style="padding:8px;">
+                                            <option value="">No Project</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" style="font-family:'JetBrains Mono','SF Mono',monospace;text-transform:uppercase;letter-spacing:1px;font-size:0.65rem;color:var(--specops-pink-light);">Target Scope</label>
+                                        <input type="text" class="form-input" id="specops-target-scope" placeholder="e.g., Frontend codebase, API layer, Database schema...">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" style="font-family:'JetBrains Mono','SF Mono',monospace;text-transform:uppercase;letter-spacing:1px;font-size:0.65rem;color:var(--specops-pink-light);">Success Criteria</label>
+                                        <textarea class="form-input form-textarea" id="specops-success-criteria" placeholder="Define what mission success looks like..." style="min-height:50px;"></textarea>
+                                    </div>
+                                </div>
+
+                                <!-- Advanced Options -->
                                 <div style="margin-top:8px;">
                                     <button type="button" class="btn btn-ghost" onclick="toggleSpecopsAdvanced()" style="font-size:0.8rem;">Advanced Options</button>
                                     <div id="specops-advanced" class="hidden" style="margin-top:10px;">
@@ -25012,11 +25276,62 @@
 
                         <!-- Right: Running (spinner) -->
                         <div class="panel-mode" id="panel-right-running">
-                            <div class="agent-running-indicator">
-                                <div class="agent-spinner"></div>
-                                <div class="running-text">Agent is working...</div>
-                                <div class="running-task" id="panel-running-task"></div>
-                                <div class="running-elapsed" id="panel-running-elapsed">0:00</div>
+                            <!-- Normal agent running view -->
+                            <div id="running-normal-view">
+                                <div class="agent-running-indicator">
+                                    <div class="agent-spinner"></div>
+                                    <div class="running-text">Agent is working...</div>
+                                    <div class="running-task" id="panel-running-task"></div>
+                                    <div class="running-elapsed" id="panel-running-elapsed">0:00</div>
+                                </div>
+                            </div>
+                            <!-- SpecOps running/cycling view -->
+                            <div id="running-specops-view" style="display:none;">
+                                <div class="specops-mission-header">
+                                    <div class="agent-spinner"></div>
+                                    <div class="specops-mission-header-info">
+                                        <div class="specops-mission-header-name" id="specops-panel-mission-name"></div>
+                                        <div class="specops-mission-header-status" id="specops-panel-status">Cycle #1 — Running</div>
+                                    </div>
+                                    <div class="running-elapsed" id="specops-panel-elapsed">0:00</div>
+                                </div>
+                                <!-- Countdown dashboard (shown during cycling) -->
+                                <div id="specops-countdown-area" style="display:none;">
+                                    <div class="specops-countdown">
+                                        <div>
+                                            <div class="specops-countdown-label">Next Cycle In</div>
+                                            <div class="specops-countdown-timer" id="specops-countdown-timer">--:--</div>
+                                        </div>
+                                        <div class="specops-action-btns">
+                                            <button class="specops-action-btn force" onclick="forceNextCycle(agentPanelAgentId)">Force Next Cycle</button>
+                                            <button class="specops-action-btn pause" onclick="pauseSpecopsMission(agentPanelAgentId)">Pause Mission</button>
+                                        </div>
+                                    </div>
+                                    <div class="specops-stats-row" id="specops-stats-row">
+                                        <div class="specops-stat"><div class="specops-stat-value" id="specops-stat-cycles">0</div><div class="specops-stat-label">Cycles</div></div>
+                                        <div class="specops-stat"><div class="specops-stat-value" id="specops-stat-elapsed">0m</div><div class="specops-stat-label">Elapsed</div></div>
+                                        <div class="specops-stat"><div class="specops-stat-value" id="specops-stat-progress">—</div><div class="specops-stat-label">Progress</div></div>
+                                        <div class="specops-stat"><div class="specops-stat-value" id="specops-stat-output">0</div><div class="specops-stat-label">Output Size</div></div>
+                                    </div>
+                                </div>
+                                <!-- Tabs -->
+                                <div class="specops-tabs">
+                                    <div class="specops-tab active" data-tab="live" onclick="switchSpecopsTab(this)">Live</div>
+                                    <div class="specops-tab" data-tab="journal" onclick="switchSpecopsTab(this)">Journal</div>
+                                    <div class="specops-tab" data-tab="fulloutput" onclick="switchSpecopsTab(this)">Full Output</div>
+                                </div>
+                                <!-- Tab contents -->
+                                <div class="specops-tab-content active" id="specops-tab-live">
+                                    <div class="specops-live-output" id="specops-live-output">Waiting for output...</div>
+                                </div>
+                                <div class="specops-tab-content" id="specops-tab-journal">
+                                    <div id="specops-journal-panel">
+                                        <div style="color:var(--text-muted);font-size:0.8rem;padding:20px;text-align:center;">No journal entries yet — first cycle in progress</div>
+                                    </div>
+                                </div>
+                                <div class="specops-tab-content" id="specops-tab-fulloutput">
+                                    <div class="specops-full-output" id="specops-full-output">Accumulated output will appear here after the first cycle completes.</div>
+                                </div>
                             </div>
                         </div>
 
@@ -29876,6 +30191,13 @@
                     if (data.auto_continue !== undefined) agent.auto_continue = data.auto_continue;
                     if (data.status) agent.status = data.status;
                     renderAgents();
+                    // Update specops panel if open for this agent
+                    if (agentPanelAgentId === data.agent_id && (agentPanelState === 'running')) {
+                        var panelAgent = agents[data.agent_id];
+                        if (panelAgent && panelAgent.is_specops) {
+                            updateSpecopsRunningPanel(panelAgent);
+                        }
+                    }
                 }
             });
 
@@ -34054,6 +34376,24 @@
                 if (agentId) {
                     var agent = agents[agentId];
                     if (agent) {
+                        // Check for cycling status
+                        if (agent.status === 'cycling') {
+                            statusBadge.textContent = 'CYCLING';
+                            statusBadge.className = 'agent-status-badge cycling';
+                        }
+                        // Toggle normal vs specops running view
+                        var normalView = document.getElementById('running-normal-view');
+                        var specopsView = document.getElementById('running-specops-view');
+                        if (normalView && specopsView) {
+                            if (agent.is_specops) {
+                                normalView.style.display = 'none';
+                                specopsView.style.display = 'block';
+                                updateSpecopsRunningPanel(agent);
+                            } else {
+                                normalView.style.display = 'block';
+                                specopsView.style.display = 'none';
+                            }
+                        }
                         populateLeftDetailPanel(agentId);
                         document.getElementById('panel-running-task').textContent = agent.task.slice(0, 120) + (agent.task.length > 120 ? '...' : '');
                         var typeEmoji = (agent.type || 'worker') === 'researcher' ? '\uD83D\uDD0D' : (agent.type || 'worker') === 'coder' ? '\uD83D\uDCBB' : (agent.type || 'worker') === 'analyst' ? '\uD83D\uDCCA' : '\u26A1';
@@ -34157,7 +34497,7 @@
                 }).catch(console.error);
 
                 var agent = agents[agentId];
-                if (agent && agent.status === 'running') {
+                if (agent && (agent.status === 'running' || agent.status === 'cycling')) {
                     setAgentPanelState('running', agentId);
                 } else {
                     setAgentPanelState('detail', agentId);
@@ -34171,6 +34511,7 @@
             var chainNavClose = document.getElementById('panel-chain-nav');
             if (chainNavClose) chainNavClose.style.display = 'none';
             if (_panelElapsedTimer) { clearInterval(_panelElapsedTimer); _panelElapsedTimer = null; }
+            stopSpecopsCountdown();
             agentPanelState = null;
             agentPanelAgentId = null;
             currentDetailAgentId = null;
@@ -35687,6 +36028,25 @@
             if (workflowForm) workflowForm.classList.toggle('hidden', mode !== 'workflow');
             if (specopsForm) specopsForm.classList.toggle('hidden', mode !== 'specops');
 
+            // Populate project dropdown for specops
+            if (mode === 'specops') {
+                var projSelect = document.getElementById('specops-project-select');
+                if (projSelect && typeof agentProjects === 'object') {
+                    projSelect.textContent = '';
+                    var defaultOpt = document.createElement('option');
+                    defaultOpt.value = '';
+                    defaultOpt.textContent = 'No Project';
+                    projSelect.appendChild(defaultOpt);
+                    Object.keys(agentProjects).forEach(function(pid) {
+                        var proj = agentProjects[pid];
+                        var opt = document.createElement('option');
+                        opt.value = pid;
+                        opt.textContent = proj.name || pid;
+                        projSelect.appendChild(opt);
+                    });
+                }
+            }
+
             // Update launch button text
             var launchBtn = document.getElementById('panel-launch-btn');
             if (launchBtn) {
@@ -35706,10 +36066,10 @@
         // SPECIAL OPS FUNCTIONS
         // =====================================================
 
-        function selectSpecopsRole(btn) {
-            document.querySelectorAll('#specops-role-selector .sel-btn').forEach(function(b) { b.classList.remove('active'); });
-            btn.classList.add('active');
-            selectedSpecopsRole = btn.dataset.role;
+        function selectSpecopsRole(el) {
+            document.querySelectorAll('#specops-role-selector .specops-role-btn').forEach(function(b) { b.classList.remove('active'); });
+            el.classList.add('active');
+            selectedSpecopsRole = el.dataset.role;
         }
 
         function selectWorkStyle(btn) {
@@ -35756,12 +36116,15 @@
                 timeout: 0,
                 model: model,
                 context: context,
+                project_id: document.getElementById('specops-project-select')?.value || null,
                 specops_config: {
                     mission_name: missionName,
                     work_style: specopsWorkStyle,
                     cycle_interval: specopsCycleInterval,
                     mission_duration: specopsMissionDuration,
-                    sub_role: selectedSpecopsRole
+                    sub_role: selectedSpecopsRole,
+                    target_scope: (document.getElementById('specops-target-scope')?.value || '').trim() || null,
+                    success_criteria: (document.getElementById('specops-success-criteria')?.value || '').trim() || null
                 }
             };
 
@@ -35780,6 +36143,183 @@
                 if (nameEl) nameEl.value = '';
             } catch (e) {
                 console.error('[SpecOps] Deploy failed:', e);
+            }
+        }
+
+        // ==================== SPECOPS TABBED PANEL ====================
+
+        var _specopsCountdownTimer = null;
+
+        function switchSpecopsTab(tabEl) {
+            var tabName = tabEl.dataset.tab;
+            document.querySelectorAll('.specops-tab').forEach(function(t) { t.classList.remove('active'); });
+            document.querySelectorAll('.specops-tab-content').forEach(function(c) { c.classList.remove('active'); });
+            tabEl.classList.add('active');
+            var content = document.getElementById('specops-tab-' + tabName);
+            if (content) content.classList.add('active');
+        }
+
+        function renderSpecopsJournalTab(agent) {
+            var panel = document.getElementById('specops-journal-panel');
+            if (!panel) return;
+            var journal = agent.mission_journal || [];
+            if (journal.length === 0) {
+                panel.textContent = '';
+                var emptyMsg = document.createElement('div');
+                emptyMsg.style.cssText = 'color:var(--text-muted);font-size:0.8rem;padding:20px;text-align:center;';
+                emptyMsg.textContent = 'No journal entries yet \u2014 first cycle in progress';
+                panel.appendChild(emptyMsg);
+                return;
+            }
+            panel.textContent = '';
+            var sorted = journal.slice().reverse();
+            sorted.forEach(function(entry) {
+                var entryDiv = document.createElement('div');
+                entryDiv.className = 'specops-journal-entry';
+                var headerDiv = document.createElement('div');
+                headerDiv.className = 'specops-journal-entry-header';
+                var cycleSpan = document.createElement('span');
+                cycleSpan.textContent = 'CYCLE #' + (entry.cycle || '?');
+                var timeSpan = document.createElement('span');
+                timeSpan.textContent = entry.timestamp ? new Date(entry.timestamp).toLocaleString() : '';
+                headerDiv.appendChild(cycleSpan);
+                headerDiv.appendChild(timeSpan);
+                var bodyDiv = document.createElement('div');
+                bodyDiv.className = 'specops-journal-entry-body';
+                var fields = [
+                    { label: 'Progress', value: entry.progress || 'N/A' },
+                    { label: 'Completed', value: entry.completed || 'N/A' },
+                    { label: 'Next', value: entry.next || 'N/A' },
+                    { label: 'Blockers', value: entry.blockers || 'None' }
+                ];
+                fields.forEach(function(f) {
+                    var row = document.createElement('div');
+                    var strong = document.createElement('strong');
+                    strong.textContent = f.label + ': ';
+                    row.appendChild(strong);
+                    row.appendChild(document.createTextNode(f.value));
+                    bodyDiv.appendChild(row);
+                });
+                entryDiv.appendChild(headerDiv);
+                entryDiv.appendChild(bodyDiv);
+                panel.appendChild(entryDiv);
+            });
+        }
+
+        function updateSpecopsRunningPanel(agent) {
+            if (!agent || !agent.is_specops) return;
+
+            // Update mission name
+            var nameEl = document.getElementById('specops-panel-mission-name');
+            if (nameEl) nameEl.textContent = agent.mission_name || 'Unnamed Mission';
+
+            // Update status text
+            var statusEl = document.getElementById('specops-panel-status');
+            if (statusEl) {
+                var cycleNum = (agent.cycle_count || 0) + 1;
+                if (agent.status === 'cycling') {
+                    statusEl.textContent = 'Completed ' + agent.cycle_count + ' cycle(s) \u2014 Standing by';
+                } else {
+                    statusEl.textContent = 'Cycle #' + cycleNum + ' \u2014 Running';
+                }
+            }
+
+            // Update stats
+            var cyclesEl = document.getElementById('specops-stat-cycles');
+            if (cyclesEl) cyclesEl.textContent = agent.cycle_count || 0;
+
+            var elapsedEl = document.getElementById('specops-stat-elapsed');
+            if (elapsedEl) elapsedEl.textContent = formatDurationShort(agent.mission_elapsed || 0);
+
+            var progressEl = document.getElementById('specops-stat-progress');
+            if (progressEl) {
+                var journal = agent.mission_journal || [];
+                var lastEntry = journal.length > 0 ? journal[journal.length - 1] : null;
+                progressEl.textContent = lastEntry ? (lastEntry.progress || '\u2014').substring(0, 20) : '\u2014';
+            }
+
+            var outputEl = document.getElementById('specops-stat-output');
+            if (outputEl) {
+                var outLen = (agent.accumulated_output || agent.output || '').length;
+                outputEl.textContent = outLen > 1000 ? Math.round(outLen / 1000) + 'K' : outLen;
+            }
+
+            // Show/hide countdown area based on status
+            var countdownArea = document.getElementById('specops-countdown-area');
+            if (countdownArea) {
+                countdownArea.style.display = (agent.status === 'cycling') ? 'block' : 'none';
+            }
+
+            // Update countdown timer
+            if (agent.status === 'cycling' && agent.next_checkin) {
+                startSpecopsCountdown(agent.next_checkin);
+            } else {
+                stopSpecopsCountdown();
+            }
+
+            // Render journal tab
+            renderSpecopsJournalTab(agent);
+        }
+
+        function startSpecopsCountdown(nextCheckin) {
+            stopSpecopsCountdown();
+            var timerEl = document.getElementById('specops-countdown-timer');
+            if (!timerEl) return;
+
+            var targetTime = new Date(nextCheckin).getTime();
+
+            _specopsCountdownTimer = setInterval(function() {
+                var now = Date.now();
+                var diff = Math.max(0, Math.floor((targetTime - now) / 1000));
+                var m = Math.floor(diff / 60);
+                var s = diff % 60;
+                timerEl.textContent = m + ':' + s.toString().padStart(2, '0');
+                if (diff <= 0) {
+                    timerEl.textContent = 'STARTING...';
+                    stopSpecopsCountdown();
+                }
+            }, 1000);
+        }
+
+        function stopSpecopsCountdown() {
+            if (_specopsCountdownTimer) {
+                clearInterval(_specopsCountdownTimer);
+                _specopsCountdownTimer = null;
+            }
+        }
+
+        async function forceNextCycle(agentId) {
+            if (!agentId) return;
+            var confirmed = await cerebroConfirm('Force the next cycle to start immediately?', { title: 'Force Cycle', confirmText: 'Force It', danger: false });
+            if (!confirmed) return;
+            try {
+                var token = localStorage.getItem('cerebro_token');
+                await fetch(API_URL + '/agents/' + agentId + '/specops/force-cycle', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                showToast('Force cycle requested', 'success');
+            } catch (e) {
+                console.error('Force cycle failed:', e);
+                showToast('Failed to force cycle', 'error');
+            }
+        }
+
+        async function pauseSpecopsMission(agentId) {
+            if (!agentId) return;
+            var confirmed = await cerebroConfirm('Pause this mission? The agent will stop after the current cycle completes.', { title: 'Pause Mission', confirmText: 'Pause', danger: true });
+            if (!confirmed) return;
+            try {
+                var token = localStorage.getItem('cerebro_token');
+                await fetch(API_URL + '/agents/' + agentId + '/specops', {
+                    method: 'PATCH',
+                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ auto_continue: false })
+                });
+                showToast('Mission will pause after current cycle', 'success');
+            } catch (e) {
+                console.error('Pause failed:', e);
+                showToast('Failed to pause mission', 'error');
             }
         }
 
@@ -36202,10 +36742,31 @@
             }
 
             // Update unified panel if it's open for this agent
-            if (agentPanelAgentId === agent.id && agentPanelState === 'running') {
-                // Update running task text
+            if (agentPanelAgentId === agent.id && (agentPanelState === 'running')) {
                 var runTaskEl = document.getElementById('panel-running-task');
                 if (runTaskEl) runTaskEl.textContent = agent.task.slice(0, 120) + (agent.task.length > 120 ? '...' : '');
+
+                // SpecOps live streaming
+                if (agent.is_specops) {
+                    updateSpecopsRunningPanel(agent);
+                    // Stream live output
+                    var liveOutput = document.getElementById('specops-live-output');
+                    if (liveOutput && agent.output) {
+                        try { liveOutput.textContent = agent.output; } catch(e) { liveOutput.textContent = agent.output; }
+                        liveOutput.scrollTop = liveOutput.scrollHeight;
+                    }
+                    // Update full output
+                    var fullOutput = document.getElementById('specops-full-output');
+                    if (fullOutput && agent.accumulated_output) {
+                        try { fullOutput.textContent = agent.accumulated_output; } catch(e) { fullOutput.textContent = agent.accumulated_output; }
+                    }
+
+                    // Handle state transitions
+                    if (agent.status === 'cycling' && agentPanelState === 'running') {
+                        // Still use running state but update the specops view
+                        updateSpecopsRunningPanel(agent);
+                    }
+                }
             }
 
             // Start polling fallback when agents are running (catches missed WebSocket events)

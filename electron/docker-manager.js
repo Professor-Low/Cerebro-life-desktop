@@ -6,6 +6,7 @@ const os = require('os');
 const crypto = require('crypto');
 const http = require('http');
 const https = require('https');
+const net = require('net');
 
 const CEREBRO_DIR = path.join(os.homedir(), '.cerebro');
 const COMPOSE_FILE = path.join(CEREBRO_DIR, 'docker-compose.yml');
@@ -128,6 +129,107 @@ class DockerManager extends EventEmitter {
       }
     }
     return false;
+  }
+
+  /**
+   * Check if a port is available for binding. Returns an object describing the result:
+   * - { available: true }
+   * - { available: false, reason: 'cerebro-running' } — our backend is already up
+   * - { available: false, reason: 'hyper-v', details: string } — Windows reserved range
+   * - { available: false, reason: 'in-use', details: string } — blocked by another process
+   */
+  async checkPort(port = 61000) {
+    // 1. Check if it's already our backend running from a previous session
+    const isCerebro = await this._probeCerebroHealth(port);
+    if (isCerebro) {
+      return { available: false, reason: 'cerebro-running' };
+    }
+
+    // 2. On Windows, check Hyper-V dynamic port reservations
+    if (process.platform === 'win32') {
+      const hyperV = await this._checkHyperVReservation(port);
+      if (hyperV.reserved) {
+        return {
+          available: false,
+          reason: 'hyper-v',
+          details: `Port ${port} is blocked by a Windows Hyper-V reservation (range ${hyperV.start}-${hyperV.end}). `
+            + 'This happens randomly on boot. Fix: open an Admin terminal and run:\n'
+            + '  net stop winnat\n'
+            + `  netsh int ipv4 add excludedportrange protocol=tcp startport=${port} numberofports=1 store=persistent\n`
+            + '  net start winnat\n'
+            + 'Then restart Cerebro.',
+        };
+      }
+    }
+
+    // 3. Try to actually bind the port
+    const bindResult = await this._tryBindPort(port);
+    if (!bindResult.ok) {
+      return {
+        available: false,
+        reason: 'in-use',
+        details: `Port ${port} is in use by another application. Close the other program or reboot, then restart Cerebro.`,
+      };
+    }
+
+    return { available: true };
+  }
+
+  /**
+   * Probe localhost:port/health to see if a Cerebro backend is already running.
+   */
+  _probeCerebroHealth(port) {
+    return new Promise((resolve) => {
+      const req = http.get(`http://127.0.0.1:${port}/health`, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          // If we get a 200, Cerebro backend is already up
+          resolve(res.statusCode === 200);
+        });
+      });
+      req.on('error', () => resolve(false));
+      req.setTimeout(2000, () => { req.destroy(); resolve(false); });
+    });
+  }
+
+  /**
+   * Check if a port falls inside a Windows Hyper-V excluded port range.
+   */
+  async _checkHyperVReservation(port) {
+    try {
+      const output = await this._run('netsh', [
+        'interface', 'ipv4', 'show', 'excludedportrange', 'protocol=tcp',
+      ], { timeout: 5000 });
+
+      for (const line of output.split('\n')) {
+        const match = line.match(/^\s*(\d+)\s+(\d+)\s*$/);
+        if (match) {
+          const start = parseInt(match[1], 10);
+          const end = parseInt(match[2], 10);
+          if (port >= start && port <= end) {
+            return { reserved: true, start, end };
+          }
+        }
+      }
+    } catch {
+      // netsh not available — skip check
+    }
+    return { reserved: false };
+  }
+
+  /**
+   * Try to briefly bind a TCP port to verify it's available.
+   */
+  _tryBindPort(port) {
+    return new Promise((resolve) => {
+      const server = net.createServer();
+      server.once('error', () => resolve({ ok: false }));
+      server.once('listening', () => {
+        server.close(() => resolve({ ok: true }));
+      });
+      server.listen(port, '0.0.0.0');
+    });
   }
 
   /**
@@ -422,6 +524,25 @@ class DockerManager extends EventEmitter {
   async startStack() {
     this.emit('status', 'starting');
 
+    // Pre-flight: check if port 61000 is available before trying compose up
+    const portCheck = await this.checkPort(61000);
+    if (!portCheck.available) {
+      if (portCheck.reason === 'cerebro-running') {
+        // Backend is already running (e.g. leftover from previous session) — just reconnect
+        console.log('[Docker] Backend already running on port 61000, reconnecting');
+        this._running = true;
+        this.emit('status', 'running');
+        this.startCredentialWatch();
+        return true;
+      }
+      // Port is blocked by Hyper-V or another app — throw a clear error
+      this.emit('status', 'error');
+      const err = new Error(portCheck.details);
+      err.portConflict = true;
+      err.portConflictReason = portCheck.reason;
+      throw err;
+    }
+
     // Always refresh Claude credentials from host before starting
     const credResult = this.refreshClaudeCredentials();
     if (!credResult.valid) {
@@ -443,6 +564,7 @@ class DockerManager extends EventEmitter {
       console.log('[Docker] Stack started');
       return true;
     } catch (err) {
+      if (err.portConflict) throw err; // Already a clear error, don't overwrite
       this.emit('status', 'error');
       // Append container logs to help diagnose
       try {

@@ -1340,6 +1340,8 @@ You are Agent {call_sign}. Complete the browsing task thoroughly.""",
 - **Cycle Interval:** {cycle_interval_human}
 - **Mission Duration:** {duration_human}
 - **Current Cycle:** #{cycle_number}
+- **Target Scope:** {target_scope}
+- **Success Criteria:** {success_criteria}
 
 ## YOUR ROLE
 {sub_role_prompt}
@@ -1536,6 +1538,9 @@ async def create_agent(
             "mission_elapsed": 0,
             "auto_continue": True,
             "sub_role": sub_role,
+            "target_scope": specops_cfg.get("target_scope", ""),
+            "success_criteria": specops_cfg.get("success_criteria", ""),
+            "accumulated_output": "",
         })
 
     active_agents[agent_id] = agent_info
@@ -1914,6 +1919,15 @@ async def save_agent_to_memory(agent: dict):
             "parent_agent_id": agent.get('parent_agent_id'),
             "priority": agent.get('priority', 'normal'),
             "project_id": agent.get('project_id'),
+            "cycle_count": agent.get('cycle_count', 0),
+            "mission_elapsed": agent.get('mission_elapsed', 0),
+            "mission_journal": agent.get('mission_journal', []),
+            "is_specops": agent.get('is_specops', False),
+            "mission_name": agent.get('mission_name'),
+            "work_style": agent.get('work_style'),
+            "auto_continue": agent.get('auto_continue'),
+            "target_scope": agent.get('target_scope'),
+            "success_criteria": agent.get('success_criteria'),
         })
         index["agents"] = index["agents"][:100]
         index["last_updated"] = datetime.now(timezone.utc).isoformat()
@@ -2112,6 +2126,8 @@ async def run_agent(
             cycle_number=agent.get("cycle_count", 0) + 1,
             sub_role_prompt=sub_role_prompt,
             mission_journal=journal_text,
+            target_scope=agent.get("target_scope", "Not specified"),
+            success_criteria=agent.get("success_criteria", "Not specified"),
         )
     else:
         role_config = AGENT_ROLE_PROMPTS.get(agent_type, AGENT_ROLE_PROMPTS["worker"])
@@ -4086,6 +4102,8 @@ class AgentRequest(BaseModel):
     model: Optional[str] = "sonnet"
     # Special Ops mission config
     specops_config: Optional[dict] = None  # {mission_name, work_style, cycle_interval, mission_duration, sub_role}
+    target_scope: Optional[str] = None
+    success_criteria: Optional[str] = None
 
 class WorkflowRequest(BaseModel):
     task: str
@@ -4917,6 +4935,20 @@ async def update_specops_settings(agent_id: str, request: SpecopsUpdateRequest, 
     await _emit_specops_update(agent)
     return {"status": "updated", "agent_id": agent_id}
 
+@app.post("/agents/{agent_id}/specops/force-cycle")
+async def force_specops_cycle(agent_id: str, user: str = Depends(verify_token)):
+    """Force the next cycle to start immediately for a cycling specops agent."""
+    agent = active_agents.get(agent_id)
+    if not agent:
+        raise HTTPException(404, f"Agent {agent_id} not found")
+    if not agent.get("is_specops"):
+        raise HTTPException(400, "Agent is not a Special Ops agent")
+    if agent.get("status") != AgentStatus.CYCLING:
+        raise HTTPException(400, f"Agent is not cycling (status: {agent.get('status')})")
+
+    agent["_force_next_cycle"] = True
+    return {"status": "ok", "message": "Force cycle requested"}
+
 @app.get("/agents/{agent_id}/journal")
 async def get_mission_journal(agent_id: str, user: str = Depends(verify_token)):
     """Get mission journal entries for a specops agent."""
@@ -5226,6 +5258,12 @@ async def run_agent_continuation(agent_id: str, call_sign: str, task: str, agent
         agent_data["tools_used"] = list(tools_used)
         agent_data["completed_at"] = datetime.now(timezone.utc).isoformat()
 
+        # Track accumulated output for specops
+        if agent_data.get("is_specops"):
+            cycle_num = agent_data.get("cycle_count", 0) + 1
+            separator = f"\n\n--- CYCLE {cycle_num} ---\n\n"
+            agent_data["accumulated_output"] = (agent_data.get("accumulated_output") or "") + separator + full_output
+
         print(f"[Agent {call_sign}] Continuation completed. Output length: {len(full_output)}")
 
         # Save to file if we have one (sanitize to remove _process etc)
@@ -5244,6 +5282,15 @@ async def run_agent_continuation(agent_id: str, call_sign: str, task: str, agent
                     agent_entry["status"] = agent_data["status"]
                     agent_entry["completed_at"] = agent_data["completed_at"]
                     agent_entry["tools_used"] = agent_data["tools_used"]
+                    # Add specops fields
+                    if agent_data.get("is_specops"):
+                        agent_entry["cycle_count"] = agent_data.get("cycle_count", 0)
+                        agent_entry["mission_elapsed"] = agent_data.get("mission_elapsed", 0)
+                        agent_entry["mission_journal"] = agent_data.get("mission_journal", [])
+                        agent_entry["is_specops"] = True
+                        agent_entry["mission_name"] = agent_data.get("mission_name")
+                        agent_entry["work_style"] = agent_data.get("work_style")
+                        agent_entry["auto_continue"] = agent_data.get("auto_continue")
                     break
             index["last_updated"] = datetime.now(timezone.utc).isoformat()
             with open(index_file, 'w', encoding='utf-8') as f:
@@ -5337,6 +5384,55 @@ def _parse_mission_status(output: str, cycle_num: int) -> dict:
             entry["blockers"] = line.split(':', 1)[1].strip()
     return entry
 
+async def _persist_specops_state(agent: dict):
+    """Persist specops agent state to disk — both the agent JSON file and index.json."""
+    try:
+        agents_dir = Path(config.AI_MEMORY_PATH) / "agents"
+        agent_id = agent["id"]
+
+        # Find and update the agent's JSON file
+        index_file = agents_dir / "index.json"
+        agent_file = None
+        if index_file.exists():
+            with open(index_file, 'r', encoding='utf-8') as f:
+                index = json.load(f)
+            agent_entry = next((a for a in index.get("agents", []) if a["id"] == agent_id), None)
+            if agent_entry:
+                agent_file = agents_dir / agent_entry.get("file", f"{agent_id}.json")
+        else:
+            index = {"agents": [], "last_updated": None}
+
+        # Write full agent state to its JSON file
+        if agent_file:
+            with open(agent_file, 'w', encoding='utf-8') as f:
+                json.dump(sanitize_agent_for_emit(agent), f, indent=2, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+
+        # Update index.json with specops-specific fields
+        if index_file.exists() or agent_file:
+            for entry in index.get("agents", []):
+                if entry["id"] == agent_id:
+                    entry["cycle_count"] = agent.get("cycle_count", 0)
+                    entry["mission_journal"] = agent.get("mission_journal", [])
+                    entry["mission_elapsed"] = agent.get("mission_elapsed", 0)
+                    entry["next_checkin"] = agent.get("next_checkin")
+                    entry["auto_continue"] = agent.get("auto_continue", True)
+                    entry["is_specops"] = agent.get("is_specops", True)
+                    entry["mission_name"] = agent.get("mission_name")
+                    entry["work_style"] = agent.get("work_style")
+                    entry["status"] = agent.get("status")
+                    break
+            index["last_updated"] = datetime.now(timezone.utc).isoformat()
+            with open(index_file, 'w', encoding='utf-8') as f:
+                json.dump(index, f, indent=2, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+
+        print(f"[SpecOps] Persisted state for {agent_id} (cycle {agent.get('cycle_count', 0)})")
+    except Exception as e:
+        print(f"[SpecOps] Failed to persist state for {agent.get('id', '?')}: {e}")
+
 async def _emit_specops_update(agent: dict):
     """Emit specops_mission_update socket event with current mission metrics."""
     await sio.emit("specops_mission_update", {
@@ -5349,6 +5445,7 @@ async def _emit_specops_update(agent: dict):
         "auto_continue": agent.get("auto_continue", True),
         "status": agent.get("status"),
         "mission_name": agent.get("mission_name", ""),
+        "accumulated_output_length": len(agent.get("accumulated_output", "")),
     }, room=os.environ.get("CEREBRO_ROOM", "default"))
 
 async def run_specops_mission(agent_id: str):
@@ -5394,6 +5491,7 @@ async def run_specops_mission(agent_id: str):
 
         print(f"[SpecOps] {agent_id} cycle #{cycle_num} complete — status: {final_status}, progress: {journal_entry.get('progress', '?')}")
         await _emit_specops_update(agent)
+        await _persist_specops_state(agent)
 
         # === Check termination conditions ===
         # 1. Agent was stopped or failed
@@ -5445,6 +5543,7 @@ async def run_specops_mission(agent_id: str):
             agent["next_checkin"] = next_checkin.isoformat()
             await sio.emit("agent_update", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
             await _emit_specops_update(agent)
+            await _persist_specops_state(agent)
 
             print(f"[SpecOps] {agent_id} cycling — next cycle in {_format_interval(sleep_seconds)}")
 
@@ -5465,6 +5564,11 @@ async def run_specops_mission(agent_id: str):
                     await sio.emit("agent_update", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
                     _specops_locks.pop(agent_id, None)
                     return
+                # Check for force-cycle request
+                if agent.get("_force_next_cycle"):
+                    agent.pop("_force_next_cycle", None)
+                    print(f"[SpecOps] Force cycle triggered for {agent_id}")
+                    break
         else:
             await asyncio.sleep(sleep_seconds)
 
@@ -5603,7 +5707,7 @@ Use `hostname`, `uname -a`, `ip addr` to discover this system.
 
       except Exception as e:
         consecutive_failures += 1
-        print(f"[SpecOps] Exception in mission loop for {agent_id} (failure {consecutive_failures}/3): {e}")
+        print(f"[SpecOps] FATAL ERROR in mission loop for {agent_id} (failure {consecutive_failures}/3): {e}")
         import traceback
         traceback.print_exc()
 
@@ -5612,9 +5716,10 @@ Use `hostname`, `uname -a`, `ip addr` to discover this system.
             agent = active_agents.get(agent_id)
             if agent:
                 agent["status"] = AgentStatus.FAILED
-                agent["error"] = f"Mission failed after 3 consecutive errors: {e}"
+                agent["error"] = f"Mission supervisor error: {str(e)}"
+                await _persist_specops_state(agent)
                 await sio.emit("agent_update", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
-                await _emit_specops_update(agent)
+                await sio.emit("agent_completed", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
             _specops_locks.pop(agent_id, None)
             return
 

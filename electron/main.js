@@ -432,7 +432,12 @@ async function startDockerStack() {
     return { ok: true };
   } catch (err) {
     console.error('[Main] Docker stack failed to start:', err.message);
-    return { ok: false, error: err.message };
+    const result = { ok: false, error: err.message };
+    if (err.portConflict) {
+      result.portConflict = true;
+      result.portConflictReason = err.portConflictReason;
+    }
+    return result;
   }
 }
 
@@ -649,9 +654,17 @@ app.whenReady().then(async () => {
   // Returning user: start Docker stack and load frontend
   const dockerResult = await startDockerStack();
   if (!dockerResult.ok) {
-    // Docker not running or not setup — show wizard
     console.error('[Main] Docker start failed:', dockerResult.error);
     showSetupWizard();
+    // If it's a port conflict, send the detailed error to the activation page
+    if (dockerResult.portConflict) {
+      mainWindow.webContents.once('did-finish-load', () => {
+        mainWindow.webContents.send('port-conflict', {
+          reason: dockerResult.portConflictReason,
+          error: dockerResult.error,
+        });
+      });
+    }
     return;
   }
 
@@ -941,7 +954,12 @@ ipcMain.handle('wizard-complete', async () => {
   try {
     const result = await startDockerStack();
     if (!result.ok) {
-      return { success: false, error: result.error || 'Failed to start Docker stack' };
+      const response = { success: false, error: result.error || 'Failed to start Docker stack' };
+      if (result.portConflict) {
+        response.portConflict = true;
+        response.portConflictReason = result.portConflictReason;
+      }
+      return response;
     }
     await loadFrontend();
     updateTrayStatus(tray, 'running');

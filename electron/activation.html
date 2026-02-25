@@ -1015,6 +1015,11 @@
         } else {
           btn.disabled = false;
           btn.textContent = 'Retry Launch';
+          // Port conflict: show detailed fix instructions
+          if (result && result.portConflict) {
+            showPortConflictError(result.portConflictReason);
+            return;
+          }
           var errMsg = result && result.error ? result.error : 'Failed to start. Please try again.';
           // Truncate long error messages (container logs) for display
           if (errMsg.length > 200) {
@@ -1027,6 +1032,38 @@
         btn.textContent = 'Retry Launch';
         showStatus('launch-status', err.message || 'Failed to start. Please try again.', 'error');
       });
+    }
+
+    function showPortConflictError(reason) {
+      var statusEl = document.getElementById('launch-status');
+      while (statusEl.firstChild) statusEl.removeChild(statusEl.firstChild);
+
+      if (reason === 'hyper-v') {
+        var title = document.createElement('strong');
+        title.textContent = 'Port 61000 is blocked by Windows';
+        statusEl.appendChild(title);
+        statusEl.appendChild(document.createElement('br'));
+        statusEl.appendChild(document.createTextNode('Hyper-V reserved this port. Open an Admin terminal and run:'));
+        statusEl.appendChild(document.createElement('br'));
+
+        var code = document.createElement('code');
+        code.style.cssText = 'display:block;text-align:left;background:rgba(0,0,0,0.3);padding:8px 12px;border-radius:6px;margin:8px 0;font-size:12px;line-height:1.6;white-space:pre';
+        code.textContent = 'net stop winnat\nnetsh int ipv4 add excludedportrange protocol=tcp startport=61000 numberofports=1 store=persistent\nnet start winnat';
+        statusEl.appendChild(code);
+
+        statusEl.appendChild(document.createTextNode('Then click Retry Launch.'));
+      } else {
+        var title2 = document.createElement('strong');
+        title2.textContent = 'Port 61000 is unavailable';
+        statusEl.appendChild(title2);
+        statusEl.appendChild(document.createElement('br'));
+        statusEl.appendChild(document.createTextNode(
+          'Another application is using this port. Close the conflicting program or reboot, then retry.'
+        ));
+      }
+      statusEl.className = 'status status-error';
+      statusEl.style.whiteSpace = 'normal';
+      statusEl.style.lineHeight = '1.5';
     }
 
     function markStep(id, state) {
@@ -1130,6 +1167,49 @@
 
     function delay(ms) {
       return new Promise(function(resolve) { setTimeout(resolve, ms); });
+    }
+
+    // Handle port conflict error from main process
+    if (window.cerebroDesktop.onPortConflict) {
+      window.cerebroDesktop.onPortConflict(function(data) {
+        // Jump to the ready step and show the error
+        goToStep(7);
+        var btn = document.getElementById('launch-btn');
+        btn.textContent = 'Retry Launch';
+
+        var statusEl = document.getElementById('launch-status');
+        // Clear existing content
+        while (statusEl.firstChild) statusEl.removeChild(statusEl.firstChild);
+
+        if (data.reason === 'hyper-v') {
+          var title = document.createElement('strong');
+          title.textContent = 'Port 61000 is blocked by Windows';
+          statusEl.appendChild(title);
+          statusEl.appendChild(document.createElement('br'));
+          statusEl.appendChild(document.createTextNode('Hyper-V reserved this port. Open an Admin terminal and run:'));
+          statusEl.appendChild(document.createElement('br'));
+
+          var code = document.createElement('code');
+          code.style.cssText = 'display:block;text-align:left;background:rgba(0,0,0,0.3);padding:8px 12px;border-radius:6px;margin:8px 0;font-size:12px;line-height:1.6;white-space:pre';
+          code.textContent = 'net stop winnat\nnetsh int ipv4 add excludedportrange protocol=tcp startport=61000 numberofports=1 store=persistent\nnet start winnat';
+          statusEl.appendChild(code);
+
+          var retryHint = document.createElement('span');
+          retryHint.textContent = 'Then click Retry Launch.';
+          statusEl.appendChild(retryHint);
+        } else {
+          var title2 = document.createElement('strong');
+          title2.textContent = 'Port 61000 is unavailable';
+          statusEl.appendChild(title2);
+          statusEl.appendChild(document.createElement('br'));
+          statusEl.appendChild(document.createTextNode(
+            'Another application is using this port. Close the conflicting program or reboot, then retry.'
+          ));
+        }
+        statusEl.className = 'status status-error';
+        statusEl.style.whiteSpace = 'normal';
+        statusEl.style.lineHeight = '1.5';
+      });
     }
 
     // Handle license failure reason from main process (expired/cancelled users)
