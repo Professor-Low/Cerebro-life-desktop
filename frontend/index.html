@@ -3821,17 +3821,107 @@
         .specops-tab-content.active {
             display: block;
         }
-        .specops-live-output {
-            font-family: 'SF Mono', monospace;
-            font-size: 0.8rem;
-            line-height: 1.6;
+        .specops-debrief-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-bottom: 16px;
             padding: 12px;
+            background: rgba(255, 45, 120, 0.04);
+            border: 1px solid rgba(255, 45, 120, 0.15);
+            border-radius: 10px;
+        }
+        .specops-debrief-stat {
+            text-align: center;
+        }
+        .specops-debrief-stat-value {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--specops-pink);
+            font-family: 'JetBrains Mono', 'SF Mono', monospace;
+        }
+        .specops-debrief-stat-label {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 2px;
+        }
+        .specops-debrief-content {
+            padding: 16px;
+            background: var(--bg-primary);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            line-height: 1.7;
+        }
+        .specops-debrief-content h2 {
+            color: var(--specops-pink);
+            font-size: 0.9rem;
+            font-weight: 700;
+            margin: 16px 0 8px 0;
+            font-family: 'JetBrains Mono', 'SF Mono', monospace;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .specops-debrief-content h2:first-child {
+            margin-top: 0;
+        }
+        .specops-debrief-content ul {
+            margin: 4px 0 8px 0;
+            padding-left: 20px;
+        }
+        .specops-debrief-content li {
+            margin-bottom: 4px;
+        }
+        .specops-debrief-content p {
+            margin-bottom: 8px;
+        }
+        .specops-debrief-generating {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 20px;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            font-style: italic;
+        }
+        .specops-debrief-generating .agent-spinner {
+            width: 16px;
+            height: 16px;
+        }
+        .specops-completed-cycle-detail {
+            animation: specops-fade-in 0.25s ease-out;
+        }
+        @keyframes specops-fade-in {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .specops-live-output {
+            font-size: 0.85rem;
+            line-height: 1.6;
+            padding: 16px;
             background: var(--bg-primary);
             border-radius: 8px;
             min-height: 150px;
-            white-space: pre-wrap;
-            word-break: break-word;
+            max-height: calc(100vh - 400px);
+            overflow-y: auto;
             color: var(--text-secondary);
+        }
+        .specops-live-output .agent-output-rendered {
+            border: none;
+            padding: 0;
+            background: transparent;
+        }
+        .specops-live-output .agent-output-rendered p {
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .specops-live-output .agent-output-rendered p:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
         }
         .specops-mission-header {
             display: flex;
@@ -3949,18 +4039,98 @@
             margin-top: 2px;
         }
         .specops-full-output {
-            font-family: 'SF Mono', monospace;
-            font-size: 0.78rem;
-            line-height: 1.5;
-            padding: 12px;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            padding: 16px;
             background: var(--bg-primary);
             border-radius: 8px;
             min-height: 150px;
             max-height: calc(100vh - 400px);
             overflow-y: auto;
-            white-space: pre-wrap;
-            word-break: break-word;
             color: var(--text-secondary);
+        }
+        .specops-full-output .agent-output-rendered {
+            border: none;
+            padding: 0;
+            background: transparent;
+        }
+        .specops-cycle-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            margin-top: 16px;
+            margin-bottom: 8px;
+            background: rgba(255, 45, 120, 0.08);
+            border-left: 3px solid var(--specops-pink);
+            border-radius: 0 6px 6px 0;
+            font-family: 'JetBrains Mono', 'SF Mono', monospace;
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: var(--specops-pink-light);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .specops-cycle-header:first-child { margin-top: 0; }
+        /* Journal entry clickable expand */
+        .specops-journal-entry {
+            cursor: pointer;
+            transition: background 0.2s ease, border-color 0.2s ease;
+        }
+        .specops-journal-entry:hover {
+            background: rgba(255, 45, 120, 0.06);
+            border-color: rgba(255, 45, 120, 0.3);
+        }
+        .specops-journal-expand-hint {
+            font-size: 0.65rem;
+            color: var(--specops-pink);
+            opacity: 0.6;
+            margin-top: 6px;
+            transition: opacity 0.2s ease;
+        }
+        .specops-journal-entry:hover .specops-journal-expand-hint {
+            opacity: 1;
+        }
+        .specops-journal-entry-output {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+            max-height: 0;
+            overflow: hidden;
+            opacity: 0;
+            transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
+        }
+        .specops-journal-entry-output.expanded {
+            max-height: 2000px;
+            opacity: 1;
+        }
+        .specops-journal-entry-output .agent-output-rendered {
+            border: none;
+            padding: 8px 0;
+            background: transparent;
+            font-size: 0.8rem;
+        }
+        #specops-cycle-detail {
+            animation: specops-slide-in 0.25s ease-out;
+        }
+        @keyframes specops-slide-in {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        #specops-cycle-back-btn:hover {
+            background: rgba(255, 45, 120, 0.1) !important;
+            border-color: var(--specops-pink) !important;
+            color: var(--specops-pink) !important;
+        }
+        #specops-cycle-detail-body .agent-output-rendered p {
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        #specops-cycle-detail-body .agent-output-rendered p:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
         }
         /* Specops form redesign */
         .specops-briefing-section {
@@ -24722,12 +24892,6 @@
                                         <span class="settings-label">Cost</span>
                                         <span class="settings-value success" id="settings-cost-display">Included (Claude Code subscription)</span>
                                     </div>
-                                    <div class="settings-row" style="justify-content: flex-end; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; margin-top: 4px;">
-                                        <button class="btn btn-ghost" id="check-updates-btn" onclick="manualCheckForUpdates()" style="font-size: 0.8rem; padding: 6px 16px; display: flex; align-items: center; gap: 6px;">
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                                            Check for Updates
-                                        </button>
-                                    </div>
                                 </div>
 
                                 <div class="settings-divider"></div>
@@ -25154,6 +25318,18 @@
                                             <span>Analyst</span>
                                         </div>
                                     </div>
+                                    <div class="form-group" style="margin-top:12px;">
+                                        <label class="form-label" style="font-family:'JetBrains Mono','SF Mono',monospace;text-transform:uppercase;letter-spacing:1px;font-size:0.65rem;color:var(--specops-pink-light);">Model</label>
+                                        <select class="form-input" id="specops-model-select" style="padding:8px;">
+                                            <option value="sonnet">Sonnet (Recommended)</option>
+                                            <option value="opus">Opus</option>
+                                            <option value="haiku">Haiku</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" style="font-family:'JetBrains Mono','SF Mono',monospace;text-transform:uppercase;letter-spacing:1px;font-size:0.65rem;color:var(--specops-pink-light);">Additional Context</label>
+                                        <textarea class="form-input form-textarea" id="specops-context-input" placeholder="Background information for the mission..." style="min-height:60px;"></textarea>
+                                    </div>
                                 </div>
 
                                 <!-- Section 3: DEPLOYMENT PARAMETERS -->
@@ -25194,36 +25370,13 @@
                                     <div class="specops-briefing-header">&#x1F4CB; Rules of Engagement</div>
                                     <div class="form-group">
                                         <label class="form-label" style="font-family:'JetBrains Mono','SF Mono',monospace;text-transform:uppercase;letter-spacing:1px;font-size:0.65rem;color:var(--specops-pink-light);">Project</label>
-                                        <select class="form-input" id="specops-project-select" style="padding:8px;">
+                                        <select class="form-input" id="specops-project-select" style="padding:8px;" onchange="onSpecopsProjectChange(this)">
                                             <option value="">No Project</option>
                                         </select>
                                     </div>
                                     <div class="form-group">
-                                        <label class="form-label" style="font-family:'JetBrains Mono','SF Mono',monospace;text-transform:uppercase;letter-spacing:1px;font-size:0.65rem;color:var(--specops-pink-light);">Target Scope</label>
-                                        <input type="text" class="form-input" id="specops-target-scope" placeholder="e.g., Frontend codebase, API layer, Database schema...">
-                                    </div>
-                                    <div class="form-group">
                                         <label class="form-label" style="font-family:'JetBrains Mono','SF Mono',monospace;text-transform:uppercase;letter-spacing:1px;font-size:0.65rem;color:var(--specops-pink-light);">Success Criteria</label>
                                         <textarea class="form-input form-textarea" id="specops-success-criteria" placeholder="Define what mission success looks like..." style="min-height:50px;"></textarea>
-                                    </div>
-                                </div>
-
-                                <!-- Advanced Options -->
-                                <div style="margin-top:8px;">
-                                    <button type="button" class="btn btn-ghost" onclick="toggleSpecopsAdvanced()" style="font-size:0.8rem;">Advanced Options</button>
-                                    <div id="specops-advanced" class="hidden" style="margin-top:10px;">
-                                        <div class="form-group">
-                                            <label class="form-label">Model</label>
-                                            <select class="form-input" id="specops-model-select" style="padding:8px;">
-                                                <option value="sonnet">Sonnet (Recommended)</option>
-                                                <option value="opus">Opus</option>
-                                                <option value="haiku">Haiku</option>
-                                            </select>
-                                        </div>
-                                        <div class="form-group">
-                                            <label class="form-label">Additional Context</label>
-                                            <textarea class="form-input form-textarea" id="specops-context-input" placeholder="Background information for the mission..." style="min-height:60px;"></textarea>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -25320,23 +25473,33 @@
                                         <div class="specops-stat"><div class="specops-stat-value" id="specops-stat-output">0</div><div class="specops-stat-label">Output Size</div></div>
                                     </div>
                                 </div>
-                                <!-- Tabs -->
-                                <div class="specops-tabs">
-                                    <div class="specops-tab active" data-tab="live" onclick="switchSpecopsTab(this)">Live</div>
-                                    <div class="specops-tab" data-tab="journal" onclick="switchSpecopsTab(this)">Journal</div>
+                                <!-- SpecOps Running Tabs -->
+                                <div class="specops-tabs" id="specops-running-tabs">
+                                    <div class="specops-tab active" data-tab="journal" onclick="switchSpecopsTab(this)">Journal</div>
+                                    <div class="specops-tab" data-tab="debrief" onclick="switchSpecopsTab(this)">Debrief</div>
                                     <div class="specops-tab" data-tab="fulloutput" onclick="switchSpecopsTab(this)">Full Output</div>
                                 </div>
-                                <!-- Tab contents -->
-                                <div class="specops-tab-content active" id="specops-tab-live">
-                                    <div class="specops-live-output" id="specops-live-output">Waiting for output...</div>
-                                </div>
-                                <div class="specops-tab-content" id="specops-tab-journal">
+                                <!-- Journal tab -->
+                                <div id="specops-tab-journal" class="specops-tab-content active">
                                     <div id="specops-journal-panel">
                                         <div style="color:var(--text-muted);font-size:0.8rem;padding:20px;text-align:center;">No journal entries yet — first cycle in progress</div>
                                     </div>
+                                    <!-- Cycle detail view (replaces journal when clicking an entry) -->
+                                    <div id="specops-cycle-detail" style="display:none;">
+                                        <div id="specops-cycle-detail-header" style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                                            <button id="specops-cycle-back-btn" onclick="exitCycleDetailView()" style="background:none;border:1px solid var(--border);color:var(--text-secondary);border-radius:6px;padding:4px 12px;cursor:pointer;font-size:0.75rem;transition:all 0.2s ease;">Back</button>
+                                            <span id="specops-cycle-detail-title" style="font-family:var(--font-mono);font-size:0.85rem;color:var(--specops-pink);font-weight:600;"></span>
+                                        </div>
+                                        <div id="specops-cycle-detail-body" class="specops-live-output" style="min-height:200px;"></div>
+                                    </div>
                                 </div>
-                                <div class="specops-tab-content" id="specops-tab-fulloutput">
-                                    <div class="specops-full-output" id="specops-full-output">Accumulated output will appear here after the first cycle completes.</div>
+                                <!-- Debrief tab -->
+                                <div id="specops-tab-debrief" class="specops-tab-content">
+                                    <div id="specops-debrief-panel"></div>
+                                </div>
+                                <!-- Full Output tab -->
+                                <div id="specops-tab-fulloutput" class="specops-tab-content">
+                                    <div id="specops-fulloutput-panel" class="specops-live-output" style="min-height:200px;"></div>
                                 </div>
                             </div>
                         </div>
@@ -30196,6 +30359,7 @@
                     if (data.work_style) agent.work_style = data.work_style;
                     if (data.auto_continue !== undefined) agent.auto_continue = data.auto_continue;
                     if (data.status) agent.status = data.status;
+                    if (data.mission_debrief !== undefined) agent.mission_debrief = data.mission_debrief;
                     renderAgents();
                     // Update specops panel if open for this agent
                     if (agentPanelAgentId === data.agent_id && (agentPanelState === 'running')) {
@@ -32204,41 +32368,6 @@
             }
         }
 
-        async function manualCheckForUpdates() {
-            var btn = document.getElementById('check-updates-btn');
-            if (!btn || !window.cerebroDesktop) return;
-            var origText = btn.textContent;
-            btn.disabled = true;
-            btn.textContent = 'Checking...';
-            try {
-                var result = await window.cerebroDesktop.checkForUpdates();
-                if (result && result.updateAvailable) {
-                    btn.textContent = 'Update Available!';
-                    btn.style.color = 'var(--accent, #8b5cf6)';
-                    window.__cerebroShowUpdateBanner(result.type || 'docker');
-                    showToast('Update available! Check the banner at the bottom.', 'success');
-                } else {
-                    btn.textContent = 'Up to date';
-                    btn.style.color = '#4ade80';
-                    showToast('You\'re on the latest version.', 'success');
-                    setTimeout(function() {
-                        btn.textContent = origText;
-                        btn.style.color = '';
-                        btn.disabled = false;
-                    }, 3000);
-                }
-            } catch (e) {
-                btn.textContent = 'Check failed';
-                btn.style.color = '#f87171';
-                showToast('Failed to check for updates: ' + e.message, 'error');
-                setTimeout(function() {
-                    btn.textContent = origText;
-                    btn.style.color = '';
-                    btn.disabled = false;
-                }, 3000);
-            }
-        }
-
         // ==================== SIM CLARIFICATION POPUP ====================
         function showSimClarificationModal(data) {
             var old = document.getElementById('sim-clarify-overlay');
@@ -33406,7 +33535,7 @@
                 renderAgents();
 
                 // Start polling if any agents are currently running
-                const hasRunning = Object.values(agents).some(a => a.status === 'running' || a.status === 'queued');
+                const hasRunning = Object.values(agents).some(a => a.status === 'running' || a.status === 'queued' || a.status === 'cycling');
                 if (hasRunning) startAgentPolling();
             } catch (e) {
                 console.error('Failed to load agents:', e);
@@ -34006,7 +34135,8 @@
 
             // Check if agents have meaningful distinct project_ids
             const projectIds = new Set(leafAgents.map(a => a.project_id).filter(Boolean));
-            const useFallbackGrouping = projectIds.size <= 1;
+            const hasTrackerProjects = Object.keys(agentProjects).length > 0;
+            const useFallbackGrouping = projectIds.size === 0 && !hasTrackerProjects;
 
             let groups = {};
             if (useFallbackGrouping) {
@@ -34019,6 +34149,10 @@
                     const proj = agent.project_id || 'uncategorized';
                     if (!groups[proj]) groups[proj] = [];
                     groups[proj].push(agent);
+                }
+                // Include empty groups from agentProjects so created groups always show
+                for (const pid in agentProjects) {
+                    if (!groups[pid]) groups[pid] = [];
                 }
             }
 
@@ -34184,12 +34318,14 @@
                 if (response.ok) {
                     const data = await response.json();
                     agentProjects = {};
-                    if (Array.isArray(data)) {
-                        for (const proj of data) {
-                            agentProjects[proj.id || proj.project_id] = proj;
+                    // Backend returns {"projects": [...]} — extract the array
+                    var projectsList = Array.isArray(data) ? data : (data && data.projects ? data.projects : []);
+                    for (var i = 0; i < projectsList.length; i++) {
+                        var proj = projectsList[i];
+                        var pid = proj.id || proj.project_id;
+                        if (pid && pid !== 'uncategorized') {
+                            agentProjects[pid] = proj;
                         }
-                    } else if (data && typeof data === 'object') {
-                        agentProjects = data;
                     }
                 }
             } catch (e) {
@@ -34628,12 +34764,16 @@
                 if (journalEntries.length > 0) {
                     specopsHtml += '<div class="specops-journal"><div class="agent-section-title" style="color:var(--specops-pink-light);">Mission Journal (' + journalEntries.length + ' cycles)</div>';
                     journalEntries.slice().reverse().forEach(function(entry) {
+                        var assessmentHtml = entry.cycle_assessment ? '<div><strong>Assessment:</strong> ' + escapeHtml(entry.cycle_assessment) + '</div>' : '';
+                        var contextHtml = entry.context_carry ? '<div><strong>Context:</strong> ' + escapeHtml(entry.context_carry) + '</div>' : '';
                         specopsHtml += '<div class="specops-journal-entry">'
                             + '<div class="specops-journal-entry-header"><span>Cycle #' + (entry.cycle || '?') + '</span><span>' + (entry.timestamp ? new Date(entry.timestamp).toLocaleString() : '') + '</span></div>'
                             + '<div class="specops-journal-entry-body">'
-                            + '<div><strong>Progress:</strong> ' + escapeHtml(entry.progress || 'N/A') + '</div>'
+                            + '<div><strong>Progress:</strong> ' + escapeHtml(entry.mission_progress || entry.progress || 'N/A') + '</div>'
+                            + assessmentHtml
                             + '<div><strong>Completed:</strong> ' + escapeHtml(entry.completed || 'N/A') + '</div>'
-                            + '<div><strong>Next:</strong> ' + escapeHtml(entry.next || 'N/A') + '</div>'
+                            + '<div><strong>Next Directive:</strong> ' + escapeHtml(entry.next_directive || entry.next || 'N/A') + '</div>'
+                            + contextHtml
                             + '<div><strong>Blockers:</strong> ' + escapeHtml(entry.blockers || 'None') + '</div>'
                             + '</div></div>';
                     });
@@ -34650,6 +34790,12 @@
             _panelThreadStack = [];
             var agent = agents[agentId];
             if (!agent) return;
+
+            // SpecOps agents get their own tabbed completed panel
+            if (agent.is_specops || (agent.type && agent.type.startsWith('specops_'))) {
+                populateSpecopsCompletedPanel(agentId);
+                return;
+            }
 
             var outputText = agent.output || 'No output captured yet.';
             var renderedOutput = safeAgentOutput(outputText);
@@ -35812,7 +35958,7 @@
         }
 
         async function createGroupFromEditor() {
-            var name = prompt('Enter group name:');
+            var name = await cerebroPrompt('Enter a name for the new group:', '', { title: 'New Group', confirmText: 'Create', placeholder: 'Group name' });
             if (!name || !name.trim()) return;
             name = name.trim();
 
@@ -35839,7 +35985,7 @@
 
         async function renameGroupFromEditor(projectId) {
             var currentName = (agentProjects[projectId] && agentProjects[projectId].name) || projectId;
-            var newName = prompt('Rename group:', currentName);
+            var newName = await cerebroPrompt('Enter new name for this group:', currentName, { title: 'Rename Group', confirmText: 'Rename' });
             if (!newName || !newName.trim() || newName.trim() === currentName) return;
             newName = newName.trim();
 
@@ -35986,7 +36132,7 @@
         }
 
         async function bulkAssignNewGroup() {
-            var name = prompt('Enter new group name:');
+            var name = await cerebroPrompt('Enter a name for the new group:', '', { title: 'New Group', confirmText: 'Create', placeholder: 'Group name' });
             if (!name || !name.trim()) return;
             name = name.trim();
 
@@ -36085,6 +36231,10 @@
                         opt.textContent = proj.name || pid;
                         projSelect.appendChild(opt);
                     });
+                    var createOpt = document.createElement('option');
+                    createOpt.value = '__create_new__';
+                    createOpt.textContent = '+ Create New Project';
+                    projSelect.appendChild(createOpt);
                 }
             }
 
@@ -36135,9 +36285,40 @@
             specopsMissionDuration = parseInt(btn.dataset.value) || 0;
         }
 
-        function toggleSpecopsAdvanced() {
-            var adv = document.getElementById('specops-advanced');
-            if (adv) adv.classList.toggle('hidden');
+        async function onSpecopsProjectChange(sel) {
+            if (sel.value !== '__create_new__') return;
+            var name = await cerebroPrompt('Enter a name for the new project:', '', { title: 'New Project', confirmText: 'Create', placeholder: 'Project name' });
+            if (!name || !name.trim()) {
+                sel.value = '';
+                return;
+            }
+            name = name.trim();
+            try {
+                var t = localStorage.getItem('cerebro_token');
+                var resp = await fetch(API_URL + '/agents/projects/create', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + t, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name })
+                });
+                var data = await resp.json();
+                if (data.status === 'error') {
+                    showToast(data.error || 'Failed to create project', 'error');
+                    sel.value = '';
+                    return;
+                }
+                agentProjects[data.project_id] = { id: data.project_id, name: data.name, tech_tags: [] };
+                var newOpt = document.createElement('option');
+                newOpt.value = data.project_id;
+                newOpt.textContent = data.name;
+                var createOpt = sel.querySelector('option[value="__create_new__"]');
+                sel.insertBefore(newOpt, createOpt);
+                sel.value = data.project_id;
+                showToast('Created project: ' + name, 'success');
+            } catch (err) {
+                console.error('Failed to create project:', err);
+                showToast('Failed to create project', 'error');
+                sel.value = '';
+            }
         }
 
         async function submitSpecopsMission() {
@@ -36157,14 +36338,13 @@
                 timeout: 0,
                 model: model,
                 context: context,
-                project_id: document.getElementById('specops-project-select')?.value || null,
+                project_id: (function(){ var v = document.getElementById('specops-project-select')?.value; return (v && v !== '__create_new__') ? v : null; })(),
                 specops_config: {
                     mission_name: missionName,
                     work_style: specopsWorkStyle,
                     cycle_interval: specopsCycleInterval,
                     mission_duration: specopsMissionDuration,
                     sub_role: selectedSpecopsRole,
-                    target_scope: (document.getElementById('specops-target-scope')?.value || '').trim() || null,
                     success_criteria: (document.getElementById('specops-success-criteria')?.value || '').trim() || null
                 }
             };
@@ -36193,17 +36373,90 @@
 
         function switchSpecopsTab(tabEl) {
             var tabName = tabEl.dataset.tab;
-            document.querySelectorAll('.specops-tab').forEach(function(t) { t.classList.remove('active'); });
-            document.querySelectorAll('.specops-tab-content').forEach(function(c) { c.classList.remove('active'); });
+            // Scope to parent container to avoid conflicts between running and completed panels
+            var container = tabEl.parentElement ? tabEl.parentElement.parentElement : document;
+            container.querySelectorAll('.specops-tab').forEach(function(t) { t.classList.remove('active'); });
+            container.querySelectorAll('.specops-tab-content').forEach(function(c) { c.classList.remove('active'); });
             tabEl.classList.add('active');
-            var content = document.getElementById('specops-tab-' + tabName);
+            var content = container.querySelector('#specops-tab-' + tabName) ||
+                          container.querySelector('[data-specops-tab="' + tabName + '"]');
             if (content) content.classList.add('active');
         }
+
+        // Extract a specific cycle's output from accumulated_output text
+        function getCycleOutput(text, cycleNum) {
+            if (!text) return '';
+            var pattern = new RegExp('---\\s*CYCLE\\s+' + cycleNum + '\\s*---\\s*\\n?');
+            var match = pattern.exec(text);
+            if (!match) return '';
+            var startIdx = match.index + match[0].length;
+            var nextPattern = /---\s*CYCLE\s+\d+\s*---/;
+            var nextMatch = nextPattern.exec(text.substring(startIdx));
+            var endIdx = nextMatch ? startIdx + nextMatch.index : text.length;
+            return text.substring(startIdx, endIdx).trim();
+        }
+
+        // Render accumulated_output with per-cycle headers and rendered markdown
+        function renderAccumulatedOutput(container, text) {
+            container.textContent = '';
+            if (!text || !text.trim()) {
+                var emptyMsg = document.createElement('div');
+                emptyMsg.style.cssText = 'color:var(--text-muted);font-size:0.8rem;padding:20px;text-align:center;';
+                emptyMsg.textContent = 'Output will appear after first cycle completes';
+                container.appendChild(emptyMsg);
+                return;
+            }
+            // Split by cycle separators — captures cycle number as group
+            var parts = text.split(/---\s*CYCLE\s+(\d+)\s*---/);
+            // parts[0] = text before first separator (usually empty)
+            // parts[1] = cycle number, parts[2] = cycle content, etc.
+            if (parts.length <= 1) {
+                // No cycle separators found — render as single block
+                var block = document.createElement('div');
+                block.className = 'agent-output-rendered';
+                block.innerHTML = safeAgentOutput(text);
+                container.appendChild(block);
+                return;
+            }
+            // If there's content before the first separator
+            if (parts[0].trim()) {
+                var preBlock = document.createElement('div');
+                preBlock.className = 'agent-output-rendered';
+                preBlock.innerHTML = safeAgentOutput(parts[0].trim());
+                container.appendChild(preBlock);
+            }
+            // Iterate cycle pairs
+            for (var i = 1; i < parts.length; i += 2) {
+                var cycleNum = parts[i];
+                var cycleContent = (parts[i + 1] || '').trim();
+                var header = document.createElement('div');
+                header.className = 'specops-cycle-header';
+                header.textContent = 'Cycle #' + cycleNum;
+                container.appendChild(header);
+                if (cycleContent) {
+                    var contentDiv = document.createElement('div');
+                    contentDiv.className = 'agent-output-rendered';
+                    contentDiv.innerHTML = safeAgentOutput(cycleContent);
+                    container.appendChild(contentDiv);
+                } else {
+                    var emptyDiv = document.createElement('div');
+                    emptyDiv.style.cssText = 'color:var(--text-muted);font-size:0.75rem;padding:8px 12px;font-style:italic;';
+                    emptyDiv.textContent = 'No output recorded for this cycle';
+                    container.appendChild(emptyDiv);
+                }
+            }
+        }
+
+        // Store accumulated output for cycle detail navigation
+        var _specopsAccumulatedOutput = '';
+        var _specopsAgentOutput = '';
 
         function renderSpecopsJournalTab(agent) {
             var panel = document.getElementById('specops-journal-panel');
             if (!panel) return;
             var journal = agent.mission_journal || [];
+            _specopsAccumulatedOutput = agent.accumulated_output || '';
+            _specopsAgentOutput = agent.output || '';
             if (journal.length === 0) {
                 panel.textContent = '';
                 var emptyMsg = document.createElement('div');
@@ -36228,11 +36481,13 @@
                 var bodyDiv = document.createElement('div');
                 bodyDiv.className = 'specops-journal-entry-body';
                 var fields = [
-                    { label: 'Progress', value: entry.progress || 'N/A' },
+                    { label: 'Progress', value: entry.mission_progress || entry.progress || 'N/A' },
+                    { label: 'Assessment', value: entry.cycle_assessment || '' },
                     { label: 'Completed', value: entry.completed || 'N/A' },
-                    { label: 'Next', value: entry.next || 'N/A' },
+                    { label: 'Next Directive', value: entry.next_directive || entry.next || 'N/A' },
+                    { label: 'Context', value: entry.context_carry || '' },
                     { label: 'Blockers', value: entry.blockers || 'None' }
-                ];
+                ].filter(function(f) { return f.value && f.value !== ''; });
                 fields.forEach(function(f) {
                     var row = document.createElement('div');
                     var strong = document.createElement('strong');
@@ -36241,10 +36496,68 @@
                     row.appendChild(document.createTextNode(f.value));
                     bodyDiv.appendChild(row);
                 });
+                // Click hint
+                var hintDiv = document.createElement('div');
+                hintDiv.className = 'specops-journal-expand-hint';
+                hintDiv.textContent = '\u25B6 View full output';
+                // Click handler — navigate to cycle detail view
+                (function(cycleN) {
+                    entryDiv.addEventListener('click', function() {
+                        openCycleDetailView(cycleN);
+                    });
+                })(entry.cycle || 0);
                 entryDiv.appendChild(headerDiv);
                 entryDiv.appendChild(bodyDiv);
+                entryDiv.appendChild(hintDiv);
                 panel.appendChild(entryDiv);
             });
+        }
+
+        function openCycleDetailView(cycleNum) {
+            // Hide the journal panel
+            var journalPanel = document.getElementById('specops-journal-panel');
+            if (journalPanel) journalPanel.style.display = 'none';
+
+            // Show the cycle detail view
+            var detailView = document.getElementById('specops-cycle-detail');
+            var titleEl = document.getElementById('specops-cycle-detail-title');
+            var bodyEl = document.getElementById('specops-cycle-detail-body');
+            if (!detailView || !bodyEl) return;
+
+            titleEl.textContent = 'CYCLE #' + cycleNum + ' \u2014 Full Output';
+            bodyEl.textContent = '';
+
+            // Get cycle output from accumulated_output, fallback to agent.output for cycle 1
+            var cycleText = getCycleOutput(_specopsAccumulatedOutput, cycleNum);
+            if (!cycleText && cycleNum === 1 && _specopsAgentOutput) {
+                cycleText = _specopsAgentOutput;
+            }
+
+            if (cycleText) {
+                var liveText = cycleText.replace(/([.!?])([A-Z])/g, '$1\n\n$2');
+                var wrapper = document.createElement('div');
+                wrapper.className = 'agent-output-rendered';
+                // safeAgentOutput uses DOMPurify for sanitization
+                wrapper.innerHTML = safeAgentOutput(liveText);
+                bodyEl.appendChild(wrapper);
+            } else {
+                var noData = document.createElement('div');
+                noData.style.cssText = 'color:var(--text-muted);font-size:0.85rem;padding:20px;text-align:center;font-style:italic;';
+                noData.textContent = 'Output not yet available for this cycle';
+                bodyEl.appendChild(noData);
+            }
+
+            detailView.style.display = 'block';
+        }
+
+        function exitCycleDetailView() {
+            // Hide cycle detail
+            var detailView = document.getElementById('specops-cycle-detail');
+            if (detailView) detailView.style.display = 'none';
+
+            // Restore journal panel
+            var journalPanel = document.getElementById('specops-journal-panel');
+            if (journalPanel) journalPanel.style.display = '';
         }
 
         function updateSpecopsRunningPanel(agent) {
@@ -36276,7 +36589,7 @@
             if (progressEl) {
                 var journal = agent.mission_journal || [];
                 var lastEntry = journal.length > 0 ? journal[journal.length - 1] : null;
-                progressEl.textContent = lastEntry ? (lastEntry.progress || '\u2014').substring(0, 20) : '\u2014';
+                progressEl.textContent = lastEntry ? ((lastEntry.mission_progress || lastEntry.progress || '\u2014').substring(0, 20)) : '\u2014';
             }
 
             var outputEl = document.getElementById('specops-stat-output');
@@ -36300,6 +36613,333 @@
 
             // Render journal tab
             renderSpecopsJournalTab(agent);
+
+            // Render debrief tab
+            renderSpecopsDebriefTab(agent);
+
+            // Render full output tab
+            var fullOutputPanel = document.getElementById('specops-fulloutput-panel');
+            if (fullOutputPanel) {
+                renderAccumulatedOutput(fullOutputPanel, agent.accumulated_output || '');
+            }
+        }
+
+        function renderSpecopsDebriefTab(agent) {
+            var panel = document.getElementById('specops-debrief-panel');
+            if (!panel) return;
+            panel.textContent = '';
+
+            var debrief = agent.mission_debrief || '';
+            var cycleCount = agent.cycle_count || 0;
+
+            // Stats row
+            var statsDiv = document.createElement('div');
+            statsDiv.className = 'specops-debrief-stats';
+            var stats = [
+                { label: 'Cycles', value: cycleCount },
+                { label: 'Elapsed', value: formatDurationShort(agent.mission_elapsed || 0) },
+                { label: 'Progress', value: (function() {
+                    var j = agent.mission_journal || [];
+                    var last = j.length > 0 ? j[j.length - 1] : null;
+                    return last ? (last.mission_progress || last.progress || '\u2014').substring(0, 20) : '\u2014';
+                })() },
+                { label: 'Output', value: (function() {
+                    var len = (agent.accumulated_output || agent.output || '').length;
+                    return len > 1000 ? Math.round(len / 1000) + 'K' : String(len);
+                })() }
+            ];
+            stats.forEach(function(s) {
+                var statDiv = document.createElement('div');
+                statDiv.className = 'specops-debrief-stat';
+                var valDiv = document.createElement('div');
+                valDiv.className = 'specops-debrief-stat-value';
+                valDiv.textContent = s.value;
+                var lblDiv = document.createElement('div');
+                lblDiv.className = 'specops-debrief-stat-label';
+                lblDiv.textContent = s.label;
+                statDiv.appendChild(valDiv);
+                statDiv.appendChild(lblDiv);
+                statsDiv.appendChild(statDiv);
+            });
+            panel.appendChild(statsDiv);
+
+            // Debrief content
+            if (!debrief && cycleCount > 0) {
+                var genDiv = document.createElement('div');
+                genDiv.className = 'specops-debrief-generating';
+                var spinner = document.createElement('div');
+                spinner.className = 'agent-spinner';
+                genDiv.appendChild(spinner);
+                genDiv.appendChild(document.createTextNode('Generating mission debrief\u2026'));
+                panel.appendChild(genDiv);
+            } else if (debrief) {
+                var contentDiv = document.createElement('div');
+                contentDiv.className = 'specops-debrief-content';
+                // safeAgentOutput uses DOMPurify for XSS-safe rendering
+                contentDiv.innerHTML = safeAgentOutput(debrief);
+                panel.appendChild(contentDiv);
+            } else {
+                var emptyDiv = document.createElement('div');
+                emptyDiv.style.cssText = 'color:var(--text-muted);font-size:0.8rem;padding:20px;text-align:center;';
+                emptyDiv.textContent = 'Debrief will be generated after the first cycle completes';
+                panel.appendChild(emptyDiv);
+            }
+        }
+
+        function populateSpecopsCompletedPanel(agentId) {
+            var agent = agents[agentId];
+            if (!agent) return;
+
+            var outputArea = document.getElementById('panel-output-area');
+            if (!outputArea) return;
+            outputArea.textContent = '';
+
+            // Tab bar
+            var tabBar = document.createElement('div');
+            tabBar.className = 'specops-tabs';
+            var tabs = [
+                { name: 'debrief', label: 'Debrief', active: true },
+                { name: 'cycles', label: 'Cycles', active: false },
+                { name: 'fulloutput', label: 'Full Output', active: false }
+            ];
+            tabs.forEach(function(tab) {
+                var tabDiv = document.createElement('div');
+                tabDiv.className = 'specops-tab' + (tab.active ? ' active' : '');
+                tabDiv.dataset.tab = tab.name;
+                tabDiv.textContent = tab.label;
+                tabDiv.addEventListener('click', function() {
+                    switchCompletedSpecopsTab(this);
+                });
+                tabBar.appendChild(tabDiv);
+            });
+            outputArea.appendChild(tabBar);
+
+            // === DEBRIEF TAB ===
+            var debriefTab = document.createElement('div');
+            debriefTab.className = 'specops-tab-content active';
+            debriefTab.setAttribute('data-specops-tab', 'debrief');
+
+            // Stats row
+            var statsDiv = document.createElement('div');
+            statsDiv.className = 'specops-debrief-stats';
+            var debriefStats = [
+                { label: 'Cycles', value: agent.cycle_count || 0 },
+                { label: 'Elapsed', value: formatDurationShort(agent.mission_elapsed || 0) },
+                { label: 'Progress', value: (function() {
+                    var j = agent.mission_journal || [];
+                    var last = j.length > 0 ? j[j.length - 1] : null;
+                    return last ? (last.mission_progress || last.progress || '\u2014').substring(0, 20) : '\u2014';
+                })() },
+                { label: 'Output', value: (function() {
+                    var len = (agent.accumulated_output || agent.output || '').length;
+                    return len > 1000 ? Math.round(len / 1000) + 'K' : String(len);
+                })() }
+            ];
+            debriefStats.forEach(function(s) {
+                var statDiv = document.createElement('div');
+                statDiv.className = 'specops-debrief-stat';
+                var valDiv = document.createElement('div');
+                valDiv.className = 'specops-debrief-stat-value';
+                valDiv.textContent = s.value;
+                var lblDiv = document.createElement('div');
+                lblDiv.className = 'specops-debrief-stat-label';
+                lblDiv.textContent = s.label;
+                statDiv.appendChild(valDiv);
+                statDiv.appendChild(lblDiv);
+                statsDiv.appendChild(statDiv);
+            });
+            debriefTab.appendChild(statsDiv);
+
+            // Debrief content
+            var debrief = agent.mission_debrief || '';
+            if (debrief) {
+                var contentDiv = document.createElement('div');
+                contentDiv.className = 'specops-debrief-content';
+                // safeAgentOutput uses DOMPurify for XSS-safe rendering
+                contentDiv.innerHTML = safeAgentOutput(debrief);
+                debriefTab.appendChild(contentDiv);
+            } else {
+                var emptyDebrief = document.createElement('div');
+                emptyDebrief.style.cssText = 'color:var(--text-muted);font-size:0.8rem;padding:20px;text-align:center;font-style:italic;';
+                emptyDebrief.textContent = 'No debrief generated for this mission';
+                debriefTab.appendChild(emptyDebrief);
+            }
+
+            // Error section (if agent had errors)
+            if (agent.error) {
+                var errorDiv = document.createElement('div');
+                errorDiv.style.cssText = 'margin-top:16px;padding:12px;background:rgba(255,50,50,0.08);border:1px solid rgba(255,50,50,0.2);border-radius:8px;';
+                var errorLabel = document.createElement('div');
+                errorLabel.style.cssText = 'font-size:0.7rem;font-weight:700;color:#ff5050;text-transform:uppercase;margin-bottom:4px;';
+                errorLabel.textContent = 'Error';
+                var errorText = document.createElement('div');
+                errorText.style.cssText = 'font-size:0.8rem;color:var(--text-secondary);';
+                errorText.textContent = agent.error;
+                errorDiv.appendChild(errorLabel);
+                errorDiv.appendChild(errorText);
+                debriefTab.appendChild(errorDiv);
+            }
+            outputArea.appendChild(debriefTab);
+
+            // === CYCLES TAB ===
+            var cyclesTab = document.createElement('div');
+            cyclesTab.className = 'specops-tab-content';
+            cyclesTab.setAttribute('data-specops-tab', 'cycles');
+
+            var journal = agent.mission_journal || [];
+            if (journal.length === 0) {
+                var emptyJ = document.createElement('div');
+                emptyJ.style.cssText = 'color:var(--text-muted);font-size:0.8rem;padding:20px;text-align:center;';
+                emptyJ.textContent = 'No cycle data available';
+                cyclesTab.appendChild(emptyJ);
+            } else {
+                // Journal entries container
+                var journalContainer = document.createElement('div');
+                journalContainer.className = 'specops-completed-journal-list';
+
+                var sorted = journal.slice().reverse();
+                sorted.forEach(function(entry) {
+                    var entryDiv = document.createElement('div');
+                    entryDiv.className = 'specops-journal-entry';
+                    var headerDiv = document.createElement('div');
+                    headerDiv.className = 'specops-journal-entry-header';
+                    var cycleSpan = document.createElement('span');
+                    cycleSpan.textContent = 'CYCLE #' + (entry.cycle || '?');
+                    var timeSpan = document.createElement('span');
+                    timeSpan.textContent = entry.timestamp ? new Date(entry.timestamp).toLocaleString() : '';
+                    headerDiv.appendChild(cycleSpan);
+                    headerDiv.appendChild(timeSpan);
+                    var bodyDiv = document.createElement('div');
+                    bodyDiv.className = 'specops-journal-entry-body';
+                    var fields = [
+                        { label: 'Progress', value: entry.mission_progress || entry.progress || 'N/A' },
+                        { label: 'Assessment', value: entry.cycle_assessment || '' },
+                        { label: 'Completed', value: entry.completed || 'N/A' },
+                        { label: 'Next Directive', value: entry.next_directive || entry.next || 'N/A' },
+                        { label: 'Context', value: entry.context_carry || '' },
+                        { label: 'Blockers', value: entry.blockers || 'None' }
+                    ].filter(function(f) { return f.value && f.value !== ''; });
+                    fields.forEach(function(f) {
+                        var row = document.createElement('div');
+                        var strong = document.createElement('strong');
+                        strong.textContent = f.label + ': ';
+                        row.appendChild(strong);
+                        row.appendChild(document.createTextNode(f.value));
+                        bodyDiv.appendChild(row);
+                    });
+                    var hintDiv = document.createElement('div');
+                    hintDiv.className = 'specops-journal-expand-hint';
+                    hintDiv.textContent = '\u25B6 View full output';
+                    (function(cycleN, cTab) {
+                        entryDiv.addEventListener('click', function() {
+                            openCompletedCycleDetailView(cycleN, cTab);
+                        });
+                    })(entry.cycle || 0, cyclesTab);
+                    entryDiv.appendChild(headerDiv);
+                    entryDiv.appendChild(bodyDiv);
+                    entryDiv.appendChild(hintDiv);
+                    journalContainer.appendChild(entryDiv);
+                });
+                cyclesTab.appendChild(journalContainer);
+
+                // Cycle detail view (hidden initially)
+                var cycleDetail = document.createElement('div');
+                cycleDetail.className = 'specops-completed-cycle-detail';
+                cycleDetail.style.display = 'none';
+                cycleDetail.setAttribute('data-role', 'completed-cycle-detail');
+
+                var detailHeader = document.createElement('div');
+                detailHeader.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:12px;';
+                var backBtn = document.createElement('button');
+                backBtn.style.cssText = 'background:none;border:1px solid var(--border);color:var(--text-secondary);border-radius:6px;padding:4px 12px;cursor:pointer;font-size:0.75rem;transition:all 0.2s ease;';
+                backBtn.textContent = 'Back';
+                backBtn.addEventListener('click', function() {
+                    cycleDetail.style.display = 'none';
+                    journalContainer.style.display = '';
+                });
+                backBtn.addEventListener('mouseover', function() {
+                    this.style.background = 'rgba(255, 45, 120, 0.1)';
+                    this.style.borderColor = 'var(--specops-pink)';
+                    this.style.color = 'var(--specops-pink)';
+                });
+                backBtn.addEventListener('mouseout', function() {
+                    this.style.background = 'none';
+                    this.style.borderColor = 'var(--border)';
+                    this.style.color = 'var(--text-secondary)';
+                });
+                var detailTitle = document.createElement('span');
+                detailTitle.style.cssText = 'font-family:var(--font-mono);font-size:0.85rem;color:var(--specops-pink);font-weight:600;';
+                detailTitle.setAttribute('data-role', 'cycle-title');
+                detailHeader.appendChild(backBtn);
+                detailHeader.appendChild(detailTitle);
+                cycleDetail.appendChild(detailHeader);
+
+                var detailBody = document.createElement('div');
+                detailBody.className = 'specops-live-output';
+                detailBody.style.minHeight = '200px';
+                detailBody.setAttribute('data-role', 'cycle-body');
+                cycleDetail.appendChild(detailBody);
+                cyclesTab.appendChild(cycleDetail);
+            }
+            outputArea.appendChild(cyclesTab);
+
+            // === FULL OUTPUT TAB ===
+            var fullTab = document.createElement('div');
+            fullTab.className = 'specops-tab-content';
+            fullTab.setAttribute('data-specops-tab', 'fulloutput');
+            var fullContainer = document.createElement('div');
+            fullContainer.className = 'specops-live-output';
+            fullContainer.style.minHeight = '200px';
+            renderAccumulatedOutput(fullContainer, agent.accumulated_output || agent.output || '');
+            fullTab.appendChild(fullContainer);
+            outputArea.appendChild(fullTab);
+        }
+
+        function switchCompletedSpecopsTab(tabEl) {
+            var tabName = tabEl.dataset.tab;
+            var outputArea = document.getElementById('panel-output-area');
+            if (!outputArea) return;
+            outputArea.querySelectorAll('.specops-tab').forEach(function(t) { t.classList.remove('active'); });
+            outputArea.querySelectorAll('.specops-tab-content').forEach(function(c) { c.classList.remove('active'); });
+            tabEl.classList.add('active');
+            var content = outputArea.querySelector('[data-specops-tab="' + tabName + '"]');
+            if (content) content.classList.add('active');
+        }
+
+        function openCompletedCycleDetailView(cycleNum, container) {
+            // Hide journal list
+            var journalList = container.querySelector('.specops-completed-journal-list');
+            if (journalList) journalList.style.display = 'none';
+
+            // Show cycle detail
+            var detailView = container.querySelector('[data-role="completed-cycle-detail"]');
+            if (!detailView) return;
+
+            var titleEl = detailView.querySelector('[data-role="cycle-title"]');
+            var bodyEl = detailView.querySelector('[data-role="cycle-body"]');
+            if (titleEl) titleEl.textContent = 'CYCLE #' + cycleNum + ' \u2014 Full Output';
+            if (bodyEl) {
+                bodyEl.textContent = '';
+                var agent = agents[agentPanelAgentId];
+                var accOutput = agent ? (agent.accumulated_output || '') : '';
+                var cycleText = getCycleOutput(accOutput, cycleNum);
+                if (!cycleText && cycleNum === 1 && agent) {
+                    cycleText = agent.output || '';
+                }
+                if (cycleText) {
+                    var wrapper = document.createElement('div');
+                    wrapper.className = 'agent-output-rendered';
+                    // safeAgentOutput uses DOMPurify for XSS-safe rendering
+                    wrapper.innerHTML = safeAgentOutput(cycleText);
+                    bodyEl.appendChild(wrapper);
+                } else {
+                    var noData = document.createElement('div');
+                    noData.style.cssText = 'color:var(--text-muted);font-size:0.85rem;padding:20px;text-align:center;font-style:italic;';
+                    noData.textContent = 'Output not available for this cycle';
+                    bodyEl.appendChild(noData);
+                }
+            }
+            detailView.style.display = 'block';
         }
 
         function startSpecopsCountdown(nextCheckin) {
@@ -36787,31 +37427,14 @@
                 var runTaskEl = document.getElementById('panel-running-task');
                 if (runTaskEl) runTaskEl.textContent = agent.task.slice(0, 120) + (agent.task.length > 120 ? '...' : '');
 
-                // SpecOps live streaming
+                // SpecOps panel updates
                 if (agent.is_specops) {
                     updateSpecopsRunningPanel(agent);
-                    // Stream live output
-                    var liveOutput = document.getElementById('specops-live-output');
-                    if (liveOutput && agent.output) {
-                        try { liveOutput.textContent = agent.output; } catch(e) { liveOutput.textContent = agent.output; }
-                        liveOutput.scrollTop = liveOutput.scrollHeight;
-                    }
-                    // Update full output
-                    var fullOutput = document.getElementById('specops-full-output');
-                    if (fullOutput && agent.accumulated_output) {
-                        try { fullOutput.textContent = agent.accumulated_output; } catch(e) { fullOutput.textContent = agent.accumulated_output; }
-                    }
-
-                    // Handle state transitions
-                    if (agent.status === 'cycling' && agentPanelState === 'running') {
-                        // Still use running state but update the specops view
-                        updateSpecopsRunningPanel(agent);
-                    }
                 }
             }
 
             // Start polling fallback when agents are running (catches missed WebSocket events)
-            if (agent.status === 'running' || agent.status === 'queued') {
+            if (agent.status === 'running' || agent.status === 'queued' || agent.status === 'cycling') {
                 startAgentPolling();
             }
         }
@@ -36932,7 +37555,7 @@
 
         async function pollRunningAgents() {
             const runningIds = Object.values(agents)
-                .filter(a => a.status === 'running' || a.status === 'queued')
+                .filter(a => a.status === 'running' || a.status === 'queued' || a.status === 'cycling')
                 .map(a => a.id);
 
             if (runningIds.length === 0) {
@@ -36947,18 +37570,49 @@
                 if (!response.ok) return;
                 const data = await response.json();
                 let changed = false;
+                let specopsPanelNeedsUpdate = false;
 
                 for (const serverAgent of data.agents) {
                     const local = agents[serverAgent.id];
-                    if (local && (local.status === 'running' || local.status === 'queued')
-                        && serverAgent.status !== local.status) {
+                    if (!local) continue;
+                    const isActive = local.status === 'running' || local.status === 'queued' || local.status === 'cycling';
+                    if (!isActive) continue;
+
+                    if (serverAgent.status !== local.status) {
                         // Status changed on server but we missed the WebSocket event
                         console.log(`[Poll] Agent ${serverAgent.id} status: ${local.status} → ${serverAgent.status}`);
                         agents[serverAgent.id] = serverAgent;
                         changed = true;
 
                         if (serverAgent.status === 'completed' || serverAgent.status === 'failed') {
-                            handleAgentCompleted(serverAgent);
+                            // For SpecOps agents with auto_continue, don't trigger completion handler
+                            // during inter-cycle transitions (status briefly hits 'completed' between cycles)
+                            if (serverAgent.is_specops && serverAgent.auto_continue && serverAgent.status === 'completed') {
+                                console.log(`[Poll] SpecOps agent ${serverAgent.id} completed a cycle — skipping handleAgentCompleted (auto_continue active)`);
+                                // Update panel instead
+                                if (agentPanelAgentId === serverAgent.id && agentPanelState === 'running') {
+                                    specopsPanelNeedsUpdate = true;
+                                }
+                            } else {
+                                handleAgentCompleted(serverAgent);
+                            }
+                        }
+                    } else if (local.is_specops) {
+                        // For SpecOps agents, sync data even when status hasn't changed
+                        // (cycle completions update journal/output without changing status)
+                        var dataChanged = false;
+                        if (serverAgent.cycle_count !== local.cycle_count) dataChanged = true;
+                        if ((serverAgent.mission_journal || []).length !== (local.mission_journal || []).length) dataChanged = true;
+                        if ((serverAgent.accumulated_output || '').length !== (local.accumulated_output || '').length) dataChanged = true;
+                        if ((serverAgent.output || '').length !== (local.output || '').length) dataChanged = true;
+
+                        if (dataChanged) {
+                            console.log(`[Poll] SpecOps agent ${serverAgent.id} data updated (cycle: ${local.cycle_count} → ${serverAgent.cycle_count})`);
+                            agents[serverAgent.id] = serverAgent;
+                            changed = true;
+                            if (agentPanelAgentId === serverAgent.id && agentPanelState === 'running') {
+                                specopsPanelNeedsUpdate = true;
+                            }
                         }
                     }
                 }
@@ -36968,6 +37622,12 @@
                     updateCerebroStatus();
                     if (_currentMindTab === 'agents') renderMindAgents();
                     updateAgentsTabBadge();
+                }
+                if (specopsPanelNeedsUpdate) {
+                    var panelAgent = agents[agentPanelAgentId];
+                    if (panelAgent && panelAgent.is_specops) {
+                        updateSpecopsRunningPanel(panelAgent);
+                    }
                 }
             } catch (e) {
                 // Silent fail — WebSocket is primary, this is just fallback
@@ -48639,6 +49299,80 @@ Please proceed with implementing this recommendation. You have full permissions.
                 okBtn.focus();
             });
         };
+
+        // Custom prompt dialog — replaces browser prompt()
+        // Returns Promise<string|null> (null if cancelled)
+        function cerebroPrompt(message, defaultValue, options) {
+            options = options || {};
+            return new Promise(function(resolve) {
+                var overlay = document.getElementById('cerebro-confirm-overlay');
+                var titleEl = document.getElementById('cerebro-confirm-title');
+                var bodyEl = document.getElementById('cerebro-confirm-body');
+                var okBtn = document.getElementById('cerebro-confirm-ok');
+                var cancelBtn = document.getElementById('cerebro-confirm-cancel');
+                var iconEl = document.getElementById('cerebro-confirm-icon');
+
+                titleEl.textContent = options.title || message;
+                bodyEl.textContent = '';
+
+                // Add message text if title is custom
+                if (options.title) {
+                    var msgP = document.createElement('div');
+                    msgP.style.cssText = 'margin-bottom:12px;color:var(--text-secondary);font-size:0.85rem;';
+                    msgP.textContent = message;
+                    bodyEl.appendChild(msgP);
+                }
+
+                // Add text input
+                var input = document.createElement('input');
+                input.type = 'text';
+                input.value = defaultValue || '';
+                input.placeholder = options.placeholder || '';
+                input.style.cssText = 'width:100%;padding:10px 12px;background:var(--bg-primary);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);font-size:0.9rem;font-family:inherit;outline:none;box-sizing:border-box;';
+                input.addEventListener('focus', function() {
+                    this.style.borderColor = 'rgba(139, 92, 246, 0.5)';
+                });
+                input.addEventListener('blur', function() {
+                    this.style.borderColor = 'var(--border)';
+                });
+                bodyEl.appendChild(input);
+
+                okBtn.textContent = options.confirmText || 'OK';
+                cancelBtn.style.display = '';
+                cancelBtn.textContent = options.cancelText || 'Cancel';
+                iconEl.className = 'cerebro-confirm-icon warn';
+                okBtn.className = 'cerebro-confirm-btn confirm';
+
+                overlay.classList.add('active');
+
+                function cleanup(result) {
+                    overlay.classList.remove('active');
+                    okBtn.removeEventListener('click', onConfirm);
+                    cancelBtn.removeEventListener('click', onCancel);
+                    overlay.removeEventListener('click', onBackdrop);
+                    document.removeEventListener('keydown', onKey);
+                    input.removeEventListener('keydown', onInputKey);
+                    resolve(result);
+                }
+                function onConfirm() {
+                    var val = input.value.trim();
+                    cleanup(val || null);
+                }
+                function onCancel() { cleanup(null); }
+                function onBackdrop(e) { if (e.target === overlay) cleanup(null); }
+                function onKey(e) { if (e.key === 'Escape') cleanup(null); }
+                function onInputKey(e) { if (e.key === 'Enter') { e.preventDefault(); onConfirm(); } }
+
+                okBtn.addEventListener('click', onConfirm);
+                cancelBtn.addEventListener('click', onCancel);
+                overlay.addEventListener('click', onBackdrop);
+                document.addEventListener('keydown', onKey);
+                input.addEventListener('keydown', onInputKey);
+
+                // Focus input and select text
+                setTimeout(function() { input.focus(); input.select(); }, 100);
+            });
+        }
     </script>
 
     <!-- Voice Screenshot Overlay -->

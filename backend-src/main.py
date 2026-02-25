@@ -809,8 +809,12 @@ def reload_agents_from_persistence():
                         with open(agent_file, 'r', encoding='utf-8') as f:
                             agent_data = json.load(f)
 
-                        # Mark formerly-running/queued agents as completed with error note
-                        if agent_data.get("status") in ("running", "queued"):
+                        # SpecOps cycling agents: flag for resume instead of marking completed
+                        if agent_data.get("status") == "cycling" and agent_data.get("is_specops") and agent_data.get("auto_continue", True):
+                            agent_data["_needs_resume"] = True
+                            print(f"[Startup] SpecOps agent {agent_id} flagged for resume (was cycling)")
+                        elif agent_data.get("status") in ("running", "queued"):
+                            # Mark formerly-running/queued agents as completed with error note
                             agent_data["status"] = "completed"
                             agent_data["error"] = "Server restarted before completion"
                             agent_data["completed_at"] = datetime.now(timezone.utc).isoformat()
@@ -840,6 +844,173 @@ def reload_agents_from_persistence():
         print(f"[Startup] Reloaded {loaded} agents from persistence ({len(used_call_signs)} call signs tracked)")
     except Exception as e:
         print(f"[Startup] Error reloading agents: {e}")
+
+
+async def _resume_specops_agent(agent_id: str):
+    """Resume a specops agent that was cycling when the server restarted."""
+    agent = active_agents.get(agent_id)
+    if not agent:
+        return
+
+    agent.pop("_needs_resume", None)
+    call_sign = agent.get("call_sign", agent_id)
+
+    # Calculate remaining sleep from original next_checkin
+    next_checkin_str = agent.get("next_checkin")
+    sleep_remaining = 0
+    if next_checkin_str:
+        try:
+            next_checkin_dt = datetime.fromisoformat(next_checkin_str.replace('Z', '+00:00'))
+            remaining = (next_checkin_dt - datetime.now(timezone.utc)).total_seconds()
+            sleep_remaining = max(0, int(remaining))
+        except Exception:
+            pass
+
+    if sleep_remaining > 10:
+        print(f"[SpecOps Resume] {call_sign} — waiting {_format_interval(sleep_remaining)} until original checkin")
+        # Sleep in 30s increments (same interruptible pattern)
+        elapsed_sleep = 0
+        while elapsed_sleep < sleep_remaining:
+            await asyncio.sleep(min(30, sleep_remaining - elapsed_sleep))
+            elapsed_sleep += 30
+            agent = active_agents.get(agent_id)
+            if not agent or agent.get("status") == AgentStatus.STOPPED:
+                print(f"[SpecOps Resume] {call_sign} cancelled during wait")
+                return
+            if not agent.get("auto_continue", True):
+                print(f"[SpecOps Resume] {call_sign} auto-continue disabled during wait")
+                agent["status"] = AgentStatus.COMPLETED
+                await sio.emit("agent_update", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
+                return
+            if agent.get("_force_next_cycle"):
+                agent.pop("_force_next_cycle", None)
+                print(f"[SpecOps Resume] {call_sign} force cycle triggered")
+                break
+    else:
+        print(f"[SpecOps Resume] {call_sign} — checkin time passed, starting immediately")
+
+    # Re-fetch agent in case it changed during sleep
+    agent = active_agents.get(agent_id)
+    if not agent:
+        return
+
+    cycle_num = agent.get("cycle_count", 0)
+    print(f"[SpecOps Resume] {call_sign} resuming — starting cycle #{cycle_num + 1}")
+
+    # Ensure specops lock exists
+    if agent_id not in _specops_locks:
+        _specops_locks[agent_id] = asyncio.Lock()
+
+    # Use existing cycle context if available, otherwise create a minimal one
+    context_file = str(Path(config.AI_MEMORY_PATH) / "agent_contexts" / f"{agent_id}_cycle_{cycle_num}.json")
+    if not Path(context_file).exists():
+        context_file = str(Path(config.AI_MEMORY_PATH) / "agent_contexts" / f"{agent_id}.json")
+    cycle_context_ref = {"context_file": context_file}
+
+    # Build intelligent continuation
+    specops_system, specops_task = _build_specops_continuation(agent, cycle_num, cycle_context_ref)
+
+    # Reset agent for new cycle
+    agent["status"] = AgentStatus.RUNNING
+    agent["started_at"] = datetime.now(timezone.utc).isoformat()
+    agent["completed_at"] = None
+    agent["error"] = None
+    agent["next_checkin"] = None
+    agent.pop("_process", None)
+    agent.pop("_stdout_thread", None)
+
+    await sio.emit("agent_update", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
+
+    # Find agent file
+    agents_dir = Path(config.AI_MEMORY_PATH) / "agents"
+    agent_file = None
+    index_file = agents_dir / "index.json"
+    if index_file.exists():
+        try:
+            with open(index_file, 'r', encoding='utf-8') as f:
+                index = json.load(f)
+            agent_entry = next((a for a in index.get("agents", []) if a["id"] == agent_id), None)
+            if agent_entry:
+                agent_file = str(agents_dir / agent_entry["file"])
+        except Exception:
+            pass
+
+    # Build capabilities context
+    agent_token = create_token("agent:" + agent_id)
+    if not _IS_STANDALONE:
+        capabilities_context = f"""
+---
+
+## Cerebro Capabilities (HTTP API at localhost:59000)
+You have access to these Cerebro backend tools via curl. Use them when relevant to the task.
+
+**Your auth token (use in all API calls):**
+`TOKEN={agent_token}`
+
+### Trading (Alpaca - Paper Account, ~$100K)
+- **Get positions:** `curl -s http://localhost:59000/api/trading/positions -H "Authorization: Bearer $TOKEN"`
+- **Place order:** `curl -s -X POST http://localhost:59000/api/trading/order -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"symbol":"AAPL","qty":1,"side":"buy","type":"market","time_in_force":"day"}}'`
+- **Get account:** `curl -s http://localhost:59000/api/trading/account -H "Authorization: Bearer $TOKEN"`
+
+### Browser Control (shared Chrome)
+- **Page state:** `curl -s http://localhost:59000/api/browser/page_state -H "Authorization: Bearer $TOKEN"`
+- **Navigate:** `curl -s -X POST http://localhost:59000/api/browser/agent/navigate -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"url":"https://..."}}'`
+
+### Ask User (blocks until response)
+- `curl -s -X POST http://localhost:59000/api/agent/ask -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"question":"Should I proceed?","options":["Yes","No"],"agent_id":"AGENT_ID"}}'`
+
+### Remote Machines (SSH Access)
+- Devices listed in /data/memory/network_config.json (if configured)
+"""
+    else:
+        capabilities_context = f"""
+---
+
+## Cerebro Capabilities (HTTP API at localhost:59000)
+
+**Your auth token (use in all API calls):**
+`TOKEN={agent_token}`
+
+### Browser Control (shared Chrome)
+- **Page state:** `curl -s http://localhost:59000/api/browser/page_state -H "Authorization: Bearer $TOKEN"`
+- **Navigate:** `curl -s -X POST http://localhost:59000/api/browser/agent/navigate -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"url":"https://..."}}'`
+
+### Ask User (blocks until response, 5min timeout)
+- `curl -s -X POST http://localhost:59000/api/agent/ask -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"question":"Should I proceed?","options":["Yes","No"],"agent_id":"AGENT_ID"}}'`
+
+### Spawn Child Agent
+- `curl -s -X POST http://localhost:59000/internal/spawn-child-agent -H "Content-Type: application/json" -d '{{"task":"...","type":"worker"}}'`
+"""
+
+    full_system_context = specops_system + "\n" + capabilities_context
+
+    # Launch continuation cycle
+    await run_agent_continuation(
+        agent_id=agent_id,
+        call_sign=call_sign,
+        task=specops_task,
+        agent_file=agent_file,
+        agent_data=agent,
+        is_specops_cycle=True,
+        system_context=full_system_context
+    )
+
+    # After cycle completes, enter the normal mission supervisor loop
+    await run_specops_mission(agent_id)
+
+
+async def _resume_specops_missions():
+    """Find and resume all specops agents that were cycling when the server restarted."""
+    resume_candidates = [
+        (aid, agent) for aid, agent in active_agents.items()
+        if agent.get("_needs_resume")
+    ]
+    if not resume_candidates:
+        return
+
+    print(f"[Startup] Resuming {len(resume_candidates)} specops mission(s)")
+    for agent_id, agent in resume_candidates:
+        asyncio.create_task(_resume_specops_agent(agent_id))
 
 
 # Concurrent agent queue system
@@ -874,8 +1045,12 @@ class AgentMemoryService:
         self.context_dir = base_path / "agent_contexts"
         self.context_dir.mkdir(exist_ok=True)
 
-    def save_agent_context(self, agent_id: str, call_sign: str, task: str, output: str) -> dict:
-        """Save agent output to file for follow-up retrieval."""
+    def save_agent_context(self, agent_id: str, call_sign: str, task: str, output: str, cycle_num: int = None) -> dict:
+        """Save agent output to file for follow-up retrieval.
+        For specops cycles, saves per-cycle files (agent_contexts/{id}_cycle_{N}.json)
+        in addition to the latest context file.
+        """
+        # Always save the latest context (overwrites previous)
         context_file = self.context_dir / f"{agent_id}.json"
 
         # Create summary (first 500 chars) for quick reference
@@ -889,12 +1064,21 @@ class AgentMemoryService:
             "summary": summary,
             "saved_at": datetime.now(timezone.utc).isoformat()
         }
+        if cycle_num is not None:
+            context_data["cycle"] = cycle_num
 
         with open(context_file, 'w', encoding='utf-8') as f:
             json.dump(context_data, f, indent=2, ensure_ascii=False)
 
+        # For specops cycles, also save a per-cycle snapshot
+        cycle_file = None
+        if cycle_num is not None:
+            cycle_file = self.context_dir / f"{agent_id}_cycle_{cycle_num}.json"
+            with open(cycle_file, 'w', encoding='utf-8') as f:
+                json.dump(context_data, f, indent=2, ensure_ascii=False)
+
         return {
-            "context_file": str(context_file),
+            "context_file": str(cycle_file or context_file),
             "summary": summary
         }
 
@@ -1358,20 +1542,33 @@ You are running a LONG-DURATION mission that spans multiple work cycles. Each cy
 {mission_journal}
 
 ## CYCLE COMPLETION PROTOCOL
-At the END of every work cycle, you MUST output a mission status block in this exact format:
+At the END of every cycle, you MUST complete these steps:
+
+### Step 1: Reflect
+Review everything you did this cycle. Cross-reference against the original mission objective. What's new? What changed? What did you learn?
+
+### Step 2: Output Mission Status
+Output this block in EXACT format:
 
 [MISSION STATUS]
-Progress: <percentage or qualitative assessment of overall mission progress>
-Completed: <bullet list of what was accomplished this cycle>
-Next: <what should be done in the next cycle>
-Blockers: <any issues preventing progress, or "None">
+Mission_Progress: <overall mission progress — NOT this cycle's task completion. For recurring/monitoring missions, assess coverage quality. For finite tasks, estimate % toward end goal.>
+Cycle_Assessment: <1-2 sentence reflection — what went well, what was surprising, what you'd do differently>
+Completed: <bullet list of what was accomplished THIS cycle>
+Next_Directive: <SPECIFIC task/question for the next cycle. Be precise — the next cycle executes THIS, not the original mission. What should it investigate, build, check, or monitor?>
+Context_Carry: <key facts, data points, file paths, or state the next cycle MUST know to avoid repeating work>
+Blockers: <any issues, or "None">
 [/MISSION STATUS]
 
-This block is parsed by the mission supervisor to maintain the journal. Do NOT skip it.
-If your work style is "hybrid" and you want to pause before the next cycle, include "PAUSE" in the Next field.
+IMPORTANT:
+- Next_Directive drives mission EVOLUTION. Do NOT repeat the original task. Formulate what SHOULD happen next based on what you learned.
+- For monitoring/recurring missions, focus on what CHANGED or needs attention since last cycle.
+- If your work style is "hybrid" and you want to pause, include "PAUSE" in Next_Directive.
+
+## MISSION MEMORY
+You have access to a mission state file at `mission_state.json` in your working directory. This file contains tagged summaries from ALL previous cycles — not just the last few. If your current work relates to something an earlier cycle handled, READ that cycle's full output file (paths are in the tags). This lets you build on work from any point in the mission, not just recent cycles.
 
 ## FOCUS
-Execute your mission objective with discipline. You have multiple cycles — pace yourself, be thorough, and build on previous work.
+Execute your directive with discipline. You have multiple cycles — pace yourself, be thorough, and build on previous work. Each cycle should leave the mission in a better state than it found it.
 
 You are Agent {call_sign}, Special Operations. Begin your cycle.""",
     }
@@ -2105,17 +2302,7 @@ async def run_agent(
 
         # Build mission journal text
         journal_entries = agent.get("mission_journal", [])
-        if journal_entries:
-            journal_text = "\n".join(
-                f"### Cycle {e.get('cycle', '?')} ({e.get('timestamp', 'unknown')})\n"
-                f"- Progress: {e.get('progress', 'N/A')}\n"
-                f"- Completed: {e.get('completed', 'N/A')}\n"
-                f"- Next: {e.get('next', 'N/A')}\n"
-                f"- Blockers: {e.get('blockers', 'None')}"
-                for e in journal_entries
-            )
-        else:
-            journal_text = "_No previous cycles — this is your first cycle._"
+        journal_text = _build_journal_text(journal_entries)
 
         role_prompt = role_config["system_prompt"].format(
             call_sign=agent_id,
@@ -2506,6 +2693,8 @@ You are running inside a Docker container.
                         for block in text:
                             if block.get("type") == "text":
                                 block_text = block.get("text", "")
+                                if full_output and not full_output.endswith("\n\n"):
+                                    full_output += "\n\n"
                                 full_output += block_text
                                 # === v2.0: Stream agent text as narration (deduped) ===
                                 _narr_key = block_text[:200].strip()
@@ -2553,6 +2742,8 @@ You are running inside a Docker container.
                                     "is_tool": True,
                                 }, room=os.environ.get("CEREBRO_ROOM", "default"))
                     elif isinstance(text, str) and text:
+                        if full_output and not full_output.endswith("\n\n"):
+                            full_output += "\n\n"
                         full_output += text
                         # === v2.0: Stream agent text as progress (deduped) ===
                         _narr_key = text[:200].strip()
@@ -2903,6 +3094,9 @@ async def startup():
 
     # Reload persisted agents into memory
     reload_agents_from_persistence()
+
+    # Resume any specops missions that were cycling when server restarted
+    asyncio.create_task(_resume_specops_missions())
 
     # Start background task listener
     asyncio.create_task(redis_task_listener())
@@ -5099,12 +5293,13 @@ async def run_agent_continuation(agent_id: str, call_sign: str, task: str, agent
         if not claude_path:
             raise Exception("Claude CLI not found")
 
-        # Use a SHORT prompt for continuations - the task already has all the instructions
-        full_prompt = f"You are Agent {call_sign} continuing your previous work.\n\n{task}"
-
-        # Prepend system context (capabilities, etc.) if provided
-        if system_context:
-            full_prompt = system_context + "\n\n" + full_prompt
+        # For specops cycles, system_context already carries the full mission briefing + journal
+        if is_specops_cycle and system_context:
+            full_prompt = system_context + "\n\n" + task
+        else:
+            full_prompt = f"You are Agent {call_sign} continuing your previous work.\n\n{task}"
+            if system_context:
+                full_prompt = system_context + "\n\n" + full_prompt
 
         print(f"[Agent {call_sign}] Prompt length: {len(full_prompt)} chars")
         print(f"[Agent {call_sign}] Starting continuation #{agent_data.get('continuation_count', 1)}")
@@ -5169,6 +5364,14 @@ async def run_agent_continuation(agent_id: str, call_sign: str, task: str, agent
         stdout_thread = threading.Thread(target=read_stdout, args=(process, line_queue), daemon=True)
         stdout_thread.start()
 
+        # For specops cycles, enforce a max cycle duration (10 min or 2x cycle interval, whichever is larger)
+        if is_specops_cycle:
+            cycle_interval = agent_data.get("cycle_interval", 900)
+            max_cycle_duration = max(600, cycle_interval * 2)
+        else:
+            max_cycle_duration = 0  # No overall limit for non-specops
+        cycle_start_time = asyncio.get_event_loop().time()
+
         while True:
             try:
                 # Non-blocking read with timeout
@@ -5180,6 +5383,14 @@ async def run_agent_continuation(agent_id: str, call_sign: str, task: str, agent
 
             if line is None:
                 break
+
+            # Check overall cycle duration limit for specops
+            if max_cycle_duration > 0:
+                elapsed = asyncio.get_event_loop().time() - cycle_start_time
+                if elapsed > max_cycle_duration:
+                    print(f"[Agent {call_sign}] Cycle exceeded max duration ({int(elapsed)}s > {max_cycle_duration}s) — terminating")
+                    process.kill()
+                    break
 
             raw_line = line.decode('utf-8', errors='replace').strip()
             if not raw_line:
@@ -5194,6 +5405,8 @@ async def run_agent_continuation(agent_id: str, call_sign: str, task: str, agent
                     if isinstance(text, list):
                         for block in text:
                             if block.get("type") == "text":
+                                if full_output and not full_output.endswith("\n\n"):
+                                    full_output += "\n\n"
                                 full_output += block.get("text", "")
                                 # Stream narration for continuations too
                                 text_content = block.get("text", "")
@@ -5207,6 +5420,8 @@ async def run_agent_continuation(agent_id: str, call_sign: str, task: str, agent
                             elif block.get("type") == "tool_use":
                                 tools_used.add(block.get("name", ""))
                     elif isinstance(text, str) and text:
+                        if full_output and not full_output.endswith("\n\n"):
+                            full_output += "\n\n"
                         full_output += text
 
                 elif msg_type == "tool_use":
@@ -5258,11 +5473,7 @@ async def run_agent_continuation(agent_id: str, call_sign: str, task: str, agent
         agent_data["tools_used"] = list(tools_used)
         agent_data["completed_at"] = datetime.now(timezone.utc).isoformat()
 
-        # Track accumulated output for specops
-        if agent_data.get("is_specops"):
-            cycle_num = agent_data.get("cycle_count", 0) + 1
-            separator = f"\n\n--- CYCLE {cycle_num} ---\n\n"
-            agent_data["accumulated_output"] = (agent_data.get("accumulated_output") or "") + separator + full_output
+        # Note: accumulated_output is tracked in run_specops_mission() after each cycle completes
 
         print(f"[Agent {call_sign}] Continuation completed. Output length: {len(full_output)}")
 
@@ -5353,14 +5564,20 @@ async def _wait_for_agent_completion(agent_id: str) -> str:
         await asyncio.sleep(5)
 
 def _parse_mission_status(output: str, cycle_num: int) -> dict:
-    """Extract [MISSION STATUS]...[/MISSION STATUS] block from agent output."""
+    """Extract [MISSION STATUS]...[/MISSION STATUS] block from agent output.
+    Supports both old format (Progress/Next) and new format (Mission_Progress/Next_Directive/etc).
+    """
     import re
     entry = {
         "cycle": cycle_num,
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "progress": "Unknown",
+        "mission_progress": "Unknown",
+        "progress": "Unknown",  # backward compat alias
+        "cycle_assessment": "",
         "completed": "Unknown",
-        "next": "Unknown",
+        "next_directive": "Unknown",
+        "next": "Unknown",  # backward compat alias
+        "context_carry": "",
         "blockers": "None",
         "raw_length": len(output) if output else 0,
     }
@@ -5374,15 +5591,184 @@ def _parse_mission_status(output: str, cycle_num: int) -> dict:
     block = match.group(1).strip()
     for line in block.split('\n'):
         line = line.strip()
-        if line.lower().startswith('progress:'):
-            entry["progress"] = line.split(':', 1)[1].strip()
-        elif line.lower().startswith('completed:'):
+        lower = line.lower()
+        if lower.startswith('mission_progress:') or lower.startswith('mission progress:'):
+            val = line.split(':', 1)[1].strip()
+            entry["mission_progress"] = val
+            entry["progress"] = val  # backward compat
+        elif lower.startswith('progress:'):
+            val = line.split(':', 1)[1].strip()
+            entry["mission_progress"] = val
+            entry["progress"] = val
+        elif lower.startswith('cycle_assessment:') or lower.startswith('cycle assessment:'):
+            entry["cycle_assessment"] = line.split(':', 1)[1].strip()
+        elif lower.startswith('completed:'):
             entry["completed"] = line.split(':', 1)[1].strip()
-        elif line.lower().startswith('next:'):
-            entry["next"] = line.split(':', 1)[1].strip()
-        elif line.lower().startswith('blockers:'):
+        elif lower.startswith('next_directive:') or lower.startswith('next directive:'):
+            val = line.split(':', 1)[1].strip()
+            entry["next_directive"] = val
+            entry["next"] = val  # backward compat
+        elif lower.startswith('next:'):
+            val = line.split(':', 1)[1].strip()
+            entry["next_directive"] = val
+            entry["next"] = val
+        elif lower.startswith('context_carry:') or lower.startswith('context carry:'):
+            entry["context_carry"] = line.split(':', 1)[1].strip()
+        elif lower.startswith('blockers:'):
             entry["blockers"] = line.split(':', 1)[1].strip()
     return entry
+
+
+def _build_journal_text(journal_entries: list) -> str:
+    """Build mission journal text from journal entries (used in both cycle 1 and continuations)."""
+    if not journal_entries:
+        return "_No previous cycles — this is your first cycle._"
+    return "\n".join(
+        f"### Cycle {e.get('cycle', '?')} ({e.get('timestamp', 'unknown')})\n"
+        f"- Progress: {e.get('mission_progress', e.get('progress', 'N/A'))}\n"
+        + (f"- Assessment: {e['cycle_assessment']}\n" if e.get('cycle_assessment') else "")
+        + f"- Completed: {e.get('completed', 'N/A')}\n"
+        f"- Next Directive: {e.get('next_directive', e.get('next', 'N/A'))}\n"
+        + (f"- Context: {e['context_carry']}\n" if e.get('context_carry') else "")
+        + f"- Blockers: {e.get('blockers', 'None')}"
+        for e in journal_entries
+    )
+
+
+def _extract_tags(journal_entry: dict) -> list:
+    """Extract simple keyword tags from a journal entry for mission_state indexing."""
+    import re
+    text_parts = [
+        journal_entry.get("completed", ""),
+        journal_entry.get("context_carry", ""),
+        journal_entry.get("next_directive", journal_entry.get("next", "")),
+    ]
+    text = " ".join(text_parts).lower()
+    # Remove common stop words and extract meaningful tokens
+    stop_words = {"the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+                  "of", "with", "by", "is", "was", "are", "were", "be", "been", "being",
+                  "have", "has", "had", "do", "does", "did", "will", "would", "could",
+                  "should", "may", "might", "shall", "can", "this", "that", "these",
+                  "those", "it", "its", "not", "no", "none", "from", "into", "about",
+                  "what", "which", "who", "whom", "how", "when", "where", "why", "all",
+                  "each", "every", "both", "few", "more", "most", "other", "some", "such",
+                  "than", "too", "very", "just", "also", "then", "so", "if", "as"}
+    words = re.findall(r'[a-z][a-z0-9_-]{2,}', text)
+    tags = []
+    seen = set()
+    for w in words:
+        if w not in stop_words and w not in seen:
+            seen.add(w)
+            tags.append(w)
+        if len(tags) >= 8:
+            break
+    return tags
+
+
+def _write_mission_state(agent: dict, journal_entry: dict, context_ref: dict):
+    """Write/update mission_state.json with cumulative cycle data and tags."""
+    try:
+        state_file = Path(config.AI_MEMORY_PATH) / "mission_state.json"
+        # Load existing or create new
+        if state_file.exists():
+            with open(state_file, 'r', encoding='utf-8') as f:
+                all_states = json.load(f)
+        else:
+            all_states = {}
+
+        agent_id = agent["id"]
+        if agent_id not in all_states:
+            all_states[agent_id] = {
+                "agent_id": agent_id,
+                "mission_name": agent.get("mission_name", ""),
+                "original_task": agent.get("task", ""),
+                "cycles": []
+            }
+
+        mission = all_states[agent_id]
+        cycle_entry = {
+            "cycle": journal_entry.get("cycle", 0),
+            "timestamp": journal_entry.get("timestamp", datetime.now(timezone.utc).isoformat()),
+            "tags": _extract_tags(journal_entry),
+            "summary": journal_entry.get("completed", "Unknown")[:200],
+            "next_directive": journal_entry.get("next_directive", journal_entry.get("next", "")),
+            "output_file": context_ref.get("context_file", "")
+        }
+        mission["cycles"].append(cycle_entry)
+
+        with open(state_file, 'w', encoding='utf-8') as f:
+            json.dump(all_states, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"[SpecOps] Error writing mission_state.json: {e}")
+
+
+def _build_specops_continuation(agent: dict, cycle_num: int, context_ref: dict) -> tuple:
+    """Build (system_prompt, task_prompt) for specops cycle 2+.
+    Returns full system prompt with journal + evolved directive as task.
+    """
+    agent_id = agent["id"]
+    call_sign = agent.get("call_sign", agent_id)
+    journal_entries = agent.get("mission_journal", [])
+
+    # Build full journal text
+    journal_text = _build_journal_text(journal_entries)
+
+    # Get sub-role prompt
+    agent_type = agent.get("type", "specops_worker")
+    sub_role = agent.get("sub_role", agent_type.replace("specops_", "")) or "worker"
+    sub_role_config = AGENT_ROLE_PROMPTS.get(sub_role, AGENT_ROLE_PROMPTS["worker"])
+    sub_role_prompt = sub_role_config["system_prompt"].format(call_sign=agent_id)
+
+    # Build system prompt using the specops template
+    role_config = AGENT_ROLE_PROMPTS["specops"]
+    system_prompt = role_config["system_prompt"].format(
+        call_sign=agent_id,
+        mission_name=agent.get("mission_name", "Unnamed Mission"),
+        work_style=agent.get("work_style", "continuous"),
+        cycle_interval_human=_format_interval(agent.get("cycle_interval", 3600)),
+        duration_human=_format_duration(agent.get("mission_duration", 259200)),
+        cycle_number=cycle_num + 1,
+        sub_role_prompt=sub_role_prompt,
+        mission_journal=journal_text,
+        target_scope=agent.get("target_scope", "Not specified"),
+        success_criteria=agent.get("success_criteria", "Not specified"),
+    )
+
+    # Build rolling context from last 3 cycles
+    rolling_context_lines = []
+    recent = journal_entries[-3:] if len(journal_entries) >= 3 else journal_entries
+    for e in reversed(recent):
+        ctx = e.get("context_carry", "")
+        if ctx:
+            rolling_context_lines.append(f"Cycle #{e.get('cycle', '?')}: {ctx}")
+    rolling_context = "\n".join(rolling_context_lines) if rolling_context_lines else "No context carried from previous cycles."
+
+    # Get the evolved directive (from last cycle's next_directive)
+    last_entry = journal_entries[-1] if journal_entries else {}
+    evolved_directive = last_entry.get("next_directive", last_entry.get("next", ""))
+    if not evolved_directive or evolved_directive == "Unknown":
+        evolved_directive = agent.get("task", "Continue your mission.")
+
+    # Build task prompt
+    task_prompt = f"""## YOUR DIRECTIVE FOR CYCLE #{cycle_num + 1}
+
+{evolved_directive}
+
+## RECENT CONTEXT (Last 3 Cycles)
+{rolling_context}
+
+## MISSION MEMORY
+A full index of all previous cycles with tags is available at: mission_state.json
+If your current work relates to an earlier cycle, read its output file for full details.
+
+## REFERENCE
+- Previous cycle full output: {context_ref.get('context_file', 'N/A')}
+- Original mission objective: {agent.get('task', '')}
+
+Execute this directive, then complete the Cycle Completion Protocol."""
+
+    return system_prompt, task_prompt
+
 
 async def _persist_specops_state(agent: dict):
     """Persist specops agent state to disk — both the agent JSON file and index.json."""
@@ -5422,6 +5808,7 @@ async def _persist_specops_state(agent: dict):
                     entry["mission_name"] = agent.get("mission_name")
                     entry["work_style"] = agent.get("work_style")
                     entry["status"] = agent.get("status")
+                    entry["mission_debrief"] = agent.get("mission_debrief", "")
                     break
             index["last_updated"] = datetime.now(timezone.utc).isoformat()
             with open(index_file, 'w', encoding='utf-8') as f:
@@ -5432,6 +5819,229 @@ async def _persist_specops_state(agent: dict):
         print(f"[SpecOps] Persisted state for {agent_id} (cycle {agent.get('cycle_count', 0)})")
     except Exception as e:
         print(f"[SpecOps] Failed to persist state for {agent.get('id', '?')}: {e}")
+
+
+async def _generate_mission_debrief(agent: dict):
+    """Generate an AI-powered mission debrief summary using Claude CLI (haiku)."""
+    try:
+        journal = agent.get("mission_journal", [])
+        if not journal:
+            agent["mission_debrief"] = ""
+            return
+
+        # Build journal summary for the prompt
+        journal_lines = []
+        for entry in journal:
+            cycle = entry.get("cycle", "?")
+            progress = entry.get("mission_progress", entry.get("progress", "N/A"))
+            completed = entry.get("completed", "N/A")
+            blockers = entry.get("blockers", "None")
+            next_dir = entry.get("next_directive", entry.get("next", "N/A"))
+            journal_lines.append(
+                f"Cycle #{cycle}: Progress={progress} | Completed={completed} | Blockers={blockers} | Next={next_dir}"
+            )
+        journal_text = "\n".join(journal_lines)
+
+        # Get a truncated output excerpt
+        acc_output = agent.get("accumulated_output", "")
+        output_excerpt = acc_output[-3000:] if len(acc_output) > 3000 else acc_output
+
+        prompt = f"""You are a military intelligence analyst writing a mission debrief report.
+
+MISSION: {agent.get('mission_name', 'Unnamed Mission')}
+TASK: {agent.get('task', 'No task specified')}
+CYCLES COMPLETED: {agent.get('cycle_count', 0)}
+ELAPSED: {_format_duration(agent.get('mission_elapsed', 0))}
+TARGET SCOPE: {agent.get('target_scope', 'Not specified')}
+SUCCESS CRITERIA: {agent.get('success_criteria', 'Not specified')}
+
+MISSION JOURNAL:
+{journal_text}
+
+RECENT OUTPUT EXCERPT:
+{output_excerpt[:2000]}
+
+Write a concise mission debrief in markdown format with these sections:
+## Mission Status
+One sentence overall assessment.
+
+## Key Findings
+- Bullet points of important discoveries/completions
+
+## Blockers & Issues
+- Any problems encountered (or "None identified")
+
+## Progress Assessment
+Brief assessment of mission progress toward objectives.
+
+## Next Steps
+- What the next cycle should focus on
+
+Keep it concise and actionable. Use military-style brevity."""
+
+        # Run claude CLI with haiku for speed
+        import subprocess
+        result = subprocess.run(
+            ["claude", "-p", "--model", "haiku", prompt],
+            capture_output=True, text=True, timeout=30,
+            env={**os.environ, "CLAUDE_NO_TELEMETRY": "1"}
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            agent["mission_debrief"] = result.stdout.strip()
+            print(f"[SpecOps] Generated mission debrief for {agent['id']} ({len(agent['mission_debrief'])} chars)")
+        else:
+            print(f"[SpecOps] Claude CLI failed (rc={result.returncode}), using fallback debrief")
+            _build_fallback_debrief(agent)
+    except subprocess.TimeoutExpired:
+        print(f"[SpecOps] Claude CLI timed out, using fallback debrief")
+        _build_fallback_debrief(agent)
+    except FileNotFoundError:
+        print(f"[SpecOps] Claude CLI not found, using fallback debrief")
+        _build_fallback_debrief(agent)
+    except Exception as e:
+        print(f"[SpecOps] Debrief generation failed: {e}")
+        _build_fallback_debrief(agent)
+
+
+def _build_fallback_debrief(agent: dict):
+    """Build a programmatic fallback debrief from journal entries."""
+    journal = agent.get("mission_journal", [])
+    if not journal:
+        agent["mission_debrief"] = ""
+        return
+
+    lines = []
+    lines.append("## Mission Status")
+    lines.append(f"Completed {len(journal)} cycle(s) over {_format_duration(agent.get('mission_elapsed', 0))}.")
+    lines.append("")
+
+    # Key findings from completed fields
+    findings = []
+    blockers = []
+    for entry in journal:
+        completed = entry.get("completed", "")
+        if completed and completed != "N/A":
+            findings.append(f"- **Cycle #{entry.get('cycle', '?')}:** {completed}")
+        blocker = entry.get("blockers", "")
+        if blocker and blocker.lower() not in ("none", "n/a", ""):
+            blockers.append(f"- **Cycle #{entry.get('cycle', '?')}:** {blocker}")
+
+    lines.append("## Key Findings")
+    if findings:
+        lines.extend(findings[-5:])  # Last 5 findings
+    else:
+        lines.append("- No specific findings recorded")
+    lines.append("")
+
+    lines.append("## Blockers & Issues")
+    if blockers:
+        lines.extend(blockers[-3:])
+    else:
+        lines.append("- None identified")
+    lines.append("")
+
+    # Progress from last entry
+    last = journal[-1]
+    progress = last.get("mission_progress", last.get("progress", "Unknown"))
+    lines.append("## Progress Assessment")
+    lines.append(f"{progress}")
+    lines.append("")
+
+    next_dir = last.get("next_directive", last.get("next", "Continue mission"))
+    lines.append("## Next Steps")
+    lines.append(f"- {next_dir}")
+
+    agent["mission_debrief"] = "\n".join(lines)
+
+
+async def _generate_mission_debrief_and_emit(agent: dict):
+    """Generate debrief, re-persist, and re-emit WebSocket update."""
+    try:
+        await asyncio.to_thread(_generate_mission_debrief_sync, agent)
+        await _persist_specops_state(agent)
+        await _emit_specops_update(agent)
+    except Exception as e:
+        print(f"[SpecOps] Debrief-and-emit failed: {e}")
+
+
+def _generate_mission_debrief_sync(agent: dict):
+    """Synchronous wrapper for debrief generation (runs in thread)."""
+    import subprocess
+    try:
+        journal = agent.get("mission_journal", [])
+        if not journal:
+            agent["mission_debrief"] = ""
+            return
+
+        journal_lines = []
+        for entry in journal:
+            cycle = entry.get("cycle", "?")
+            progress = entry.get("mission_progress", entry.get("progress", "N/A"))
+            completed = entry.get("completed", "N/A")
+            blockers = entry.get("blockers", "None")
+            next_dir = entry.get("next_directive", entry.get("next", "N/A"))
+            journal_lines.append(
+                f"Cycle #{cycle}: Progress={progress} | Completed={completed} | Blockers={blockers} | Next={next_dir}"
+            )
+        journal_text = "\n".join(journal_lines)
+
+        acc_output = agent.get("accumulated_output", "")
+        output_excerpt = acc_output[-3000:] if len(acc_output) > 3000 else acc_output
+
+        prompt = f"""You are a military intelligence analyst writing a mission debrief report.
+
+MISSION: {agent.get('mission_name', 'Unnamed Mission')}
+TASK: {agent.get('task', 'No task specified')}
+CYCLES COMPLETED: {agent.get('cycle_count', 0)}
+ELAPSED: {_format_duration(agent.get('mission_elapsed', 0))}
+TARGET SCOPE: {agent.get('target_scope', 'Not specified')}
+SUCCESS CRITERIA: {agent.get('success_criteria', 'Not specified')}
+
+MISSION JOURNAL:
+{journal_text}
+
+RECENT OUTPUT EXCERPT:
+{output_excerpt[:2000]}
+
+Write a concise mission debrief in markdown format with these sections:
+## Mission Status
+One sentence overall assessment.
+
+## Key Findings
+- Bullet points of important discoveries/completions
+
+## Blockers & Issues
+- Any problems encountered (or "None identified")
+
+## Progress Assessment
+Brief assessment of mission progress toward objectives.
+
+## Next Steps
+- What the next cycle should focus on
+
+Keep it concise and actionable. Use military-style brevity."""
+
+        result = subprocess.run(
+            ["claude", "-p", "--model", "haiku", prompt],
+            capture_output=True, text=True, timeout=30,
+            env={**os.environ, "CLAUDE_NO_TELEMETRY": "1"}
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            agent["mission_debrief"] = result.stdout.strip()
+            print(f"[SpecOps] Generated mission debrief for {agent['id']} ({len(agent['mission_debrief'])} chars)")
+        else:
+            print(f"[SpecOps] Claude CLI failed (rc={result.returncode}), using fallback debrief")
+            _build_fallback_debrief(agent)
+    except subprocess.TimeoutExpired:
+        print(f"[SpecOps] Claude CLI timed out, using fallback debrief")
+        _build_fallback_debrief(agent)
+    except FileNotFoundError:
+        print(f"[SpecOps] Claude CLI not found, using fallback debrief")
+        _build_fallback_debrief(agent)
+    except Exception as e:
+        print(f"[SpecOps] Debrief generation failed: {e}")
+        _build_fallback_debrief(agent)
+
 
 async def _emit_specops_update(agent: dict):
     """Emit specops_mission_update socket event with current mission metrics."""
@@ -5446,6 +6056,7 @@ async def _emit_specops_update(agent: dict):
         "status": agent.get("status"),
         "mission_name": agent.get("mission_name", ""),
         "accumulated_output_length": len(agent.get("accumulated_output", "")),
+        "mission_debrief": agent.get("mission_debrief", ""),
     }, room=os.environ.get("CEREBRO_ROOM", "default"))
 
 async def run_specops_mission(agent_id: str):
@@ -5480,6 +6091,14 @@ async def run_specops_mission(agent_id: str):
             journal_entry = _parse_mission_status(agent.get("output", ""), cycle_num)
             agent.setdefault("mission_journal", []).append(journal_entry)
 
+            # Accumulate cycle output (covers all cycles including the first)
+            cycle_output = agent.get("output", "")
+            if cycle_output:
+                separator = f"\n\n--- CYCLE {cycle_num} ---\n\n"
+                current_acc = agent.get("accumulated_output") or ""
+                if f"--- CYCLE {cycle_num} ---" not in current_acc:
+                    agent["accumulated_output"] = current_acc + separator + cycle_output
+
             # Update mission elapsed time
             started = agent.get("mission_started_at")
             if started:
@@ -5489,9 +6108,22 @@ async def run_specops_mission(agent_id: str):
                 except Exception:
                     pass
 
-        print(f"[SpecOps] {agent_id} cycle #{cycle_num} complete — status: {final_status}, progress: {journal_entry.get('progress', '?')}")
+        # Save per-cycle context file and update mission_state.json
+        cycle_context_ref = agent_memory_service.save_agent_context(
+            agent_id=agent_id,
+            call_sign=agent.get("call_sign", agent_id),
+            task=agent.get("task", ""),
+            output=agent.get("output", ""),
+            cycle_num=cycle_num
+        )
+        _write_mission_state(agent, journal_entry, cycle_context_ref)
+
+        print(f"[SpecOps] {agent_id} cycle #{cycle_num} complete — status: {final_status}, progress: {journal_entry.get('mission_progress', journal_entry.get('progress', '?'))}")
         await _emit_specops_update(agent)
         await _persist_specops_state(agent)
+
+        # Generate mission debrief asynchronously (non-blocking)
+        asyncio.create_task(_generate_mission_debrief_and_emit(agent))
 
         # === Check termination conditions ===
         # 1. Agent was stopped or failed
@@ -5528,7 +6160,7 @@ async def run_specops_mission(agent_id: str):
             sleep_seconds = cycle_interval
         elif work_style == "hybrid":
             # Check if agent requested PAUSE
-            next_action = journal_entry.get("next", "")
+            next_action = journal_entry.get("next_directive", journal_entry.get("next", ""))
             if "PAUSE" in next_action.upper():
                 sleep_seconds = cycle_interval
             else:
@@ -5578,26 +6210,11 @@ async def run_specops_mission(agent_id: str):
             _specops_locks.pop(agent_id, None)
             return
 
-        # === Start next cycle via continuation ===
+        # === Start next cycle via intelligent continuation ===
         print(f"[SpecOps] {agent_id} starting cycle #{cycle_num + 1}")
 
-        # Save context for continuation
-        context_ref = agent_memory_service.save_agent_context(
-            agent_id=agent_id,
-            call_sign=agent.get("call_sign", agent_id),
-            task=agent.get("task", ""),
-            output=agent.get("output", "")
-        )
-
-        continuation_prompt = f"""SPECOPS CONTINUATION: Agent {agent.get('call_sign', agent_id)} — Cycle #{cycle_num + 1}
-
-FIRST: Read your previous cycle output from: {context_ref['context_file']}
-
-THEN: Continue your mission. Refer to the mission journal in your system prompt for all previous cycle summaries.
-
-Your mission objective: {agent.get('task', '')}
-
-Remember to output a [MISSION STATUS] block at the end of this cycle."""
+        # Build intelligent continuation with evolved directive and full system prompt
+        specops_system, specops_task = _build_specops_continuation(agent, cycle_num, cycle_context_ref)
 
         # Reset agent for new cycle
         agent["status"] = AgentStatus.RUNNING
@@ -5611,7 +6228,7 @@ Remember to output a [MISSION STATUS] block at the end of this cycle."""
         await sio.emit("agent_update", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
         await _emit_specops_update(agent)
 
-        # Find or create agent file for continuation
+        # Find agent file for continuation
         agents_dir = Path(config.AI_MEMORY_PATH) / "agents"
         agent_file = None
         index_file = agents_dir / "index.json"
@@ -5691,15 +6308,18 @@ You are running inside a Docker container. Do NOT assume external servers, NAS, 
 Use `hostname`, `uname -a`, `ip addr` to discover this system.
 """
 
+        # Combine: full specops system prompt + capabilities + evolved task directive
+        full_system_context = specops_system + "\n" + capabilities_context
+
         # Launch the continuation (this blocks until the cycle completes)
         await run_agent_continuation(
             agent_id=agent_id,
             call_sign=agent.get("call_sign", agent_id),
-            task=continuation_prompt,
+            task=specops_task,
             agent_file=agent_file,
             agent_data=agent,
             is_specops_cycle=True,
-            system_context=capabilities_context
+            system_context=full_system_context
         )
         # Cycle completed successfully — reset failure counter
         consecutive_failures = 0
