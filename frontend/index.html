@@ -24722,6 +24722,12 @@
                                         <span class="settings-label">Cost</span>
                                         <span class="settings-value success" id="settings-cost-display">Included (Claude Code subscription)</span>
                                     </div>
+                                    <div class="settings-row" style="justify-content: flex-end; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; margin-top: 4px;">
+                                        <button class="btn btn-ghost" id="check-updates-btn" onclick="manualCheckForUpdates()" style="font-size: 0.8rem; padding: 6px 16px; display: flex; align-items: center; gap: 6px;">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                                            Check for Updates
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div class="settings-divider"></div>
@@ -32195,6 +32201,41 @@
             } catch (e) {
                 showToast('Update failed: ' + e.message, 'error');
                 if (btn) { btn.disabled = false; btn.classList.remove('updating'); btn.textContent = 'Restart & Update'; }
+            }
+        }
+
+        async function manualCheckForUpdates() {
+            var btn = document.getElementById('check-updates-btn');
+            if (!btn || !window.cerebroDesktop) return;
+            var origText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Checking...';
+            try {
+                var result = await window.cerebroDesktop.checkForUpdates();
+                if (result && result.updateAvailable) {
+                    btn.textContent = 'Update Available!';
+                    btn.style.color = 'var(--accent, #8b5cf6)';
+                    window.__cerebroShowUpdateBanner(result.type || 'docker');
+                    showToast('Update available! Check the banner at the bottom.', 'success');
+                } else {
+                    btn.textContent = 'Up to date';
+                    btn.style.color = '#4ade80';
+                    showToast('You\'re on the latest version.', 'success');
+                    setTimeout(function() {
+                        btn.textContent = origText;
+                        btn.style.color = '';
+                        btn.disabled = false;
+                    }, 3000);
+                }
+            } catch (e) {
+                btn.textContent = 'Check failed';
+                btn.style.color = '#f87171';
+                showToast('Failed to check for updates: ' + e.message, 'error');
+                setTimeout(function() {
+                    btn.textContent = origText;
+                    btn.style.color = '';
+                    btn.disabled = false;
+                }, 3000);
             }
         }
 
