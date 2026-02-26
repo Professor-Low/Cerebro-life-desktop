@@ -1178,6 +1178,41 @@ ipcMain.handle('launch-chrome-cdp', async () => {
   }
 });
 
+// Chrome CDP stop (called by frontend when user clicks browser orb to stop)
+ipcMain.handle('stop-chrome-cdp', async () => {
+  try {
+    if (cdpChromeProcess) {
+      try { cdpChromeProcess.kill(); } catch (_) {}
+      cdpChromeProcess = null;
+      return { success: true };
+    }
+    // If we didn't launch it but CDP is still available, try to kill via PID
+    if (await isCdpAvailable()) {
+      try {
+        const { execFileSync } = require('child_process');
+        // Use netstat to find PID on CDP port, then taskkill
+        const result = execFileSync('cmd', ['/c', 'netstat -ano | findstr :9222 | findstr LISTENING'], { encoding: 'utf-8', timeout: 3000 });
+        const lines = result.trim().split('\n');
+        const pids = new Set();
+        for (const line of lines) {
+          const parts = line.trim().split(/\s+/);
+          const pid = parts[parts.length - 1];
+          if (pid && pid !== '0') pids.add(pid);
+        }
+        for (const pid of pids) {
+          try { execFileSync('taskkill', ['/F', '/PID', pid], { timeout: 3000 }); } catch (_) {}
+        }
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: 'Could not find Chrome CDP process: ' + e.message };
+      }
+    }
+    return { success: true, message: 'Chrome was not running' };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
 // Restart & setup state
 ipcMain.handle('needs-restart', async () => {
   return dockerManager.checkNeedsRestart();

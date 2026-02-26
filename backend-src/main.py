@@ -74,6 +74,7 @@ config = Config()
 # Available Claude models for model selector
 AVAILABLE_MODELS = [
     {"id": "claude-opus-4-6", "name": "Claude Opus 4.6", "description": "Most capable, best for complex tasks", "tier": "premium"},
+    {"id": "claude-sonnet-4-6", "name": "Claude Sonnet 4.6", "description": "Fast and intelligent", "tier": "standard"},
     {"id": "claude-sonnet-4-5-20250929", "name": "Claude Sonnet 4.5", "description": "Balanced performance and speed", "tier": "standard"},
     {"id": "claude-haiku-4-5-20251001", "name": "Claude Haiku 4.5", "description": "Fastest responses", "tier": "fast"},
 ]
@@ -1327,6 +1328,49 @@ curl -s -X DELETE http://localhost:59000/agents/AGENT_ID -H "Authorization: Bear
 
 RULES: When the user asks about agents, call /internal/agents/active first. Confirm agent identity before making changes. After setting a directive, tell the user when it takes effect.
 
+### Automation Control (Auto Page)
+You can create and manage scheduled automations from chat. These appear on the Auto page.
+
+**List all automations:**
+```bash
+curl -s http://localhost:59000/internal/automations
+```
+
+**Create automation:**
+```bash
+curl -s -X POST http://localhost:59000/internal/chat-create-automation \
+  -H "Content-Type: application/json" \
+  -d '{{"name": "Morning Crypto Report", "agent_type": "researcher", "prompt": "Check current crypto prices and summarize top movers", "schedule_type": "recurring", "frequency": "daily", "time": "09:00", "days_of_week": [1,2,3,4,5], "enabled": true, "timeout": 3600}}'
+```
+
+**Schedule types and fields:**
+- schedule_type: "once" (one-time) or "recurring"
+- For one-time: set "date" (YYYY-MM-DD) and "time" (HH:MM)
+- For recurring: set "frequency" ("daily", "weekly", "monthly", "custom")
+  - weekly: use "days_of_week" [0=Sun..6=Sat], default [1,2,3,4,5] (Mon-Fri)
+  - custom: use "cron" field with cron expression
+- agent_type: "researcher", "coder", "worker", "analyst"
+- timeout: seconds (3600=1hr, 0=unlimited)
+
+**Update automation (enable/disable, change prompt, etc):**
+```bash
+curl -s -X PATCH http://localhost:59000/internal/automations/SCHEDULE_ID \
+  -H "Content-Type: application/json" \
+  -d '{{"enabled": false}}'
+```
+
+**Run automation immediately:**
+```bash
+curl -s -X POST http://localhost:59000/internal/automations/SCHEDULE_ID/run
+```
+
+**Delete automation:**
+```bash
+curl -s -X DELETE http://localhost:59000/internal/automations/SCHEDULE_ID
+```
+
+RULES: When user asks to create an automation, extract: name, what it does (prompt), when/how often (schedule), and agent type. Use sensible defaults (daily at 09:00, researcher, 1hr timeout) for anything not specified. After creating, tell the user the schedule and that it appears on the Auto page.
+
 ### Rules
 - Do NOT assume external servers, NAS, or SSH targets exist
 - Always verify actions worked (check exit codes, read output)
@@ -1395,6 +1439,49 @@ curl -s -X DELETE http://localhost:59000/agents/AGENT_ID -H "Authorization: Bear
 ```
 
 RULES: When the user asks about agents, call /internal/agents/active first. Confirm agent identity before making changes. After setting a directive, tell the user when it takes effect.
+
+### Automation Control (Auto Page)
+You can create and manage scheduled automations from chat. These appear on the Auto page.
+
+**List all automations:**
+```bash
+curl -s http://localhost:59000/internal/automations
+```
+
+**Create automation:**
+```bash
+curl -s -X POST http://localhost:59000/internal/chat-create-automation \
+  -H "Content-Type: application/json" \
+  -d '{{"name": "Morning Crypto Report", "agent_type": "researcher", "prompt": "Check current crypto prices and summarize top movers", "schedule_type": "recurring", "frequency": "daily", "time": "09:00", "days_of_week": [1,2,3,4,5], "enabled": true, "timeout": 3600}}'
+```
+
+**Schedule types and fields:**
+- schedule_type: "once" (one-time) or "recurring"
+- For one-time: set "date" (YYYY-MM-DD) and "time" (HH:MM)
+- For recurring: set "frequency" ("daily", "weekly", "monthly", "custom")
+  - weekly: use "days_of_week" [0=Sun..6=Sat], default [1,2,3,4,5] (Mon-Fri)
+  - custom: use "cron" field with cron expression
+- agent_type: "researcher", "coder", "worker", "analyst"
+- timeout: seconds (3600=1hr, 0=unlimited)
+
+**Update automation (enable/disable, change prompt, etc):**
+```bash
+curl -s -X PATCH http://localhost:59000/internal/automations/SCHEDULE_ID \
+  -H "Content-Type: application/json" \
+  -d '{{"enabled": false}}'
+```
+
+**Run automation immediately:**
+```bash
+curl -s -X POST http://localhost:59000/internal/automations/SCHEDULE_ID/run
+```
+
+**Delete automation:**
+```bash
+curl -s -X DELETE http://localhost:59000/internal/automations/SCHEDULE_ID
+```
+
+RULES: When user asks to create an automation, extract: name, what it does (prompt), when/how often (schedule), and agent type. Use sensible defaults (daily at 09:00, researcher, 1hr timeout) for anything not specified. After creating, tell the user the schedule and that it appears on the Auto page.
 
 ### Key Principle
 You can run commands on ANY machine via SSH. You orchestrate the entire infrastructure.
@@ -1468,6 +1555,49 @@ curl -s -X DELETE http://localhost:59000/agents/AGENT_ID -H "Authorization: Bear
 ```
 
 RULES: When the user asks about agents, call /internal/agents/active first. Confirm agent identity before making changes. After setting a directive, tell the user when it takes effect.
+
+### Automation Control (Auto Page)
+You can create and manage scheduled automations from chat. These appear on the Auto page.
+
+**List all automations:**
+```bash
+curl -s http://localhost:59000/internal/automations
+```
+
+**Create automation:**
+```bash
+curl -s -X POST http://localhost:59000/internal/chat-create-automation \
+  -H "Content-Type: application/json" \
+  -d '{{"name": "Morning Crypto Report", "agent_type": "researcher", "prompt": "Check current crypto prices and summarize top movers", "schedule_type": "recurring", "frequency": "daily", "time": "09:00", "days_of_week": [1,2,3,4,5], "enabled": true, "timeout": 3600}}'
+```
+
+**Schedule types and fields:**
+- schedule_type: "once" (one-time) or "recurring"
+- For one-time: set "date" (YYYY-MM-DD) and "time" (HH:MM)
+- For recurring: set "frequency" ("daily", "weekly", "monthly", "custom")
+  - weekly: use "days_of_week" [0=Sun..6=Sat], default [1,2,3,4,5] (Mon-Fri)
+  - custom: use "cron" field with cron expression
+- agent_type: "researcher", "coder", "worker", "analyst"
+- timeout: seconds (3600=1hr, 0=unlimited)
+
+**Update automation (enable/disable, change prompt, etc):**
+```bash
+curl -s -X PATCH http://localhost:59000/internal/automations/SCHEDULE_ID \
+  -H "Content-Type: application/json" \
+  -d '{{"enabled": false}}'
+```
+
+**Run automation immediately:**
+```bash
+curl -s -X POST http://localhost:59000/internal/automations/SCHEDULE_ID/run
+```
+
+**Delete automation:**
+```bash
+curl -s -X DELETE http://localhost:59000/internal/automations/SCHEDULE_ID
+```
+
+RULES: When user asks to create an automation, extract: name, what it does (prompt), when/how often (schedule), and agent type. Use sensible defaults (daily at 09:00, researcher, 1hr timeout) for anything not specified. After creating, tell the user the schedule and that it appears on the Auto page.
 """
 
 # Role → capability blocks mapping
@@ -2820,6 +2950,9 @@ async def run_agent(
                 _ssh_args = ["ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=10", "-o", "IdentitiesOnly=yes", "-p", _ssh_port]
                 if _ssh_key:
                     _ssh_args.extend(["-i", _ssh_key])
+                # Reverse tunnel: route remote localhost:59000 back to Cerebro API
+                # Bound to 127.0.0.1 only — not exposed to the remote machine's network
+                _ssh_args.extend(["-R", "127.0.0.1:59000:localhost:59000"])
                 _ssh_args.append(_ssh_target)
 
                 # Project file sync (if project_folder specified)
@@ -2843,6 +2976,7 @@ async def run_agent(
 
                 agent["offloaded_to"] = _offload_device_id
                 agent["offloaded_to_name"] = _offload_device.get("friendly_name", _offload_device.get("device_name", _offload_device_id))
+                print(f"[Offload] Agent {agent_id} → {agent['offloaded_to_name']} (API tunnel: 127.0.0.1:59000)")
 
                 process = sp.Popen(
                     _ssh_args,
@@ -3752,9 +3886,29 @@ async def chat_message(sid, data):
             asyncio.create_task(_handle_browser_chat_action(sid, session_id, content, intent))
             return
 
+    # Check for chat offload routing
+    offload_device_id = data.get("offload_device_id")
+    _offload_device = None
+    if offload_device_id:
+        try:
+            _offload_registry = _load_device_registry()
+            _offload_device = _offload_registry.get("devices", {}).get(offload_device_id)
+            if _offload_device and _offload_device.get("ssh_config"):
+                print(f"[Chat] Offloading to device: {offload_device_id}")
+            else:
+                print(f"[Chat] Offload device {offload_device_id} not found or no SSH config, falling back to local")
+                _offload_device = None
+        except Exception as e:
+            print(f"[Chat] Offload device lookup failed: {e}, falling back to local")
+
     # Stream response, accumulating full text
     full_response = ""
-    async for chunk in process_chat_stream(content, session_id, model=model, image_path=image_path):
+    if _offload_device:
+        stream = _process_chat_offloaded(content, session_id, model=model, device=_offload_device, device_id=offload_device_id, image_path=image_path)
+    else:
+        stream = process_chat_stream(content, session_id, model=model, image_path=image_path)
+
+    async for chunk in stream:
         await sio.emit("chat_response", chunk, room=os.environ.get("CEREBRO_ROOM", "default"))
         if chunk.get("type") == "text":
             full_response += chunk.get("content", "")
@@ -3941,6 +4095,44 @@ def _build_active_agent_roster() -> str:
     return "\n## Active Agents\n" + "\n".join(roster_lines)
 
 
+def _build_automations_roster() -> str:
+    """Build a text block listing scheduled automations for chat context injection."""
+    if not SCHEDULES_PATH.exists():
+        return ""
+    day_names = {0: "Sun", 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat"}
+    roster_lines = []
+    for f in SCHEDULES_PATH.glob("sched_*.json"):
+        try:
+            s = json.loads(f.read_text())
+            name = s.get("name", "Unnamed")
+            sid = s.get("id", "?")
+            agent_type = s.get("agent_type", "worker")
+            enabled = "enabled" if s.get("enabled") else "disabled"
+            runs = s.get("run_count", 0)
+            sched_type = s.get("schedule_type", "once")
+            if sched_type == "recurring":
+                freq = s.get("frequency", "daily")
+                t = s.get("time", "09:00")
+                if freq == "daily":
+                    timing = f"daily {t}"
+                elif freq == "weekly":
+                    days = s.get("days_of_week", [1, 2, 3, 4, 5])
+                    day_str = ",".join(day_names.get(d, str(d)) for d in days)
+                    timing = f"weekly {t} {day_str}"
+                elif freq == "custom":
+                    timing = f"cron: {s.get('cron', '?')}"
+                else:
+                    timing = f"{freq} {t}"
+            else:
+                timing = f"once {s.get('date', '?')} {s.get('time', '?')}"
+            roster_lines.append(f'- "{name}" ({sid}) | {agent_type} | {timing} | {enabled} | {runs} runs')
+        except Exception:
+            continue
+    if not roster_lines:
+        return ""
+    return "\n## Scheduled Automations\n" + "\n".join(roster_lines)
+
+
 def _build_chat_prompt(content: str, session_id: str) -> str:
     """Build a prompt with conversation context injected for Claude CLI."""
     data = _load_persistent_session(session_id)
@@ -3956,6 +4148,11 @@ def _build_chat_prompt(content: str, session_id: str) -> str:
     roster = _build_active_agent_roster()
     if roster:
         parts.append(roster)
+
+    # Inject automations roster so Cerebro knows about scheduled tasks
+    auto_roster = _build_automations_roster()
+    if auto_roster:
+        parts.append(auto_roster)
 
     if summary:
         parts.append(f"\n## Conversation Summary (earlier messages)\n{summary}")
@@ -4137,6 +4334,159 @@ async def process_with_claude_code(content: str, session_id: str = "default", mo
         # ALWAYS signal completion to frontend - this fixes the stuck "Running:" indicator
         yield {"type": "done", "status": "complete", "model": effective_model}
         # Clean up process if still running
+        if process and process.returncode is None:
+            try:
+                process.kill()
+            except:
+                pass
+
+
+async def _process_chat_offloaded(content: str, session_id: str, model: str, device: dict, device_id: str, image_path: Optional[str] = None) -> AsyncGenerator[dict, None]:
+    """
+    Process a chat message on a remote device via SSH + Claude Code CLI.
+    Mirrors process_with_claude_code but runs on the offload target.
+    """
+    import threading
+
+    effective_model = model or config.DEFAULT_MODEL
+
+    # Build context-injected prompt (same as local)
+    prompt = _build_chat_prompt(content, session_id)
+    if image_path:
+        prompt = f"[Image attached at: {image_path}]\nUse the Read tool to view this image, then respond.\n\n{prompt}"
+
+    _ssh = device.get("ssh_config", {})
+    _ssh_host = _ssh.get("host", device_id)
+    _ssh_port = str(_ssh.get("port", 22))
+    _ssh_user = _ssh.get("username", "")
+    _ssh_key = _resolve_ssh_key(_ssh.get("key_path", ""))
+    _device_name = device.get("friendly_name", device.get("device_name", device_id))
+
+    _ssh_target = f"{_ssh_user}@{_ssh_host}" if _ssh_user else _ssh_host
+    _ssh_args = ["ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new",
+                 "-o", "ConnectTimeout=10", "-o", "IdentitiesOnly=yes", "-p", _ssh_port]
+    if _ssh_key:
+        _ssh_args.extend(["-i", _ssh_key])
+    # Reverse tunnel: route remote localhost:59000 back to Cerebro API
+    # Bound to 127.0.0.1 only — not exposed to the remote machine's network
+    _ssh_args.extend(["-R", "127.0.0.1:59000:localhost:59000"])
+    _ssh_args.append(_ssh_target)
+
+    # Build remote command: PATH fix + claude -p via temp file
+    _chat_id = f"chat-{session_id}-{int(datetime.now(timezone.utc).timestamp())}"
+    _remote_cmd = (
+        f'export PATH="$HOME/.local/bin:$PATH"; '
+        f'cat > /tmp/.cerebro-chat-{_chat_id} && '
+        f'claude -p "$(cat /tmp/.cerebro-chat-{_chat_id})" --model {effective_model} '
+        f'--output-format stream-json --verbose --dangerously-skip-permissions; '
+        f'rm -f /tmp/.cerebro-chat-{_chat_id}'
+    )
+    _ssh_args.append(_remote_cmd)
+
+    process = None
+    try:
+        agent_env = os.environ.copy()
+        agent_env.pop("CLAUDECODE", None)
+
+        process = subprocess.Popen(
+            _ssh_args,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=config.AI_MEMORY_PATH,
+            env=agent_env,
+        )
+
+        # Pipe prompt via stdin
+        process.stdin.write(prompt.encode('utf-8'))
+        process.stdin.close()
+
+        print(f"[Chat Offload] Routing to {_device_name} ({_ssh_host}), model={effective_model}")
+
+        # Thread-based line reader (same pattern as local)
+        line_queue = asyncio.Queue()
+        loop = asyncio.get_event_loop()
+
+        def _reader_thread():
+            try:
+                for raw_line in process.stdout:
+                    loop.call_soon_threadsafe(line_queue.put_nowait, raw_line)
+            except Exception as e:
+                loop.call_soon_threadsafe(line_queue.put_nowait, e)
+            finally:
+                loop.call_soon_threadsafe(line_queue.put_nowait, None)
+
+        reader = threading.Thread(target=_reader_thread, daemon=True)
+        reader.start()
+
+        full_response = ""
+
+        while True:
+            try:
+                line = await asyncio.wait_for(line_queue.get(), timeout=1800)
+            except asyncio.TimeoutError:
+                print("[Chat Offload] Readline timeout after 30 minutes")
+                break
+
+            if line is None:
+                break
+            if isinstance(line, Exception):
+                print(f"[Chat Offload] Reader thread error: {line}")
+                break
+
+            try:
+                data = json.loads(line.decode('utf-8', errors='replace').strip())
+                msg_type = data.get("type", "")
+
+                if msg_type == "assistant":
+                    text = data.get("message", {}).get("content", "")
+                    if isinstance(text, list):
+                        for block in text:
+                            if block.get("type") == "text":
+                                chunk = block.get("text", "")
+                                full_response += chunk
+                                yield {"type": "text", "content": chunk}
+                            elif block.get("type") == "tool_use":
+                                yield {"type": "tool", "name": block.get("name", "unknown"), "status": "running"}
+                    elif isinstance(text, str) and text:
+                        full_response += text
+                        yield {"type": "text", "content": text}
+
+                elif msg_type == "tool_use":
+                    yield {"type": "tool", "name": data.get("tool", data.get("name", "tool")), "status": "running"}
+
+                elif msg_type == "tool_result":
+                    yield {"type": "tool_result", "name": data.get("tool", "tool"), "status": "done"}
+
+                elif msg_type == "result":
+                    result_text = data.get("result", "")
+                    if result_text and result_text not in full_response:
+                        yield {"type": "text", "content": result_text}
+
+                elif msg_type == "error":
+                    error_msg = data.get("error", {}).get("message", str(data))
+                    yield {"type": "text", "content": f"Error: {error_msg}"}
+
+            except json.JSONDecodeError:
+                text = line.decode('utf-8', errors='replace').strip()
+                if text and not text.startswith('{'):
+                    yield {"type": "text", "content": text}
+
+        try:
+            process.wait(timeout=300)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            yield {"type": "text", "content": "\n\nChat offload timed out after 5 minutes."}
+
+        if process.returncode != 0 and not full_response:
+            stderr = process.stderr.read()
+            if stderr:
+                yield {"type": "text", "content": f"\n\nOffload error ({_device_name}): {stderr.decode('utf-8', errors='replace')}"}
+
+    except Exception as e:
+        yield {"type": "text", "content": f"Error offloading to {_device_name}: {type(e).__name__}: {str(e)}"}
+    finally:
+        yield {"type": "done", "status": "complete", "model": effective_model, "offloaded_to": _device_name}
         if process and process.returncode is None:
             try:
                 process.kill()
@@ -6947,6 +7297,208 @@ async def chat_spawn_agent(request: Request, data: ChatSpawnRequest):
         "status": "spawned",
         "message": f"Agent {agent.get('call_sign', agent_id)} has been deployed as a {data.agent_type}. Check the Agents tab to monitor progress."
     }
+
+
+# ── Chat-based Automation Management (localhost-only, no auth) ────────────
+
+class ScheduleRequest(BaseModel):
+    name: str
+    agent_type: str = "researcher"
+    prompt: str
+    schedule_type: str = "once"  # once, recurring
+    frequency: str = "daily"  # daily, weekly, monthly, custom
+    date: Optional[str] = None
+    time: str = "09:00"
+    days_of_week: list[int] = [1, 2, 3, 4, 5]
+    cron: Optional[str] = None
+    enabled: bool = True
+    timeout: Optional[int] = 3600  # seconds (0 = unlimited, default 1 hour)
+
+
+class ScheduleUpdate(BaseModel):
+    name: Optional[str] = None
+    enabled: Optional[bool] = None
+    prompt: Optional[str] = None
+    agent_type: Optional[str] = None
+    schedule_type: Optional[str] = None
+    frequency: Optional[str] = None
+    date: Optional[str] = None
+    time: Optional[str] = None
+    days_of_week: Optional[list[int]] = None
+    cron: Optional[str] = None
+    timeout: Optional[int] = None
+
+
+@app.post("/internal/chat-create-automation")
+async def chat_create_automation(request: Request, data: ScheduleRequest):
+    """Create a scheduled automation from the chat interface. Localhost-only."""
+    client_host = request.client.host
+    if client_host not in ("127.0.0.1", "localhost", "::1"):
+        raise HTTPException(403, "Internal endpoint only accessible from localhost")
+
+    schedule_id = f"sched_{uuid.uuid4().hex[:8]}"
+    schedule = {
+        "id": schedule_id,
+        "name": data.name,
+        "agent_type": data.agent_type,
+        "prompt": data.prompt,
+        "schedule_type": data.schedule_type,
+        "frequency": data.frequency,
+        "date": data.date,
+        "time": data.time,
+        "days_of_week": data.days_of_week,
+        "cron": data.cron,
+        "enabled": data.enabled,
+        "timeout": data.timeout or 3600,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": "cerebro_chat",
+        "last_run": None,
+        "next_run": None,
+        "run_count": 0,
+    }
+
+    SCHEDULES_PATH.mkdir(parents=True, exist_ok=True)
+    (SCHEDULES_PATH / f"{schedule_id}.json").write_text(json.dumps(schedule, indent=2))
+
+    if data.enabled and SCHEDULER_AVAILABLE:
+        try:
+            register_schedule_job(schedule)
+        except Exception as e:
+            print(f"[Chat] Failed to register schedule: {e}")
+
+    # Emit WebSocket so Auto page updates live
+    try:
+        await sio.emit("automation_created", schedule, room=os.environ.get("CEREBRO_ROOM", "default"))
+    except Exception:
+        pass
+
+    print(f"[Chat] Automation '{data.name}' ({schedule_id}) created from chat")
+    return {"success": True, "schedule": schedule, "message": f"Automation '{data.name}' created and scheduled. It now appears on the Auto page."}
+
+
+@app.get("/internal/automations")
+async def list_automations_internal(request: Request):
+    """List all automations. Localhost-only."""
+    client_host = request.client.host
+    if client_host not in ("127.0.0.1", "localhost", "::1"):
+        raise HTTPException(403, "Internal endpoint only accessible from localhost")
+
+    automations = []
+    if SCHEDULES_PATH.exists():
+        for f in SCHEDULES_PATH.glob("sched_*.json"):
+            try:
+                automations.append(json.loads(f.read_text()))
+            except Exception as e:
+                print(f"Error reading schedule {f}: {e}")
+    automations.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    return {"automations": automations, "count": len(automations)}
+
+
+@app.patch("/internal/automations/{schedule_id}")
+async def update_automation_internal(schedule_id: str, request: Request, update: ScheduleUpdate):
+    """Update a scheduled automation from chat. Localhost-only."""
+    client_host = request.client.host
+    if client_host not in ("127.0.0.1", "localhost", "::1"):
+        raise HTTPException(403, "Internal endpoint only accessible from localhost")
+
+    schedule_file = SCHEDULES_PATH / f"{schedule_id}.json"
+    if not schedule_file.exists():
+        raise HTTPException(status_code=404, detail="Schedule not found")
+
+    schedule = json.loads(schedule_file.read_text())
+
+    if update.name is not None:
+        schedule["name"] = update.name
+    if update.enabled is not None:
+        schedule["enabled"] = update.enabled
+    if update.prompt is not None:
+        schedule["prompt"] = update.prompt
+    if update.agent_type is not None:
+        schedule["agent_type"] = update.agent_type
+    if update.schedule_type is not None:
+        schedule["schedule_type"] = update.schedule_type
+    if update.frequency is not None:
+        schedule["frequency"] = update.frequency
+    if update.date is not None:
+        schedule["date"] = update.date
+    if update.time is not None:
+        schedule["time"] = update.time
+    if update.days_of_week is not None:
+        schedule["days_of_week"] = update.days_of_week
+    if update.cron is not None:
+        schedule["cron"] = update.cron
+    if update.timeout is not None:
+        schedule["timeout"] = update.timeout
+
+    schedule_file.write_text(json.dumps(schedule, indent=2))
+
+    if SCHEDULER_AVAILABLE:
+        try:
+            scheduler.remove_job(schedule_id)
+        except Exception:
+            pass
+        if schedule.get("enabled"):
+            try:
+                register_schedule_job(schedule)
+            except Exception as e:
+                print(f"[Chat] Failed to re-register schedule: {e}")
+
+    try:
+        await sio.emit("automation_updated", schedule, room=os.environ.get("CEREBRO_ROOM", "default"))
+    except Exception:
+        pass
+
+    action = "enabled" if schedule.get("enabled") else "disabled" if update.enabled is not None else "updated"
+    print(f"[Chat] Automation '{schedule.get('name')}' ({schedule_id}) {action} from chat")
+    return {"success": True, "schedule": schedule, "message": f"Automation '{schedule.get('name')}' {action}."}
+
+
+@app.delete("/internal/automations/{schedule_id}")
+async def delete_automation_internal(schedule_id: str, request: Request):
+    """Delete a scheduled automation from chat. Localhost-only."""
+    client_host = request.client.host
+    if client_host not in ("127.0.0.1", "localhost", "::1"):
+        raise HTTPException(403, "Internal endpoint only accessible from localhost")
+
+    schedule_file = SCHEDULES_PATH / f"{schedule_id}.json"
+    name = "unknown"
+    if schedule_file.exists():
+        try:
+            name = json.loads(schedule_file.read_text()).get("name", name)
+        except Exception:
+            pass
+        schedule_file.unlink()
+
+    if SCHEDULER_AVAILABLE:
+        try:
+            scheduler.remove_job(schedule_id)
+        except Exception:
+            pass
+
+    try:
+        await sio.emit("automation_deleted", {"schedule_id": schedule_id, "name": name}, room=os.environ.get("CEREBRO_ROOM", "default"))
+    except Exception:
+        pass
+
+    print(f"[Chat] Automation '{name}' ({schedule_id}) deleted from chat")
+    return {"success": True, "message": f"Automation '{name}' deleted."}
+
+
+@app.post("/internal/automations/{schedule_id}/run")
+async def run_automation_internal(schedule_id: str, request: Request):
+    """Manually trigger a scheduled automation from chat. Localhost-only."""
+    client_host = request.client.host
+    if client_host not in ("127.0.0.1", "localhost", "::1"):
+        raise HTTPException(403, "Internal endpoint only accessible from localhost")
+
+    schedule_file = SCHEDULES_PATH / f"{schedule_id}.json"
+    if not schedule_file.exists():
+        raise HTTPException(status_code=404, detail="Schedule not found")
+
+    schedule = json.loads(schedule_file.read_text())
+    asyncio.create_task(execute_scheduled_task(schedule, trigger="chat"))
+    print(f"[Chat] Automation '{schedule.get('name')}' ({schedule_id}) manually triggered from chat")
+    return {"success": True, "message": f"Automation '{schedule.get('name')}' triggered. An agent is being spawned now."}
 
 
 @app.get("/internal/agent/{agent_id}/children")
@@ -11646,34 +12198,6 @@ except ImportError:
     print("APScheduler not installed - scheduling will be disabled. Install with: pip install APScheduler")
 
 
-class ScheduleRequest(BaseModel):
-    name: str
-    agent_type: str = "researcher"
-    prompt: str
-    schedule_type: str = "once"  # once, recurring
-    frequency: str = "daily"  # daily, weekly, monthly, custom
-    date: Optional[str] = None
-    time: str = "09:00"
-    days_of_week: list[int] = [1, 2, 3, 4, 5]
-    cron: Optional[str] = None
-    enabled: bool = True
-    timeout: Optional[int] = 3600  # seconds (0 = unlimited, default 1 hour)
-
-
-class ScheduleUpdate(BaseModel):
-    name: Optional[str] = None
-    enabled: Optional[bool] = None
-    prompt: Optional[str] = None
-    agent_type: Optional[str] = None
-    schedule_type: Optional[str] = None
-    frequency: Optional[str] = None
-    date: Optional[str] = None
-    time: Optional[str] = None
-    days_of_week: Optional[list[int]] = None
-    cron: Optional[str] = None
-    timeout: Optional[int] = None
-
-
 @app.post("/schedules")
 async def create_schedule(request: ScheduleRequest, user: str = Depends(verify_token)):
     """Create a new scheduled automation."""
@@ -12621,6 +13145,13 @@ async def browser_status(user: str = Depends(verify_token)):
         from cognitive_loop.browser_manager import get_browser_manager
         mgr = get_browser_manager()
         status = await mgr.get_status()
+        # Also probe CDP availability if not connected
+        if not status.get("running"):
+            try:
+                cdp_ok = await mgr._check_cdp_available()
+                status["cdp_available"] = cdp_ok
+            except Exception:
+                status["cdp_available"] = False
         return status
     except Exception as e:
         return {"running": False, "error": str(e)}
@@ -14492,7 +15023,11 @@ async def get_eligible_devices(user: str = Depends(verify_token)):
         status = "online" if age_hours < 1 else "stale"
         eligible.append({
             "id": hostname,
-            "device_name": info.get("friendly_name", info.get("device_name", hostname)),
+            "device_name": info.get("device_name", hostname),
+            "friendly_name": info.get("friendly_name", info.get("device_name", hostname)),
+            "device_type": info.get("device_type", "unknown"),
+            "ram_gb": info.get("ram_gb"),
+            "gpu_info": info.get("gpu_info"),
             "status": status,
             "last_seen": last_seen,
             "ssh_config": info.get("ssh_config"),

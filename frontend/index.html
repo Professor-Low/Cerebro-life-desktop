@@ -10052,6 +10052,7 @@
         }
 
         .model-selector-btn .model-dot.opus { background: #a78bfa; box-shadow: 0 0 6px rgba(167, 139, 250, 0.5); }
+        .model-selector-btn .model-dot.sonnet46 { background: #818cf8; box-shadow: 0 0 6px rgba(129, 140, 248, 0.5); }
         .model-selector-btn .model-dot.sonnet { background: #6366f1; box-shadow: 0 0 6px rgba(99, 102, 241, 0.5); }
         .model-selector-btn .model-dot.haiku { background: #22d3ee; box-shadow: 0 0 6px rgba(34, 211, 238, 0.5); }
 
@@ -10120,6 +10121,10 @@
             border-radius: 50%;
             flex-shrink: 0;
         }
+        .model-dot.opus { background: #a78bfa; box-shadow: 0 0 6px rgba(167, 139, 250, 0.5); }
+        .model-dot.sonnet46 { background: #818cf8; box-shadow: 0 0 6px rgba(129, 140, 248, 0.5); }
+        .model-dot.sonnet { background: #6366f1; box-shadow: 0 0 6px rgba(99, 102, 241, 0.5); }
+        .model-dot.haiku { background: #22d3ee; box-shadow: 0 0 6px rgba(34, 211, 238, 0.5); }
 
         .model-option .model-info {
             flex: 1;
@@ -10174,7 +10179,7 @@
             border-radius: 24px;
             box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(139, 92, 246, 0.06);
             transition: opacity 0.15s ease, box-shadow 0.2s ease;
-            overflow: hidden;
+            overflow: visible;
             display: none; /* Hidden by default, shown by _switchViewCore */
         }
 
@@ -10253,7 +10258,7 @@
             transform: translateY(4px);
             transition: all 0.2s var(--ease-out-expo);
             box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.5), 0 0 24px var(--glow-subtle);
-            z-index: 600;
+            z-index: 1100;
         }
         .input-model-dropdown.open {
             opacity: 1;
@@ -10381,6 +10386,107 @@
         }
         .chat-browser-dot.paused {
             background: #eab308;
+        }
+
+        /* Chat Offload Routing Selector */
+        .chat-offload-selector {
+            position: relative;
+        }
+        .chat-offload-btn {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 8px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--glass-bg);
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.7rem;
+            font-family: inherit;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+        .chat-offload-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        .chat-offload-btn.offload-active {
+            background: rgba(34, 197, 94, 0.12);
+            color: #22c55e;
+            border-color: rgba(34, 197, 94, 0.3);
+        }
+        .chat-offload-btn .offload-icon {
+            font-size: 0.8rem;
+            line-height: 1;
+        }
+        .chat-offload-dropdown {
+            display: none;
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 0;
+            min-width: 220px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.5);
+            z-index: 1100;
+            padding: 6px;
+            opacity: 0;
+            transform: translateY(8px);
+            transition: opacity 0.15s ease, transform 0.15s ease;
+        }
+        .chat-offload-dropdown.open {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .offload-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: background 0.15s ease;
+        }
+        .offload-option:hover {
+            background: var(--bg-hover);
+        }
+        .offload-option.selected {
+            background: rgba(139, 92, 246, 0.1);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+        }
+        .offload-option .offload-opt-icon {
+            font-size: 1rem;
+            flex-shrink: 0;
+            width: 20px;
+            text-align: center;
+        }
+        .offload-option .offload-opt-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .offload-option .offload-opt-name {
+            font-weight: 500;
+        }
+        .offload-option .offload-opt-detail {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+        .offload-option .offload-check {
+            opacity: 0;
+            color: var(--accent);
+            flex-shrink: 0;
+        }
+        .offload-option.selected .offload-check {
+            opacity: 1;
         }
 
         .send-btn {
@@ -23540,6 +23646,11 @@
                                         <div class="model-info"><div class="model-name">Claude Opus 4.6</div><div class="model-desc">Most capable</div></div>
                                         <svg class="model-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
                                     </button>
+                                    <button class="model-option" data-model="claude-sonnet-4-6" onclick="selectModel('claude-sonnet-4-6')">
+                                        <span class="model-dot sonnet46"></span>
+                                        <div class="model-info"><div class="model-name">Claude Sonnet 4.6</div><div class="model-desc">Fast & intelligent</div></div>
+                                        <svg class="model-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                                    </button>
                                     <button class="model-option" data-model="claude-sonnet-4-5-20250929" onclick="selectModel('claude-sonnet-4-5-20250929')">
                                         <span class="model-dot sonnet"></span>
                                         <div class="model-info"><div class="model-name">Claude Sonnet 4.5</div><div class="model-desc">Balanced</div></div>
@@ -23549,6 +23660,20 @@
                                         <span class="model-dot haiku"></span>
                                         <div class="model-info"><div class="model-name">Claude Haiku 4.5</div><div class="model-desc">Fastest</div></div>
                                         <svg class="model-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="chat-offload-selector" id="chat-offload-selector" style="display:none;">
+                                <button class="chat-offload-btn" id="chat-offload-btn" onclick="toggleChatOffloadDropdown()" title="Route chat to device">
+                                    <span class="offload-icon">&#x1F4BB;</span>
+                                    <span id="chat-offload-label">Local</span>
+                                    <svg class="chevron-icon" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                                </button>
+                                <div class="chat-offload-dropdown" id="chat-offload-dropdown">
+                                    <button class="offload-option selected" data-device-id="" onclick="selectChatOffloadDevice('')">
+                                        <span class="offload-opt-icon">&#x1F4BB;</span>
+                                        <div class="offload-opt-info"><div class="offload-opt-name">Local</div><div class="offload-opt-detail">Process on this machine</div></div>
+                                        <svg class="offload-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
                                     </button>
                                 </div>
                             </div>
@@ -26620,6 +26745,8 @@
             await loadInsights();
             connectSocket();
             await fetchModelsFromServer();
+            loadChatOffloadDevices();
+            checkBrowserStatus();
             initVoice();
             loadAudioDevices();
             initVoiceSettings();
@@ -30407,6 +30534,31 @@
                     (data.force_cycle ? ' \u2014 cycling now' : ' \u2014 next cycle'), 'info');
             });
 
+            // Listen for automation events from chat-based creation/management
+            socket.on('automation_created', (data) => {
+                showToast('Automation created: ' + data.name, 'success');
+                if (currentView === 'automation') {
+                    loadSchedules();
+                    loadExecutionHistory();
+                }
+            });
+
+            socket.on('automation_updated', (data) => {
+                showToast('Automation updated: ' + data.name, 'success');
+                if (currentView === 'automation') {
+                    loadSchedules();
+                    loadExecutionHistory();
+                }
+            });
+
+            socket.on('automation_deleted', (data) => {
+                showToast('Automation deleted: ' + (data.name || data.schedule_id), 'info');
+                if (currentView === 'automation') {
+                    loadSchedules();
+                    loadExecutionHistory();
+                }
+            });
+
             // Listen for agent project assignment
             socket.on('agent_project_assigned', (data) => {
                 console.log('Agent project assigned:', data);
@@ -30920,7 +31072,7 @@
             scrollMessagesToBottom(true);
 
             if (socket && socket.connected) {
-                socket.emit('chat_message', { content: actualContent, session_id: sessionId, model: getSelectedModel(), browser_enabled: chatBrowserEnabled, image_path: chatImg?.path || null });
+                socket.emit('chat_message', { content: actualContent, session_id: sessionId, model: getSelectedModel(), browser_enabled: chatBrowserEnabled, image_path: chatImg?.path || null, offload_device_id: chatOffloadDeviceId || null });
                 ImageUpload.clearPreview('chat-image-preview');
             } else {
                 try {
@@ -39444,6 +39596,7 @@ Please proceed with implementing this recommendation. You have full permissions.
         // ==================== MODEL SELECTOR ====================
         const MODEL_OPTIONS = {
             'claude-opus-4-6': { label: 'Opus 4.6', fullName: 'Claude Opus 4.6', dotClass: 'opus', desc: 'Most capable' },
+            'claude-sonnet-4-6': { label: 'Sonnet 4.6', fullName: 'Claude Sonnet 4.6', dotClass: 'sonnet46', desc: 'Fast & intelligent' },
             'claude-sonnet-4-5-20250929': { label: 'Sonnet 4.5', fullName: 'Claude Sonnet 4.5', dotClass: 'sonnet', desc: 'Balanced' },
             'claude-haiku-4-5-20251001': { label: 'Haiku 4.5', fullName: 'Claude Haiku 4.5', dotClass: 'haiku', desc: 'Fastest' }
         };
@@ -39545,6 +39698,7 @@ Please proceed with implementing this recommendation. You have full permissions.
             if (costDisplay) {
                 const tierCost = {
                     'claude-opus-4-6': 'Premium tier (Claude Code sub)',
+                    'claude-sonnet-4-6': 'Standard tier (Claude Code sub)',
                     'claude-sonnet-4-5-20250929': 'Standard tier (Claude Code sub)',
                     'claude-haiku-4-5-20251001': 'Fast tier (Claude Code sub)'
                 };
@@ -39573,6 +39727,9 @@ Please proceed with implementing this recommendation. You have full permissions.
         document.addEventListener('click', function(e) {
             if (!e.target.closest('.input-model-selector')) {
                 closeInputModelDropdown();
+            }
+            if (!e.target.closest('.chat-offload-selector')) {
+                closeChatOffloadDropdown();
             }
         });
 
@@ -47234,19 +47391,28 @@ Please proceed with implementing this recommendation. You have full permissions.
 
         async function stopBrowser() {
             try {
+                // 1. Tell backend to disconnect Playwright from Chrome
                 const resp = await fetch(API_URL + '/api/browser/shutdown', {
                     method: 'POST',
                     headers: { 'Authorization': 'Bearer ' + localStorage.getItem('cerebro_token') }
                 });
-                if (resp.ok) {
-                    browserState.running = false;
-                    browserState.paused = false;
-                    browserState.tabs = [];
-                    browserState.currentUrl = '';
-                    browserState.actionNeeded = false;
-                    updateBrowserPanel();
-                    showToast('Chrome stopped', 'success');
+
+                // 2. Tell Electron to kill the Chrome CDP process on the host
+                if (window.cerebroDesktop && window.cerebroDesktop.stopChromeCDP) {
+                    try {
+                        await window.cerebroDesktop.stopChromeCDP();
+                    } catch (e) {
+                        console.warn('[Browser] Electron stopChromeCDP failed:', e);
+                    }
                 }
+
+                browserState.running = false;
+                browserState.paused = false;
+                browserState.tabs = [];
+                browserState.currentUrl = '';
+                browserState.actionNeeded = false;
+                updateBrowserPanel();
+                showToast('Chrome stopped', 'success');
             } catch(e) {
                 showToast('Failed to stop browser: ' + e.message, 'error');
             }
@@ -47352,26 +47518,204 @@ Please proceed with implementing this recommendation. You have full permissions.
             } catch(e) { /* Tab list optional */ }
         }
 
-        // Chat page browser toggle — launch or stop the shared browser
+        // Chat page browser toggle — actually launch or stop the shared browser
         async function toggleChatBrowser() {
-            chatBrowserEnabled = !chatBrowserEnabled;
-            updateChatBrowserBtn();
-            showToast(chatBrowserEnabled ? 'Browser enabled for chat' : 'Browser disabled', chatBrowserEnabled ? 'success' : 'info');
+            var btn = document.getElementById('chat-browser-btn');
+            if (btn) btn.disabled = true;
+
+            try {
+                if (browserState.running) {
+                    // Browser is running — shut it down and disable chat browser
+                    await stopBrowser();
+                    chatBrowserEnabled = false;
+                } else {
+                    // Browser is not running — launch it and enable chat browser
+                    await launchBrowser();
+                    chatBrowserEnabled = true;
+                }
+            } catch (e) {
+                console.error('[Chat Browser] Toggle error:', e);
+            } finally {
+                updateChatBrowserBtn();
+                if (btn) btn.disabled = false;
+            }
         }
 
-        // Reflect local chatBrowserEnabled toggle on the button
+        // Reflect real browser state on the chat browser orb
         function updateChatBrowserBtn() {
             var btn = document.getElementById('chat-browser-btn');
             var dot = document.getElementById('chat-browser-dot');
             if (!btn) return;
-            if (chatBrowserEnabled) {
+
+            if (browserState.running && !browserState.paused) {
+                // Browser is running — orb active + green/purple glow
                 btn.classList.add('browser-active');
-                btn.title = 'Browser enabled for chat — Click to disable';
+                btn.title = 'Browser running — Click to stop';
+                chatBrowserEnabled = true;
                 if (dot) { dot.classList.add('running'); dot.classList.remove('paused'); }
+            } else if (browserState.running && browserState.paused) {
+                // Browser is paused — orb shows yellow
+                btn.classList.add('browser-active');
+                btn.title = 'Browser paused — Click to stop';
+                chatBrowserEnabled = true;
+                if (dot) { dot.classList.remove('running'); dot.classList.add('paused'); }
             } else {
+                // Browser is off — orb inactive
                 btn.classList.remove('browser-active');
-                btn.title = 'Enable browser for chat';
+                btn.title = 'Launch browser for chat';
+                chatBrowserEnabled = false;
                 if (dot) { dot.classList.remove('running', 'paused'); }
+            }
+        }
+
+        // ==================== CHAT OFFLOAD ROUTING ====================
+        let chatOffloadDeviceId = localStorage.getItem('cerebro_chat_offload_device') || '';
+        let _chatOffloadDevices = []; // cached eligible devices
+
+        async function loadChatOffloadDevices() {
+            try {
+                const resp = await fetch(API_URL + '/api/offload/eligible-devices', {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('cerebro_token') }
+                });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                const data = await resp.json();
+                _chatOffloadDevices = data.devices || [];
+
+                // Show the offload selector if there are eligible devices
+                var selector = document.getElementById('chat-offload-selector');
+                if (selector) {
+                    selector.style.display = _chatOffloadDevices.length > 0 ? '' : 'none';
+                }
+
+                // Build dropdown options
+                var dropdown = document.getElementById('chat-offload-dropdown');
+                if (dropdown) {
+                    var html = '<button class="offload-option' + (!chatOffloadDeviceId ? ' selected' : '') + '" data-device-id="" onclick="selectChatOffloadDevice(\'\')">'
+                        + '<span class="offload-opt-icon">&#x1F4BB;</span>'
+                        + '<div class="offload-opt-info"><div class="offload-opt-name">Local</div><div class="offload-opt-detail">Process on this machine</div></div>'
+                        + '<svg class="offload-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>'
+                        + '</button>';
+
+                    _chatOffloadDevices.forEach(function(dev) {
+                        var isSelected = chatOffloadDeviceId === dev.id;
+                        var typeIcon = dev.device_type === 'gpu_server' ? '&#x1F5A5;' : dev.device_type === 'sbc' ? '&#x1F4DF;' : '&#x1F5A5;';
+                        html += '<button class="offload-option' + (isSelected ? ' selected' : '') + '" data-device-id="' + dev.id + '" onclick="selectChatOffloadDevice(\'' + dev.id + '\')">'
+                            + '<span class="offload-opt-icon">' + typeIcon + '</span>'
+                            + '<div class="offload-opt-info"><div class="offload-opt-name">' + (dev.friendly_name || dev.device_name || dev.id) + '</div>'
+                            + '<div class="offload-opt-detail">' + (dev.device_type || 'device') + (dev.ram_gb ? ' &middot; ' + dev.ram_gb + 'GB RAM' : '') + '</div></div>'
+                            + '<svg class="offload-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>'
+                            + '</button>';
+                    });
+
+                    dropdown.innerHTML = html;
+                }
+
+                // Validate current selection still exists
+                if (chatOffloadDeviceId && !_chatOffloadDevices.find(d => d.id === chatOffloadDeviceId)) {
+                    chatOffloadDeviceId = '';
+                    localStorage.removeItem('cerebro_chat_offload_device');
+                }
+
+                updateChatOffloadBtn();
+            } catch (e) {
+                console.warn('[Chat Offload] Failed to load devices:', e.message);
+                var selector = document.getElementById('chat-offload-selector');
+                if (selector) selector.style.display = 'none';
+            }
+        }
+
+        function selectChatOffloadDevice(deviceId) {
+            chatOffloadDeviceId = deviceId;
+            if (deviceId) {
+                localStorage.setItem('cerebro_chat_offload_device', deviceId);
+            } else {
+                localStorage.removeItem('cerebro_chat_offload_device');
+            }
+            updateChatOffloadBtn();
+            closeChatOffloadDropdown();
+
+            var deviceName = 'Local';
+            if (deviceId) {
+                var dev = _chatOffloadDevices.find(d => d.id === deviceId);
+                deviceName = dev ? (dev.friendly_name || dev.device_name || deviceId) : deviceId;
+            }
+            showToast(deviceId ? 'Chat routed to ' + deviceName : 'Chat set to local processing', deviceId ? 'success' : 'info');
+        }
+
+        function updateChatOffloadBtn() {
+            var btn = document.getElementById('chat-offload-btn');
+            var label = document.getElementById('chat-offload-label');
+            if (!btn || !label) return;
+
+            if (chatOffloadDeviceId) {
+                var dev = _chatOffloadDevices.find(d => d.id === chatOffloadDeviceId);
+                label.textContent = dev ? (dev.friendly_name || dev.device_name || 'Remote') : 'Remote';
+                btn.classList.add('offload-active');
+            } else {
+                label.textContent = 'Local';
+                btn.classList.remove('offload-active');
+            }
+
+            // Update dropdown selection
+            document.querySelectorAll('#chat-offload-dropdown .offload-option').forEach(function(opt) {
+                opt.classList.toggle('selected', (opt.dataset.deviceId || '') === chatOffloadDeviceId);
+            });
+        }
+
+        function toggleChatOffloadDropdown() {
+            var dropdown = document.getElementById('chat-offload-dropdown');
+            if (dropdown) {
+                var isOpen = dropdown.classList.contains('open');
+                dropdown.classList.toggle('open');
+                // Refresh devices when opening
+                if (!isOpen) loadChatOffloadDevices();
+            }
+        }
+
+        function closeChatOffloadDropdown() {
+            var dropdown = document.getElementById('chat-offload-dropdown');
+            if (dropdown) dropdown.classList.remove('open');
+        }
+
+        // Check real browser status and sync the chat orb.
+        // If Chrome CDP is available but backend disconnected (e.g. after restart), auto-reconnect.
+        async function checkBrowserStatus() {
+            try {
+                var resp = await fetch(API_URL + '/api/browser/status', {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('cerebro_token') }
+                });
+                if (resp.ok) {
+                    var data = await resp.json();
+                    browserState.running = !!data.running;
+                    browserState.paused = !!data.paused;
+
+                    // If backend is disconnected but Chrome CDP is available, auto-reconnect
+                    if (!browserState.running && data.cdp_available) {
+                        console.log('[Browser] CDP available but disconnected — auto-reconnecting...');
+                        try {
+                            if (window.cerebroDesktop && window.cerebroDesktop.launchChromeCDP) {
+                                await window.cerebroDesktop.launchChromeCDP();
+                            }
+                            var launchResp = await fetch(API_URL + '/api/browser/launch', {
+                                method: 'POST',
+                                headers: { 'Authorization': 'Bearer ' + localStorage.getItem('cerebro_token'), 'Content-Type': 'application/json' }
+                            });
+                            if (launchResp.ok) {
+                                var launchData = await launchResp.json();
+                                browserState.running = !!launchData.running;
+                                browserState.paused = !!launchData.paused;
+                                console.log('[Browser] Auto-reconnected successfully');
+                            }
+                        } catch (e) {
+                            console.warn('[Browser] Auto-reconnect failed:', e.message);
+                        }
+                    }
+
+                    updateChatBrowserBtn();
+                    updateBrowserPanel();
+                }
+            } catch (e) {
+                console.warn('[Browser] Status check failed:', e.message);
             }
         }
 
@@ -47644,6 +47988,7 @@ Please proceed with implementing this recommendation. You have full permissions.
                 browserState.running = true;
                 browserState.paused = false;
                 updateBrowserPanel();
+                updateChatBrowserBtn();
             });
 
             socket.on('browser_shutdown', function(data) {
@@ -47657,12 +48002,14 @@ Please proceed with implementing this recommendation. You have full permissions.
                 _agentBrowserStepCount = 0;
                 hideUserActionBanner();
                 updateBrowserPanel();
+                updateChatBrowserBtn();
             });
 
             socket.on('browser_paused', function(data) {
                 console.log('[Browser] Paused (user control):', data);
                 browserState.paused = true;
                 updateBrowserPanel();
+                updateChatBrowserBtn();
             });
 
             socket.on('browser_resumed', function(data) {
@@ -47671,6 +48018,7 @@ Please proceed with implementing this recommendation. You have full permissions.
                 browserState.actionNeeded = false;
                 hideUserActionBanner();
                 updateBrowserPanel();
+                updateChatBrowserBtn();
             });
 
             socket.on('browser_navigated', function(data) {

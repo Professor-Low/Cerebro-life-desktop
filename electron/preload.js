@@ -66,6 +66,7 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
 
   // Chrome CDP
   launchChromeCDP: () => ipcRenderer.invoke('launch-chrome-cdp'),
+  stopChromeCDP: () => ipcRenderer.invoke('stop-chrome-cdp'),
 
   // Claude credentials
   checkClaudeCredentials: () => ipcRenderer.invoke('check-claude-credentials'),
