@@ -34,6 +34,13 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
   // MCP configuration
   configureMcp: () => ipcRenderer.invoke('configure-mcp'),
 
+  // Kokoro TTS voice engine
+  installKokoroTts: () => ipcRenderer.invoke('install-kokoro-tts'),
+  onKokoroInstallProgress: (callback) => {
+    ipcRenderer.removeAllListeners('kokoro-install-progress');
+    ipcRenderer.on('kokoro-install-progress', (_event, data) => callback(data));
+  },
+
   // Wizard
   wizardComplete: () => ipcRenderer.invoke('wizard-complete'),
   getSetupStatus: () => ipcRenderer.invoke('get-setup-status'),

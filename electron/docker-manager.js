@@ -538,6 +538,40 @@ class DockerManager extends EventEmitter {
   }
 
   /**
+   * Pull and start the Kokoro TTS voice engine.
+   */
+  async installKokoroTts(onProgress) {
+    if (onProgress) onProgress({ stage: 'pulling', message: 'Downloading voice engine (~2 GB)...' });
+
+    try {
+      await this._spawnWithOutput(
+        this._dockerCmd(),
+        ['compose', '-f', COMPOSE_FILE, '--env-file', ENV_FILE, 'pull', 'kokoro-tts'],
+        (line) => {
+          if (onProgress) onProgress({ stage: 'pulling', message: line.trim() });
+        }
+      );
+    } catch (err) {
+      if (onProgress) onProgress({ stage: 'error', message: err.message });
+      throw err;
+    }
+
+    if (onProgress) onProgress({ stage: 'starting', message: 'Starting voice engine...' });
+
+    try {
+      await this._run(this._dockerCmd(), [
+        'compose', '-f', COMPOSE_FILE, '--env-file', ENV_FILE,
+        'up', '-d', 'kokoro-tts',
+      ], { timeout: 60000 });
+      if (onProgress) onProgress({ stage: 'done', message: 'Voice engine installed' });
+      return true;
+    } catch (err) {
+      if (onProgress) onProgress({ stage: 'error', message: err.message });
+      throw err;
+    }
+  }
+
+  /**
    * Start the Docker Compose stack.
    */
   async startStack() {

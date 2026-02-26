@@ -11754,6 +11754,15 @@
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
+        .spinner-sm {
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            flex-shrink: 0;
+        }
 
         @keyframes spin {
             to { transform: rotate(360deg); }
@@ -24974,6 +24983,40 @@
                             <!-- Section: Voice & Audio -->
                             <div class="settings-section" id="settings-section-voice-audio">
                                 <div class="settings-section-heading">Voice</div>
+
+                                <!-- Voice Engine Status -->
+                                <div class="voice-settings-card" id="kokoro-engine-card">
+                                    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                                        <div style="display:flex;align-items:center;gap:10px;">
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                                            <div>
+                                                <div style="font-weight:600;font-size:0.9rem;">Voice Engine</div>
+                                                <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;" id="kokoro-engine-desc">Checking status...</div>
+                                            </div>
+                                        </div>
+                                        <div id="kokoro-engine-status">
+                                            <span class="risk-indicator" id="kokoro-status-badge" style="font-size:0.7rem;">Checking</span>
+                                        </div>
+                                    </div>
+                                    <div id="kokoro-install-area" style="display:none;margin-top:12px;">
+                                        <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:8px;">
+                                            Kokoro TTS gives Cerebro a natural human voice. Download is ~2 GB.
+                                        </div>
+                                        <button class="btn-sm" id="kokoro-install-btn" onclick="installKokoroTts()" style="width:100%;padding:8px;font-size:0.85rem;">
+                                            Download & Install Voice Engine
+                                        </button>
+                                    </div>
+                                    <div id="kokoro-progress-area" style="display:none;margin-top:12px;">
+                                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                                            <div class="spinner-sm"></div>
+                                            <span style="font-size:0.8rem;color:var(--text-secondary);" id="kokoro-progress-text">Downloading...</span>
+                                        </div>
+                                        <div style="width:100%;height:4px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;">
+                                            <div id="kokoro-progress-bar" style="height:100%;background:var(--accent-primary);border-radius:2px;width:0%;transition:width 0.3s;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div class="voice-settings-card">
                                     <div id="voice-options-list">
                                         <div class="voice-option selected" data-voice="af_heart" onclick="selectVoice('af_heart')">
@@ -34041,7 +34084,121 @@
                 const toggle = document.getElementById('autospeak-toggle');
                 if (toggle) toggle.classList.add('active');
             }
+
+            // Check Kokoro TTS status
+            checkKokoroStatus();
         }
+
+        // ==================== KOKORO TTS ENGINE ====================
+        async function checkKokoroStatus() {
+            const badge = document.getElementById('kokoro-status-badge');
+            const desc = document.getElementById('kokoro-engine-desc');
+            const installArea = document.getElementById('kokoro-install-area');
+            const voiceList = document.getElementById('voice-options-list');
+
+            try {
+                const resp = await fetch(`${TTS_URL}/health`, { signal: AbortSignal.timeout(3000) });
+                if (resp.ok) {
+                    badge.textContent = 'Running';
+                    badge.className = 'risk-indicator safe';
+                    desc.textContent = 'Kokoro TTS is active — natural human voices enabled';
+                    installArea.style.display = 'none';
+                    if (voiceList) voiceList.style.opacity = '1';
+                    if (voiceList) voiceList.style.pointerEvents = 'auto';
+                    return;
+                }
+            } catch {}
+
+            // Not running
+            badge.textContent = 'Not Installed';
+            badge.className = 'risk-indicator';
+            badge.style.background = 'rgba(239,68,68,0.15)';
+            badge.style.color = '#ef4444';
+            desc.textContent = 'Install the voice engine to give Cerebro a natural human voice';
+            installArea.style.display = 'block';
+            // Dim voice options when engine not installed
+            if (voiceList) voiceList.style.opacity = '0.4';
+            if (voiceList) voiceList.style.pointerEvents = 'none';
+        }
+
+        let _kokoroInstalling = false;
+        async function installKokoroTts() {
+            if (_kokoroInstalling) return;
+
+            // Check if running in Electron
+            if (!window.cerebroDesktop || !window.cerebroDesktop.installKokoroTts) {
+                showToast('Voice engine install requires the Cerebro desktop app');
+                return;
+            }
+
+            _kokoroInstalling = true;
+            const btn = document.getElementById('kokoro-install-btn');
+            const installArea = document.getElementById('kokoro-install-area');
+            const progressArea = document.getElementById('kokoro-progress-area');
+            const progressText = document.getElementById('kokoro-progress-text');
+            const progressBar = document.getElementById('kokoro-progress-bar');
+            const badge = document.getElementById('kokoro-status-badge');
+
+            btn.disabled = true;
+            installArea.style.display = 'none';
+            progressArea.style.display = 'block';
+            badge.textContent = 'Installing';
+            badge.style.background = 'rgba(59,130,246,0.15)';
+            badge.style.color = '#3b82f6';
+
+            // Listen for progress updates
+            let pullCount = 0;
+            window.cerebroDesktop.onKokoroInstallProgress((data) => {
+                if (data.stage === 'pulling') {
+                    // Estimate progress from pull output
+                    const msg = data.message || '';
+                    if (msg.includes('Downloading') || msg.includes('Extracting')) pullCount++;
+                    const pct = Math.min(90, Math.round(pullCount * 0.5));
+                    progressBar.style.width = pct + '%';
+                    // Show a cleaner message
+                    if (msg.includes('Downloading')) progressText.textContent = 'Downloading voice engine...';
+                    else if (msg.includes('Extracting')) progressText.textContent = 'Extracting...';
+                    else if (msg.includes('Pull complete')) progressText.textContent = 'Layers downloaded...';
+                    else if (msg.includes('voice engine')) progressText.textContent = msg;
+                } else if (data.stage === 'starting') {
+                    progressBar.style.width = '95%';
+                    progressText.textContent = 'Starting voice engine...';
+                } else if (data.stage === 'done') {
+                    progressBar.style.width = '100%';
+                    progressText.textContent = 'Voice engine installed!';
+                } else if (data.stage === 'error') {
+                    progressText.textContent = 'Install failed: ' + (data.message || 'unknown error');
+                }
+            });
+
+            try {
+                const result = await window.cerebroDesktop.installKokoroTts();
+                if (result.success) {
+                    showToast('Voice engine installed successfully');
+                    // Wait for Kokoro to warm up
+                    setTimeout(() => {
+                        progressArea.style.display = 'none';
+                        checkKokoroStatus();
+                    }, 5000);
+                } else {
+                    showToast('Voice engine install failed: ' + (result.error || 'unknown'));
+                    progressArea.style.display = 'none';
+                    installArea.style.display = 'block';
+                    btn.disabled = false;
+                    badge.textContent = 'Not Installed';
+                    badge.style.background = 'rgba(239,68,68,0.15)';
+                    badge.style.color = '#ef4444';
+                }
+            } catch (e) {
+                console.error('Kokoro install error:', e);
+                showToast('Voice engine install failed');
+                progressArea.style.display = 'none';
+                installArea.style.display = 'block';
+                btn.disabled = false;
+            }
+            _kokoroInstalling = false;
+        }
+
         function getCerebroGreeting() {
             const hour = new Date().getHours();
             const time = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';

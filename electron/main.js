@@ -814,6 +814,19 @@ ipcMain.handle('pull-images', async () => {
   }
 });
 
+ipcMain.handle('install-kokoro-tts', async () => {
+  try {
+    await dockerManager.installKokoroTts((progress) => {
+      if (mainWindow) {
+        mainWindow.webContents.send('kokoro-install-progress', progress);
+      }
+    });
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
 ipcMain.handle('start-stack', async () => {
   try {
     await dockerManager.startStack();
