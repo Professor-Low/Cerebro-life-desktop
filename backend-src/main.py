@@ -1126,13 +1126,68 @@ You have --dangerously-skip-permissions enabled.
 - Browser control: GET /api/browser/page_state, POST /api/browser/click, /fill, /scroll, /press_key
 - Screenshots: GET /api/browser/screenshot/file
 - Ask user: POST /api/agent/ask (blocks until user responds, 5min timeout)
-- Spawn child agent: POST /internal/spawn-child-agent
+
+### Spawning Agents from Chat
+You can spawn background agents to handle tasks. Use this when the user asks you to create/deploy/launch an agent.
+
+**Endpoint:** POST http://localhost:59000/internal/chat-spawn-agent
+**No authentication required** (localhost only).
+
+**Agent Types:**
+- `worker` — General-purpose task execution (default)
+- `researcher` — Deep research, fact-finding, web searches
+- `coder` — Code writing, debugging, development tasks
+- `analyst` — Data analysis, reports, quantitative work
+- `browser` — Web browsing and interaction tasks
+- `specops_worker` — SpecOps cycling mission (runs repeatedly on a timer)
+- `specops_researcher` — SpecOps research mission (runs repeatedly on a timer)
+
+**Basic Agent Example:**
+```bash
+curl -s -X POST http://localhost:59000/internal/chat-spawn-agent \
+  -H "Content-Type: application/json" \
+  -d '{{"task": "Research current Bitcoin price trends and report findings", "agent_type": "researcher", "model": "sonnet"}}'
+```
+
+**SpecOps Agent Example (timed cycling mission):**
+```bash
+curl -s -X POST http://localhost:59000/internal/chat-spawn-agent \
+  -H "Content-Type: application/json" \
+  -d '{{"task": "The detailed mission prompt goes here...", "agent_type": "specops_researcher", "model": "sonnet", "context": "Additional context", "specops_config": {{"mission_name": "OPERATION NAME", "work_style": "cycle", "cycle_interval": 3600, "mission_duration": 259200, "target_scope": "What to focus on", "success_criteria": "How to measure success"}}}}'
+```
+
+**SpecOps Config Fields (inside specops_config object):**
+- `mission_name`: Operation name (e.g., "OPERATION PROFIT-HAWK")
+- `work_style`: "cycle" (REQUIRED — waits cycle_interval between each cycle), "continuous" (rapid 5s between cycles, use sparingly), "hybrid" (agent decides when to pause)
+- `cycle_interval`: Seconds between cycles (900 = 15 min, 1800 = 30 min, 3600 = 1 hour, 14400 = 4 hours)
+- `mission_duration`: Total mission time in seconds (86400 = 1 day, 259200 = 3 days, 604800 = 7 days)
+- `target_scope`: What the agent should focus on (optional)
+- `success_criteria`: How to measure mission success (optional)
+
+**IMPORTANT:** When the user asks you to spawn a SpecOps agent:
+1. ALWAYS use `work_style: "cycle"` unless the user explicitly asks for continuous/rapid cycling
+2. If the user doesn't specify a cycle interval, ASK them: "How often should the agent cycle? (15 min, 30 min, 1 hour, 4 hours, 12 hours)"
+3. If the user doesn't specify a duration, ASK them: "How long should the mission run? (1 day, 3 days, 7 days)"
+4. All SpecOps fields (target_scope, success_criteria) go INSIDE the specops_config object, NOT at the top level
+
+**Optional Fields:**
+- `context`: Background information for the agent
+- `expected_output`: Description of desired output format
+- `priority`: "low", "normal", "high", "critical"
+- `model`: "sonnet" (default), "opus", "haiku"
+- `timeout`: Seconds for single-run agents (default 3600)
+- `project_id`: Assign to a project/group
+
+**Response:** Returns agent_id, call_sign, and status fields in JSON.
+
+After spawning, tell the user the agent's call sign and that they can monitor it in the Agents tab.
 
 ### Rules
 - Do NOT assume external servers, NAS, or SSH targets exist
 - Always verify actions worked (check exit codes, read output)
 - Use the Ask User endpoint when you need user input
 - Be concise in your responses
+- When the user asks you to spawn/create/deploy an agent, DO IT using the endpoint above — do not tell them to do it manually
 """ if _IS_STANDALONE else """
 ## ENVIRONMENT & CAPABILITIES
 You are running on the Cerebro Server (Linux, ARM64) with FULL SYSTEM ACCESS.
@@ -1150,7 +1205,11 @@ You are the orchestrator of the user's network. You have --dangerously-skip-perm
 - Browser control: /api/browser/page_state, /api/browser/click, /api/browser/fill
 - Trading (Alpaca): /api/trading/positions, /api/trading/order
 - Ask user: /api/agent/ask (blocks until human responds)
-- Spawn child agents: /internal/spawn-child-agent
+- Spawn agents: POST /internal/chat-spawn-agent (see standalone docs for full usage)
+  - Basic: `curl -s -X POST http://localhost:59000/internal/chat-spawn-agent -H "Content-Type: application/json" -d '{{"task":"...", "agent_type":"worker", "model":"sonnet"}}'`
+  - SpecOps: Add `"specops_config": {{"mission_name":"...", "work_style":"cycle", "cycle_interval":3600, "mission_duration":259200}}`
+  - IMPORTANT: Always use work_style "cycle" for SpecOps. Ask user for cycle_interval and mission_duration if not specified.
+  - Types: worker, researcher, coder, analyst, browser, specops_worker, specops_researcher
 
 ### AI Memory (MCP)
 Agents have access to the full AI Memory system via MCP tools (search, record_learning, etc.)
@@ -1725,7 +1784,7 @@ async def create_agent(
         agent_info.update({
             "specops_config": specops_cfg,
             "mission_name": specops_cfg.get("mission_name", "Unnamed Mission"),
-            "work_style": specops_cfg.get("work_style", "continuous"),
+            "work_style": specops_cfg.get("work_style", "cycle"),
             "cycle_interval": specops_cfg.get("cycle_interval", 3600),
             "mission_duration": specops_cfg.get("mission_duration", 259200),
             "cycle_count": 0,
@@ -1804,6 +1863,9 @@ async def _process_agent_queue():
             "current_phase": "starting",
         }, room=os.environ.get("CEREBRO_ROOM", "default"))
         asyncio.create_task(run_agent(*entry["run_args"]))
+        # Start mission supervisor for queued SpecOps agents
+        if agent.get("is_specops"):
+            asyncio.create_task(run_specops_mission(agent_id))
 
 async def _generate_agent_summary(agent: dict, full_output: str):
     """Generate a clean 1-2 sentence summary of what an agent accomplished."""
@@ -2307,7 +2369,7 @@ async def run_agent(
         role_prompt = role_config["system_prompt"].format(
             call_sign=agent_id,
             mission_name=agent.get("mission_name", "Unnamed Mission"),
-            work_style=agent.get("work_style", "continuous"),
+            work_style=agent.get("work_style", "cycle"),
             cycle_interval_human=_format_interval(agent.get("cycle_interval", 3600)),
             duration_human=_format_duration(agent.get("mission_duration", 259200)),
             cycle_number=agent.get("cycle_count", 0) + 1,
@@ -2861,10 +2923,18 @@ You are running inside a Docker container.
             agent["status"] = AgentStatus.COMPLETED
             agent["completed_at"] = datetime.now(timezone.utc).isoformat()
             agent["output"] = full_output
-            print(f"[Agent {agent_id}] Completed. Output length: {len(full_output)}")
+            is_specops = agent.get("is_specops", False)
+            if is_specops:
+                print(f"[Agent {agent_id}] SpecOps cycle 1 completed. Output length: {len(full_output)}. Mission supervisor will manage lifecycle.")
+            else:
+                print(f"[Agent {agent_id}] Completed. Output length: {len(full_output)}")
 
-            # Generate and emit friendly agent summary (non-blocking)
-            asyncio.create_task(_generate_agent_summary(agent, full_output))
+            # Skip heavyweight post-completion ops for SpecOps agents — the mission
+            # supervisor (run_specops_mission) manages their full lifecycle including
+            # memory extraction, summaries, and queue processing.
+            if not is_specops:
+                # Generate and emit friendly agent summary (non-blocking)
+                asyncio.create_task(_generate_agent_summary(agent, full_output))
 
             # Update execution status if this is a scheduled agent
             if agent.get("execution_id"):
@@ -2873,23 +2943,25 @@ You are running inside a Docker container.
             # Save to AI Memory for persistence
             await save_agent_to_memory(agent)
 
-            # Auto-categorize into project (non-blocking)
-            asyncio.create_task(auto_categorize_agent(agent))
+            if not is_specops:
+                # Auto-categorize into project (non-blocking)
+                asyncio.create_task(auto_categorize_agent(agent))
 
-            # Extract structured memory from agent output (non-blocking)
-            asyncio.create_task(_extract_agent_to_memory(agent))
+                # Extract structured memory from agent output (non-blocking)
+                asyncio.create_task(_extract_agent_to_memory(agent))
 
-            # Create notification for completed agent
-            await create_notification(
-                notif_type="agent_complete",
-                title=f"Agent {agent.get('call_sign', agent_id)} Completed",
-                message=agent["task"][:100] + ("..." if len(agent["task"]) > 100 else ""),
-                link=f"/agents/{agent_id}",
-                agent_id=agent_id
-            )
+            if not is_specops:
+                # Create notification for completed agent
+                await create_notification(
+                    notif_type="agent_complete",
+                    title=f"Agent {agent.get('call_sign', agent_id)} Completed",
+                    message=agent["task"][:100] + ("..." if len(agent["task"]) > 100 else ""),
+                    link=f"/agents/{agent_id}",
+                    agent_id=agent_id
+                )
 
             # AUTO-COMPLETE DIRECTIVE: If agent was spawned for a directive, mark it complete
-            if agent.get("directive_id"):
+            if not is_specops and agent.get("directive_id"):
                 directive_id = agent["directive_id"]
                 print(f"[Agent {agent_id}] Agent completed - auto-completing directive {directive_id}")
                 try:
@@ -2987,19 +3059,26 @@ You are running inside a Docker container.
             print(f"[Agent {agent_id}] Exception after user stop (expected): {e}")
 
     # Emit final status to frontend
-    print(f"[Agent {agent_id}] Emitting completion events. Status: {agent['status']}")
+    is_specops = agent.get("is_specops", False)
+    print(f"[Agent {agent_id}] Emitting {'cycle 1 update' if is_specops else 'completion events'}. Status: {agent['status']}")
     await sio.emit("agent_update", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
-    await sio.emit("agent_completed", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
+    # For SpecOps agents, do NOT emit agent_completed after cycle 1 — the mission supervisor
+    # manages the full lifecycle. Emitting agent_completed here causes the frontend to
+    # prematurely show the agent as finished and trigger stored-item creation.
+    if not is_specops:
+        await sio.emit("agent_completed", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
 
     # v2.0: Unregister agent from cognitive loop status tracking
-    if cognitive_loop_manager:
+    if cognitive_loop_manager and not is_specops:
         cognitive_loop_manager.register_agent_completed(agent_id)
         await sio.emit("autonomy_status", cognitive_loop_manager.get_state().to_dict(), room=os.environ.get("CEREBRO_ROOM", "default"))
 
-    print(f"[Agent {agent_id}] Completion events emitted successfully")
+    print(f"[Agent {agent_id}] {'Cycle 1 update' if is_specops else 'Completion events'} emitted successfully")
 
     # Process queue — completed agent frees a slot
-    await _process_agent_queue()
+    # For SpecOps agents, do NOT free the slot — the agent is still running (between cycles)
+    if not is_specops:
+        await _process_agent_queue()
 
     # Wake cognitive loop to re-check pending directives immediately
     # (fixes bug where directives submitted mid-task were never picked up)
@@ -4309,7 +4388,12 @@ async def spawn_agent(request: AgentRequest, user: str = Depends(verify_token)):
     """Spawn a new background agent."""
     # Pass specops_config via thread-local-style attribute for create_agent to pick up
     if request.specops_config:
-        create_agent._specops_config = request.specops_config
+        cfg = dict(request.specops_config)
+        if request.target_scope and "target_scope" not in cfg:
+            cfg["target_scope"] = request.target_scope
+        if request.success_criteria and "success_criteria" not in cfg:
+            cfg["success_criteria"] = request.success_criteria
+        create_agent._specops_config = cfg
     else:
         create_agent._specops_config = None
     agent_id = await create_agent(
@@ -5553,13 +5637,15 @@ async def run_agent_continuation(agent_id: str, call_sign: str, task: str, agent
 # ============================================================================
 
 async def _wait_for_agent_completion(agent_id: str) -> str:
-    """Poll agent status every 5s until it's no longer RUNNING. Returns final status."""
+    """Poll agent status every 5s until it's no longer RUNNING/CYCLING. Returns final status."""
     while True:
         agent = active_agents.get(agent_id)
         if not agent:
             return AgentStatus.FAILED
         status = agent.get("status")
-        if status != AgentStatus.RUNNING:
+        # RUNNING = subprocess active, CYCLING = between cycles (sleep phase)
+        # Both mean the agent is still alive and we should keep waiting
+        if status not in (AgentStatus.RUNNING, AgentStatus.CYCLING):
             return status
         await asyncio.sleep(5)
 
@@ -5724,7 +5810,7 @@ def _build_specops_continuation(agent: dict, cycle_num: int, context_ref: dict) 
     system_prompt = role_config["system_prompt"].format(
         call_sign=agent_id,
         mission_name=agent.get("mission_name", "Unnamed Mission"),
-        work_style=agent.get("work_style", "continuous"),
+        work_style=agent.get("work_style", "cycle"),
         cycle_interval_human=_format_interval(agent.get("cycle_interval", 3600)),
         duration_human=_format_duration(agent.get("mission_duration", 259200)),
         cycle_number=cycle_num + 1,
@@ -6051,7 +6137,7 @@ async def _emit_specops_update(agent: dict):
         "mission_journal": agent.get("mission_journal", []),
         "next_checkin": agent.get("next_checkin"),
         "mission_elapsed": agent.get("mission_elapsed", 0),
-        "work_style": agent.get("work_style", "continuous"),
+        "work_style": agent.get("work_style", "cycle"),
         "auto_continue": agent.get("auto_continue", True),
         "status": agent.get("status"),
         "mission_name": agent.get("mission_name", ""),
@@ -6129,29 +6215,35 @@ async def run_specops_mission(agent_id: str):
         # 1. Agent was stopped or failed
         if final_status in (AgentStatus.STOPPED, AgentStatus.FAILED):
             print(f"[SpecOps] Mission ended — agent {final_status}")
+            await sio.emit("agent_completed", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
             _specops_locks.pop(agent_id, None)
             return
 
         # 2. Auto-continue disabled
         if not agent.get("auto_continue", True):
-            print(f"[SpecOps] Mission paused — auto_continue is OFF")
+            print(f"[SpecOps] Mission paused — auto_continue is OFF (value: {agent.get('auto_continue')})")
             agent["status"] = AgentStatus.COMPLETED
             await sio.emit("agent_update", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
+            await sio.emit("agent_completed", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
             _specops_locks.pop(agent_id, None)
             return
 
         # 3. Mission duration exceeded
         mission_duration = agent.get("mission_duration", 0)
-        if mission_duration > 0 and agent.get("mission_elapsed", 0) >= mission_duration:
-            print(f"[SpecOps] Mission ended — duration limit reached ({_format_duration(mission_duration)})")
+        mission_elapsed = agent.get("mission_elapsed", 0)
+        if mission_duration > 0 and mission_elapsed >= mission_duration:
+            print(f"[SpecOps] Mission ended — duration limit reached (elapsed: {_format_duration(mission_elapsed)}, limit: {_format_duration(mission_duration)})")
             agent["status"] = AgentStatus.COMPLETED
             await sio.emit("agent_update", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
+            await sio.emit("agent_completed", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
             await _emit_specops_update(agent)
             _specops_locks.pop(agent_id, None)
             return
+        elif mission_duration > 0:
+            print(f"[SpecOps] Mission time check: {_format_duration(mission_elapsed)} elapsed of {_format_duration(mission_duration)} limit")
 
         # === Determine cycle delay based on work style ===
-        work_style = agent.get("work_style", "continuous")
+        work_style = agent.get("work_style", "cycle")
         cycle_interval = agent.get("cycle_interval", 3600)
 
         if work_style == "continuous":
@@ -6168,6 +6260,8 @@ async def run_specops_mission(agent_id: str):
         else:
             sleep_seconds = 5
 
+        print(f"[SpecOps] {agent_id} cycle #{cycle_num} delay: work_style={work_style}, cycle_interval={cycle_interval}, sleep_seconds={sleep_seconds}, auto_continue={agent.get('auto_continue')}")
+
         # === Sleep / Cycling phase ===
         if sleep_seconds > 10:
             agent["status"] = AgentStatus.CYCLING
@@ -6177,21 +6271,26 @@ async def run_specops_mission(agent_id: str):
             await _emit_specops_update(agent)
             await _persist_specops_state(agent)
 
-            print(f"[SpecOps] {agent_id} cycling — next cycle in {_format_interval(sleep_seconds)}")
+            print(f"[SpecOps] {agent_id} ENTERING SLEEP — {_format_interval(sleep_seconds)} until next cycle (next_checkin: {next_checkin.isoformat()})")
 
             # Sleep in 30s increments so we can detect cancellation
             elapsed_sleep = 0
             while elapsed_sleep < sleep_seconds:
-                await asyncio.sleep(min(30, sleep_seconds - elapsed_sleep))
-                elapsed_sleep += 30
+                chunk = min(30, sleep_seconds - elapsed_sleep)
+                await asyncio.sleep(chunk)
+                elapsed_sleep += chunk
+                # Log progress every 5 minutes
+                if elapsed_sleep % 300 < 30:
+                    remaining = sleep_seconds - elapsed_sleep
+                    print(f"[SpecOps] {agent_id} sleep progress: {elapsed_sleep}s / {sleep_seconds}s ({_format_interval(remaining)} remaining)")
                 # Check if agent was stopped during sleep
                 agent = active_agents.get(agent_id)
                 if not agent or agent.get("status") == AgentStatus.STOPPED:
-                    print(f"[SpecOps] Mission cancelled during cycling")
+                    print(f"[SpecOps] Mission cancelled during cycling (status={agent.get('status') if agent else 'GONE'})")
                     _specops_locks.pop(agent_id, None)
                     return
                 if not agent.get("auto_continue", True):
-                    print(f"[SpecOps] Auto-continue disabled during cycling")
+                    print(f"[SpecOps] Auto-continue disabled during cycling — stopping mission")
                     agent["status"] = AgentStatus.COMPLETED
                     await sio.emit("agent_update", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
                     _specops_locks.pop(agent_id, None)
@@ -6199,9 +6298,12 @@ async def run_specops_mission(agent_id: str):
                 # Check for force-cycle request
                 if agent.get("_force_next_cycle"):
                     agent.pop("_force_next_cycle", None)
-                    print(f"[SpecOps] Force cycle triggered for {agent_id}")
+                    print(f"[SpecOps] Force cycle triggered for {agent_id} (skipping remaining {_format_interval(sleep_seconds - elapsed_sleep)} of sleep)")
                     break
+
+            print(f"[SpecOps] {agent_id} SLEEP COMPLETE — slept {elapsed_sleep}s, proceeding to next cycle")
         else:
+            print(f"[SpecOps] {agent_id} short delay ({sleep_seconds}s) before next cycle")
             await asyncio.sleep(sleep_seconds)
 
         # === Re-check agent still exists ===
@@ -6433,6 +6535,83 @@ async def spawn_child_agent_internal(request: Request, data: InternalSpawnReques
         "call_sign": active_agents.get(child_id, {}).get("call_sign", child_id),
         "parent_agent_id": parent_id,
         "status": "spawned"
+    }
+
+
+# ============================================================================
+# Chat Agent Spawning — allows the chat AI to spawn agents directly
+# ============================================================================
+
+class ChatSpawnRequest(BaseModel):
+    task: str
+    agent_type: str = "worker"  # worker, researcher, coder, analyst, browser, specops_worker, specops_researcher, etc.
+    context: Optional[str] = None
+    expected_output: Optional[str] = None
+    priority: Optional[str] = "normal"
+    model: Optional[str] = "sonnet"  # sonnet, opus, haiku
+    timeout: Optional[int] = 3600
+    project_id: Optional[str] = None
+    # SpecOps fields (only used when agent_type starts with "specops_")
+    specops_config: Optional[dict] = None  # {mission_name, work_style, cycle_interval, mission_duration}
+    target_scope: Optional[str] = None
+    success_criteria: Optional[str] = None
+
+@app.post("/internal/chat-spawn-agent")
+async def chat_spawn_agent(request: Request, data: ChatSpawnRequest):
+    """
+    Spawn an agent from the chat interface.
+    Localhost-only, no auth required. Supports all agent types including SpecOps.
+    """
+    client_host = request.client.host
+    if client_host not in ("127.0.0.1", "localhost", "::1"):
+        raise HTTPException(403, "Internal endpoint only accessible from localhost")
+
+    # Set specops config if this is a specops agent
+    if data.specops_config and data.agent_type.startswith("specops_"):
+        # Merge top-level target_scope/success_criteria into specops_config if present
+        cfg = dict(data.specops_config)
+        if data.target_scope and "target_scope" not in cfg:
+            cfg["target_scope"] = data.target_scope
+        if data.success_criteria and "success_criteria" not in cfg:
+            cfg["success_criteria"] = data.success_criteria
+        create_agent._specops_config = cfg
+    elif data.agent_type.startswith("specops_"):
+        # SpecOps agent without explicit config — use defaults with "cycle" work_style
+        create_agent._specops_config = {
+            "work_style": "cycle",
+            "cycle_interval": 3600,
+            "mission_duration": 259200,
+        }
+        if data.target_scope:
+            create_agent._specops_config["target_scope"] = data.target_scope
+        if data.success_criteria:
+            create_agent._specops_config["success_criteria"] = data.success_criteria
+    else:
+        create_agent._specops_config = None
+
+    agent_id = await create_agent(
+        task=data.task,
+        agent_type=data.agent_type,
+        context=data.context,
+        expected_output=data.expected_output,
+        priority=data.priority,
+        timeout=data.timeout or 3600,
+        project_id=data.project_id,
+        model=data.model or "sonnet",
+        source="cerebro",  # Mark as spawned by chat/cerebro
+    )
+
+    create_agent._specops_config = None  # Clean up
+
+    agent = active_agents.get(agent_id, {})
+    print(f"[Chat] Agent {agent_id} ({agent.get('call_sign', '?')}) spawned from chat — type={data.agent_type}")
+
+    return {
+        "agent_id": agent_id,
+        "call_sign": agent.get("call_sign", agent_id),
+        "agent_type": data.agent_type,
+        "status": "spawned",
+        "message": f"Agent {agent.get('call_sign', agent_id)} has been deployed as a {data.agent_type}. Check the Agents tab to monitor progress."
     }
 
 

@@ -682,6 +682,11 @@
             -webkit-overflow-scrolling: touch;
         }
 
+        /* When chat is active, lock main-content scroll so only messages-container scrolls */
+        .main-content:has(.chat-view.active) {
+            overflow-y: hidden;
+        }
+
         .view {
             display: none !important;
             min-height: 100%;
@@ -863,6 +868,9 @@
             left: 0 !important;
             right: 0 !important;
             width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            border-radius: 0 !important;
         }
 
         body.keyboard-open .quick-action-pills {
@@ -4780,6 +4788,17 @@
             color: var(--specops-pink-light);
         }
 
+        .agent-status.operating {
+            background: rgba(236, 72, 153, 0.2);
+            color: #f472b6;
+            animation: operatingPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes operatingPulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 4px rgba(244, 114, 182, 0.3); }
+            50% { opacity: 0.85; box-shadow: 0 0 10px rgba(244, 114, 182, 0.5); }
+        }
+
         .agent-task {
             font-size: 0.9rem;
             margin-bottom: 10px;
@@ -5043,6 +5062,12 @@
             animation: badgeThinkingPulse 1.5s ease-in-out infinite;
         }
 
+        .agent-status-badge.operating {
+            background: rgba(236, 72, 153, 0.2);
+            color: #f472b6;
+            animation: operatingPulse 2s ease-in-out infinite;
+        }
+
         @keyframes badgeThinkingPulse {
             0%, 100% { opacity: 1; box-shadow: 0 0 4px rgba(139, 92, 246, 0.3); }
             50% { opacity: 0.7; box-shadow: 0 0 12px rgba(139, 92, 246, 0.6); }
@@ -5271,6 +5296,35 @@
             border-radius: 12px;
             line-height: 1.5;
             font-size: 0.95rem;
+            max-height: 120px;
+            overflow: hidden;
+            position: relative;
+            cursor: pointer;
+            transition: max-height 0.3s ease;
+        }
+        .agent-task-box.expanded {
+            max-height: none;
+        }
+        .agent-task-box:not(.expanded)::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 40px;
+            background: linear-gradient(transparent, var(--bg-elevated));
+            pointer-events: none;
+        }
+        .agent-task-toggle {
+            text-align: center;
+            padding: 4px 0;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            cursor: pointer;
+            user-select: none;
+        }
+        .agent-task-toggle:hover {
+            color: var(--accent);
         }
 
         .agent-section {
@@ -8809,7 +8863,7 @@
         .chat-view {
             display: flex;
             flex-direction: column;
-            height: 100%;
+            height: calc(100vh - 56px); /* viewport minus header */
             position: relative;
         }
 
@@ -8818,46 +8872,25 @@
             overflow-y: auto;
             padding: 16px;
             padding-top: 16px;
-            padding-bottom: 200px; /* Space for input area + nav + breathing room — dynamically updated by ResizeObserver */
+            padding-bottom: 160px; /* Space for floating input (80px) + gap above nav (12px) + breathing (68px) */
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 0;
+            align-items: center;
             -webkit-overflow-scrolling: touch;
         }
 
         /* Mobile improvements for chat */
         @media (max-width: 480px) {
             .messages-container {
-                padding: 12px;
-                padding-top: 12px;
-                padding-bottom: 210px;
+                padding: 8px;
+                padding-top: 8px;
+                padding-bottom: 160px;
             }
 
             .message {
-                max-width: 92%;
-                padding: 12px 14px;
+                padding: 16px 12px;
                 font-size: 0.9rem;
-            }
-
-            .message.assistant {
-                padding: 0;
-            }
-
-            .assistant-card-body {
-                padding: 10px 14px;
-            }
-
-            .assistant-card-header {
-                padding: 6px 14px;
-            }
-
-            .quick-action-pills {
-                padding: 6px 12px 2px;
-                gap: 6px;
-            }
-            .quick-action-pill {
-                padding: 4px 10px;
-                font-size: 0.7rem;
             }
 
             .chat-input-wrapper {
@@ -8878,75 +8911,87 @@
             }
         }
 
-        /* === PREMIUM MESSAGE BUBBLES === */
+        /* === CLEAN MESSAGE ROWS (Claude-style) === */
         .message {
-            max-width: 85%;
-            padding: 16px 20px;
-            border-radius: 22px;
+            max-width: 1000px;
+            width: 100%;
+            padding: 20px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
             font-size: 0.95rem;
             line-height: 1.6;
             position: relative;
             word-wrap: break-word;
             overflow-wrap: break-word;
             hyphens: auto;
-            /* Animation handled by GSAP when available */
-            animation: messageIn 0.3s ease;
+            border-radius: 0;
+            background: transparent;
         }
 
-        @keyframes messageIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+        .msg-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        .msg-sender {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .message.assistant .msg-sender {
+            color: var(--accent-light);
+        }
+        .msg-meta {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .msg-model {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            opacity: 0.8;
+        }
+        .msg-model .model-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .msg-time {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            opacity: 0.6;
         }
 
         .message.user {
-            background: rgba(139, 92, 246, 0.18);
             color: var(--text-primary);
-            align-self: flex-end;
-            border-bottom-right-radius: 6px;
-            border: 1px solid rgba(139, 92, 246, 0.25);
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
-        }
-        .user-msg-timestamp {
-            font-size: 0.65rem;
-            color: var(--text-muted);
-            margin-top: 6px;
-            opacity: 0.6;
-            text-align: right;
+            align-self: center;
         }
 
         .message.assistant {
-            background: rgba(12, 12, 20, 0.65);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(139, 92, 246, 0.15);
             color: var(--text-primary);
-            align-self: flex-start;
-            border-radius: 14px;
-            border-bottom-left-radius: 4px;
-            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3), 0 0 20px rgba(139, 92, 246, 0.05);
-            padding: 0;
-            overflow: hidden;
+            align-self: center;
+            padding: 20px 16px;
+            overflow: visible;
         }
 
-        .message.assistant::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 1px;
-            background: linear-gradient(
-                90deg,
-                transparent,
-                rgba(139, 92, 246, 0.25),
-                transparent
-            );
+        /* Streaming cursor */
+        .streaming-cursor {
+            display: inline-block;
+            width: 8px;
+            height: 1.1em;
+            background: var(--accent);
+            vertical-align: text-bottom;
+            animation: blink-cursor 0.7s ease-in-out infinite;
+            margin-left: 2px;
+            border-radius: 1px;
+        }
+        @keyframes blink-cursor {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.15; }
         }
 
         /* ==================== CONTEXT SYSTEM BUBBLE ==================== */
@@ -9079,52 +9124,13 @@
             text-overflow: ellipsis;
         }
 
-        /* === ASSISTANT CARD STRUCTURE === */
-        .assistant-card-header {
-            padding: 8px 16px;
-            border-bottom: 1px solid rgba(139, 92, 246, 0.08);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .assistant-card-meta {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            width: 100%;
-        }
-        .assistant-card-timestamp {
-            font-size: 0.7rem;
-            color: var(--text-muted);
-            opacity: 0.7;
-        }
-        .assistant-card-model {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            font-size: 0.65rem;
-            color: var(--text-muted);
-            margin-left: auto;
-            opacity: 0.8;
-        }
-        .assistant-card-model .model-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            flex-shrink: 0;
-        }
-        .assistant-card-body {
-            padding: 14px 18px;
-        }
-        .assistant-card-actions {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 0 16px 10px;
-        }
-        .assistant-card-actions .chat-speak-btn {
-            margin-top: 0;
-        }
+        /* === ASSISTANT CARD STRUCTURE (legacy compat — kept for saveChatHistory) === */
+        .assistant-card-header { display: none; }
+        .assistant-card-meta { display: none; }
+        .assistant-card-timestamp { display: none; }
+        .assistant-card-model { display: none; }
+        .assistant-card-body { padding: 0; }
+        .assistant-card-actions { display: none; }
 
         .message.assistant pre {
             background: var(--bg-elevated);
@@ -9267,9 +9273,9 @@
             animation: spin 1s linear infinite;
         }
 
-        /* === TOOL TRACKER (Inline Collapsible) === */
+        /* === TOOL TRACKER (Hidden in Claude-style redesign) === */
         .tool-tracker {
-            border-bottom: 1px solid rgba(139, 92, 246, 0.08);
+            display: none !important;
         }
         .tool-tracker-bar {
             display: flex;
@@ -10133,20 +10139,24 @@
             }
         }
 
-        /* === ENHANCED CHAT INPUT === */
+        /* === FLOATING CHAT INPUT (Claude-style) === */
         .chat-input-area {
             position: fixed;
-            bottom: calc(var(--nav-height) + var(--safe-bottom));
+            bottom: calc(var(--nav-height) + var(--safe-bottom) + 12px);
             left: 0;
             right: 0;
-            width: 100%;
+            margin-left: auto;
+            margin-right: auto;
+            max-width: 1000px;
+            width: calc(100% - 32px);
             z-index: 500;
-            background: rgba(8, 8, 14, 0.95);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border-top: 1px solid rgba(139, 92, 246, 0.08);
-            box-shadow: 0 -12px 24px rgba(5, 5, 8, 0.8);
-            transition: all 0.2s var(--ease-out-expo);
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(139, 92, 246, 0.06);
+            transition: opacity 0.15s ease, box-shadow 0.2s ease;
+            overflow: hidden;
+            display: none; /* Hidden by default, shown by _switchViewCore */
         }
 
         /* When keyboard is open on mobile */
@@ -10156,34 +10166,9 @@
             }
         }
 
-        /* Quick action pills row */
+        /* Quick action pills — hidden in new design */
         .quick-action-pills {
-            display: flex;
-            gap: 8px;
-            padding: 8px 16px 4px;
-            border-top: 1px solid rgba(255, 255, 255, 0.03);
-            overflow-x: auto;
-            scrollbar-width: none;
-            -ms-overflow-style: none;
-        }
-        .quick-action-pills::-webkit-scrollbar { display: none; }
-        .quick-action-pill {
-            flex-shrink: 0;
-            padding: 5px 14px;
-            border-radius: 16px;
-            border: 1px solid var(--border);
-            background: transparent;
-            color: var(--text-secondary);
-            font-size: 0.75rem;
-            font-family: inherit;
-            cursor: pointer;
-            transition: all 0.15s ease;
-            white-space: nowrap;
-        }
-        .quick-action-pill:hover {
-            border-color: var(--accent);
-            color: var(--accent-light);
-            background: rgba(139, 92, 246, 0.1);
+            display: none;
         }
 
         .chat-input-wrapper {
@@ -10195,7 +10180,7 @@
         }
 
         .chat-input-wrapper:focus-within {
-            background: rgba(139, 92, 246, 0.05);
+            background: rgba(139, 92, 246, 0.03);
         }
 
         /* Inline model selector in input bar */
@@ -23509,30 +23494,18 @@
                 <div class="view chat-view" id="view-chat">
                     <div class="messages-container" id="messages">
                         <div class="message assistant" data-text="Hey! I'm Cerebro, your AI command center. I can spawn agents, search your memory, run automations, or help with anything else. What do you need?">
-                            <div class="assistant-card-header">
-                                <div class="assistant-card-meta">
-                                    <span class="assistant-card-timestamp">Welcome</span>
-                                    <span class="assistant-card-model"></span>
-                                </div>
+                            <div class="msg-header">
+                                <span class="msg-sender">Cerebro</span>
+                                <span class="msg-meta">
+                                    <span class="msg-model"></span>
+                                    <span class="msg-time">Welcome</span>
+                                </span>
                             </div>
-                            <div class="tool-tracker" style="display:none;"></div>
-                            <div class="assistant-card-body">
-                                <div class="message-content-wrapper">Hey! I'm Cerebro, your AI command center. I can spawn agents, search your memory, run automations, or help with anything else. What do you need?</div>
-                            </div>
-                            <div class="assistant-card-actions">
-                                <button class="chat-speak-btn" title="Listen to this message" onclick="speakMessageContent(this.closest('.message'), this)">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-                                </button>
-                            </div>
+                            <div class="message-content-wrapper">Hey! I'm Cerebro, your AI command center. I can spawn agents, search your memory, run automations, or help with anything else. What do you need?</div>
                         </div>
                     </div>
                     <div class="chat-input-area">
-                        <div class="quick-action-pills">
-                            <button class="quick-action-pill" onclick="sendQuickAction('Run a full system diagnostics check')">System Check</button>
-                            <button class="quick-action-pill" onclick="sendQuickAction('Check all running agents and their progress')">Agent Progress</button>
-                            <button class="quick-action-pill" onclick="sendQuickAction('Show my recent memory and active work')">Memory Status</button>
-                            <button class="quick-action-pill" onclick="clearChatHistory()">Clear Chat</button>
-                        </div>
+                        <div class="quick-action-pills"></div>
                         <div id="chat-image-preview" class="image-upload-preview"></div>
                         <div class="chat-input-wrapper">
                             <div class="input-model-selector">
@@ -26594,9 +26567,7 @@
             // Initialize the living presence card
             initCerebroPresence();
 
-            // Hide chat input initially (only show on chat tab)
-            const chatInput = document.querySelector('.chat-input-area');
-            if (chatInput) chatInput.style.display = 'none';
+            // Chat input is hidden via CSS by default, shown by _switchViewCore on chat tab
 
             // Load persistent chat history
             await loadChatHistory();
@@ -30265,7 +30236,7 @@
                     addMessage(data.content, 'user');
                     // Show loading for the response
                     currentAssistantMessage = addMessage('', 'assistant');
-                    const orbWrapper = currentAssistantMessage.querySelector('.assistant-card-body .message-content-wrapper');
+                    const orbWrapper = currentAssistantMessage.querySelector('.message-content-wrapper');
                     if (orbWrapper) orbWrapper.innerHTML = '<div class="thinking-orb-container"><div class="thinking-orb-dot"></div><span class="thinking-orb-label">Thinking...</span></div>';
                 }
             });
@@ -30288,7 +30259,16 @@
 
             socket.on('agent_completed', (agent) => {
                 console.log('Agent completed:', agent);
-                handleAgentCompleted(agent);
+                // For SpecOps agents with auto_continue, skip completion handler during
+                // inter-cycle transitions (the mission supervisor manages the lifecycle)
+                if (agent.is_specops && agent.auto_continue && agent.status === 'completed') {
+                    console.log(`[WS] SpecOps agent ${agent.id} cycle completed — skipping handleAgentCompleted (auto_continue active)`);
+                    // Still update local state
+                    agents[agent.id] = agent;
+                    renderAgents();
+                } else {
+                    handleAgentCompleted(agent);
+                }
                 // Auto-store agent result
                 const agentId = agent.agent_id || agent.id || ('agent_' + Date.now());
                 fetch(`${API_URL}/api/stored-items`, {
@@ -30876,9 +30856,12 @@
 
             currentAssistantMessage = addMessage('', 'assistant');
             currentAssistantMessage.setAttribute('data-text', '');
+            _chatRenderPending = false;
             // Show thinking orb while waiting for response
-            const thinkWrapper = currentAssistantMessage.querySelector('.assistant-card-body .message-content-wrapper');
+            const thinkWrapper = currentAssistantMessage.querySelector('.message-content-wrapper');
             if (thinkWrapper) thinkWrapper.innerHTML = '<div class="thinking-orb-container"><div class="thinking-orb-dot"></div><span class="thinking-orb-label">Thinking...</span></div>';
+            // Force scroll to show thinking orb
+            scrollMessagesToBottom(true);
 
             if (socket && socket.connected) {
                 socket.emit('chat_message', { content: actualContent, session_id: sessionId, model: getSelectedModel(), browser_enabled: chatBrowserEnabled, image_path: chatImg?.path || null });
@@ -30895,7 +30878,7 @@
                     });
 
                     const data = await response.json();
-                    const fbWrapper = currentAssistantMessage.querySelector('.assistant-card-body .message-content-wrapper');
+                    const fbWrapper = currentAssistantMessage.querySelector('.message-content-wrapper');
                     if (fbWrapper) { fbWrapper.innerHTML = safeMarkdown(data.content); }
                     currentAssistantMessage.setAttribute('data-text', data.content || '');
                     if (data.session_id) {
@@ -30903,7 +30886,7 @@
                         document.getElementById('session-id').textContent = sessionId.substring(0, 8) + '...';
                     }
                 } catch (e) {
-                    const errWrapper = currentAssistantMessage.querySelector('.assistant-card-body .message-content-wrapper');
+                    const errWrapper = currentAssistantMessage.querySelector('.message-content-wrapper');
                     if (errWrapper) errWrapper.textContent = 'Error: Could not reach server';
                 }
             }
@@ -30960,6 +30943,8 @@
             }
         }
 
+        let _chatRenderPending = false;
+
         function handleChatResponse(data) {
             if (!currentAssistantMessage) return;
 
@@ -30973,74 +30958,98 @@
                 const existingText = currentAssistantMessage.getAttribute('data-text') || '';
                 const newText = existingText + data.content;
                 currentAssistantMessage.setAttribute('data-text', newText);
-                const wrapper = currentAssistantMessage.querySelector('.assistant-card-body .message-content-wrapper');
-                if (wrapper) {
-                    wrapper.innerHTML = safeMarkdown(newText);
+
+                // Debounced render via rAF for smooth ~60fps streaming
+                if (!_chatRenderPending) {
+                    _chatRenderPending = true;
+                    requestAnimationFrame(function() {
+                        _chatRenderPending = false;
+                        if (!currentAssistantMessage) return;
+                        var fullText = currentAssistantMessage.getAttribute('data-text') || '';
+                        var wrapper = currentAssistantMessage.querySelector('.message-content-wrapper');
+                        if (wrapper) {
+                            wrapper.innerHTML = safeMarkdown(fullText);
+                            // Add streaming cursor at end
+                            var oldCursor = wrapper.querySelector('.streaming-cursor');
+                            if (oldCursor) oldCursor.remove();
+                            var cursor = document.createElement('span');
+                            cursor.className = 'streaming-cursor';
+                            wrapper.appendChild(cursor);
+                        }
+                        var sc = document.getElementById('messages');
+                        smartAutoScroll(sc);
+                    });
                 }
-                // Smart auto-scroll: follow text if user is near the bottom
-                var sc = document.getElementById('messages');
-                smartAutoScroll(sc);
-            } else if (data.type === 'tool') {
-                // Add tool to tracker instead of creating separate messages
-                toolTrackerData.tools.push({ name: data.name, done: false });
-                toolTrackerData.count = toolTrackerData.tools.length;
-                toolTrackerData.currentTool = data.name;
-                updateToolTracker(currentAssistantMessage);
-            } else if (data.type === 'tool_result') {
-                // Mark tool as done in tracker
-                const tool = toolTrackerData.tools.find(t => t.name === data.name && !t.done);
-                if (tool) tool.done = true;
-                // Update current tool to next running one
-                const running = toolTrackerData.tools.find(t => !t.done);
-                toolTrackerData.currentTool = running ? running.name : null;
-                updateToolTracker(currentAssistantMessage);
+            } else if (data.type === 'tool' || data.type === 'tool_result') {
+                // Tool tracking — silently track but don't show in UI
+                if (data.type === 'tool') {
+                    toolTrackerData.tools.push({ name: data.name, done: false });
+                    toolTrackerData.count = toolTrackerData.tools.length;
+                    toolTrackerData.currentTool = data.name;
+                } else {
+                    var tool = toolTrackerData.tools.find(function(t) { return t.name === data.name && !t.done; });
+                    if (tool) tool.done = true;
+                    var running = toolTrackerData.tools.find(function(t) { return !t.done; });
+                    toolTrackerData.currentTool = running ? running.name : null;
+                }
             } else if (data.type === 'session') {
                 sessionId = data.session_id;
                 document.getElementById('session-id').textContent = sessionId.substring(0, 8) + '...';
             } else if (data.type === 'done' || data.type === 'end') {
-                // Mark all tools as done in tracker
-                toolTrackerData.tools.forEach(t => t.done = true);
-                toolTrackerData.currentTool = null;
-                updateToolTracker(currentAssistantMessage);
-                // Also clean up any legacy .message.tool elements
-                document.querySelectorAll('.message.tool').forEach(el => el.remove());
-                // Reset tracker state for next message
+                // Reset tracker state
                 toolTrackerData = { tools: [], count: 0, currentTool: null };
                 currentToolMessage = null;
                 toolMessages = {};
+                // Clean up legacy tool elements
+                document.querySelectorAll('.message.tool').forEach(function(el) { el.remove(); });
                 // Re-enable send button
                 document.getElementById('send-btn').disabled = false;
+
+                // Final synchronous render — remove streaming cursor
+                var finalText = currentAssistantMessage.getAttribute('data-text') || '';
+                var finalWrapper = currentAssistantMessage.querySelector('.message-content-wrapper');
+                if (finalWrapper) {
+                    finalWrapper.innerHTML = safeMarkdown(finalText);
+                    // Remove any lingering cursor
+                    var lingering = finalWrapper.querySelector('.streaming-cursor');
+                    if (lingering) lingering.remove();
+                }
+                _chatRenderPending = false;
+
                 // Ensure final scroll after response completes
                 scrollMessagesToBottom(true);
                 // Save chat history after response completes
                 debouncedSave();
 
-                // Update model badge in card header
+                // Update model badge in new msg-model element
                 if (currentAssistantMessage && data.model) {
-                    const modelInfo = MODEL_OPTIONS[data.model];
+                    var modelInfo = MODEL_OPTIONS[data.model];
                     if (modelInfo) {
-                        const modelBadge = currentAssistantMessage.querySelector('.assistant-card-model');
+                        var modelBadge = currentAssistantMessage.querySelector('.msg-model');
                         if (modelBadge) {
-                            modelBadge.innerHTML = '<span class="model-dot ' + modelInfo.dotClass + '"></span> ' + modelInfo.label;
+                            modelBadge.textContent = '';
+                            var dot = document.createElement('span');
+                            dot.className = 'model-dot ' + modelInfo.dotClass;
+                            modelBadge.appendChild(dot);
+                            modelBadge.appendChild(document.createTextNode(' ' + modelInfo.label));
                         }
                     }
                 }
 
                 // Speak response in conversational mode
                 if (conversationalMode && currentAssistantMessage) {
-                    const responseText = currentAssistantMessage.getAttribute('data-text');
+                    var responseText = currentAssistantMessage.getAttribute('data-text');
                     console.log('[Conv] Response complete, will speak:', responseText?.substring(0, 50) + '...');
                     if (responseText && responseText.trim()) {
-                        setTimeout(() => speak(responseText), 500);
+                        setTimeout(function() { speak(responseText); }, 500);
                     } else {
-                        // No response to speak, resume listening
                         console.log('[Conv] No response text, resuming listen');
-                        setTimeout(() => startConversationalListen(), 500);
+                        setTimeout(function() { startConversationalListen(); }, 500);
                     }
                 }
             }
 
-            const container = document.getElementById('messages');
+            var container = document.getElementById('messages');
             smartAutoScroll(container);
         }
 
@@ -31059,50 +31068,39 @@
             message.setAttribute('data-message-id', msgId);
             message.setAttribute('data-text', content || '');
 
-            // Card header with timestamp and model
+            // Flat msg-header: sender + meta (model badge + time)
             const header = document.createElement('div');
-            header.className = 'assistant-card-header';
-            const meta = document.createElement('div');
-            meta.className = 'assistant-card-meta';
-            const ts = document.createElement('span');
-            ts.className = 'assistant-card-timestamp';
-            ts.textContent = options.timestamp || formatTimestamp();
-            meta.appendChild(ts);
+            header.className = 'msg-header';
+            const sender = document.createElement('span');
+            sender.className = 'msg-sender';
+            sender.textContent = 'Cerebro';
+            header.appendChild(sender);
+
+            const meta = document.createElement('span');
+            meta.className = 'msg-meta';
             const modelBadge = document.createElement('span');
-            modelBadge.className = 'assistant-card-model';
+            modelBadge.className = 'msg-model';
             if (options.model && MODEL_OPTIONS[options.model]) {
                 const info = MODEL_OPTIONS[options.model];
-                modelBadge.innerHTML = '<span class="model-dot ' + info.dotClass + '"></span> ' + info.label;
+                // Model badge uses safe dot class from MODEL_OPTIONS config
+                const dot = document.createElement('span');
+                dot.className = 'model-dot ' + info.dotClass;
+                modelBadge.appendChild(dot);
+                modelBadge.appendChild(document.createTextNode(' ' + info.label));
             }
             meta.appendChild(modelBadge);
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'msg-time';
+            timeSpan.textContent = options.timestamp || formatTimestamp();
+            meta.appendChild(timeSpan);
             header.appendChild(meta);
             message.appendChild(header);
 
-            // Tool tracker (hidden by default, populated by Step 3)
-            const tracker = document.createElement('div');
-            tracker.className = 'tool-tracker';
-            tracker.style.display = 'none';
-            message.appendChild(tracker);
-
-            // Card body
-            const body = document.createElement('div');
-            body.className = 'assistant-card-body';
+            // Content wrapper (direct child, no card body wrapper)
             const contentWrapper = document.createElement('div');
             contentWrapper.className = 'message-content-wrapper';
             if (content) contentWrapper.innerHTML = safeMarkdown(content);
-            body.appendChild(contentWrapper);
-            message.appendChild(body);
-
-            // Card actions (speak button)
-            const actions = document.createElement('div');
-            actions.className = 'assistant-card-actions';
-            const speakBtn = document.createElement('button');
-            speakBtn.className = 'chat-speak-btn';
-            speakBtn.title = 'Listen to this message';
-            speakBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>';
-            speakBtn.onclick = function() { speakMessageContent(message, this); };
-            actions.appendChild(speakBtn);
-            message.appendChild(actions);
+            message.appendChild(contentWrapper);
 
             // Store in session for chunk mapping
             window.messageChunkMap[msgId] = {
@@ -31125,31 +31123,42 @@
                 const message = buildAssistantCard(content);
                 container.appendChild(message);
                 scrollMessagesToBottom();
+                requestAnimationFrame(function() { scrollMessagesToBottom(); });
                 if (content) debouncedSave();
                 return message;
             }
 
             const message = document.createElement('div');
-            message.className = `message ${type}`;
-            const msgId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            message.className = 'message ' + type;
+            const msgId = 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
             message.setAttribute('data-message-id', msgId);
 
             if (type === 'tool') {
-                message.innerHTML = '<div class="tool-spinner"></div>' + content;
-            } else {
+                // Tool messages hidden in new design
+                message.style.display = 'none';
+                message.textContent = content;
+            } else if (type === 'user') {
+                // New flat user message with msg-header
+                const header = document.createElement('div');
+                header.className = 'msg-header';
+                const sender = document.createElement('span');
+                sender.className = 'msg-sender';
+                sender.textContent = 'You';
+                header.appendChild(sender);
+                const meta = document.createElement('span');
+                meta.className = 'msg-meta';
+                const timeSpan = document.createElement('span');
+                timeSpan.className = 'msg-time';
+                timeSpan.textContent = formatTimestamp();
+                meta.appendChild(timeSpan);
+                header.appendChild(meta);
+                message.appendChild(header);
+
                 const contentWrapper = document.createElement('div');
                 contentWrapper.className = 'message-content-wrapper';
                 contentWrapper.innerHTML = safeMarkdown(content);
                 message.appendChild(contentWrapper);
                 message.setAttribute('data-text', content);
-
-                // User timestamp
-                if (type === 'user') {
-                    const ts = document.createElement('div');
-                    ts.className = 'user-msg-timestamp';
-                    ts.textContent = formatTimestamp();
-                    message.appendChild(ts);
-                }
 
                 // Store in session for chunk mapping
                 window.messageChunkMap[msgId] = {
@@ -31159,15 +31168,21 @@
                     chunk_id: null,
                     conversation_id: null
                 };
-
                 message.classList.add('attachable');
+            } else {
+                const contentWrapper = document.createElement('div');
+                contentWrapper.className = 'message-content-wrapper';
+                contentWrapper.innerHTML = safeMarkdown(content);
+                message.appendChild(contentWrapper);
+                message.setAttribute('data-text', content);
             }
 
             container.appendChild(message);
 
-            // Auto-scroll to bottom when user sends a message or assistant starts
+            // Auto-scroll to bottom when user sends a message
             if (type === 'user' || type === 'assistant') {
                 scrollMessagesToBottom();
+                requestAnimationFrame(function() { scrollMessagesToBottom(); });
             }
 
             // Save chat history for persistence (skip tool messages)
@@ -32526,9 +32541,9 @@
 
                     if (content) {
                         const entry = { type, content, timestamp: Date.now() };
-                        // Save model info from card header
+                        // Save model info from msg-model or legacy assistant-card-model
                         if (type === 'assistant') {
-                            const modelEl = msg.querySelector('.assistant-card-model');
+                            const modelEl = msg.querySelector('.msg-model') || msg.querySelector('.assistant-card-model');
                             if (modelEl && modelEl.textContent.trim()) {
                                 const dotEl = modelEl.querySelector('.model-dot');
                                 if (dotEl) {
@@ -32635,42 +32650,49 @@
         }
 
         function renderChatHistory(messages) {
-            const container = document.getElementById('messages');
+            var container = document.getElementById('messages');
             container.innerHTML = ''; // Clear default welcome message
 
-            messages.forEach(msg => {
+            messages.forEach(function(msg) {
                 if (msg.type === 'assistant') {
-                    const ts = msg.timestamp ? formatTimestamp(new Date(msg.timestamp)) : null;
-                    const messageEl = buildAssistantCard(msg.content, {
+                    var ts = msg.timestamp ? formatTimestamp(new Date(msg.timestamp)) : null;
+                    var messageEl = buildAssistantCard(msg.content, {
                         timestamp: ts,
                         model: msg.model || null
                     });
                     container.appendChild(messageEl);
-                } else {
-                    const messageEl = document.createElement('div');
-                    messageEl.className = `message ${msg.type}`;
+                } else if (msg.type === 'user') {
+                    var messageEl = document.createElement('div');
+                    messageEl.className = 'message user';
                     messageEl.setAttribute('data-text', msg.content);
 
-                    const contentWrapper = document.createElement('div');
+                    // msg-header with sender + time
+                    var header = document.createElement('div');
+                    header.className = 'msg-header';
+                    var sender = document.createElement('span');
+                    sender.className = 'msg-sender';
+                    sender.textContent = 'You';
+                    header.appendChild(sender);
+                    var meta = document.createElement('span');
+                    meta.className = 'msg-meta';
+                    var timeSpan = document.createElement('span');
+                    timeSpan.className = 'msg-time';
+                    timeSpan.textContent = msg.timestamp ? formatTimestamp(new Date(msg.timestamp)) : '';
+                    meta.appendChild(timeSpan);
+                    header.appendChild(meta);
+                    messageEl.appendChild(header);
+
+                    var contentWrapper = document.createElement('div');
                     contentWrapper.className = 'message-content-wrapper';
                     contentWrapper.innerHTML = safeMarkdown(msg.content);
                     messageEl.appendChild(contentWrapper);
-
-                    if (msg.type === 'user') {
-                        const ts = document.createElement('div');
-                        ts.className = 'user-msg-timestamp';
-                        ts.textContent = msg.timestamp ? formatTimestamp(new Date(msg.timestamp)) : '';
-                        messageEl.appendChild(ts);
-                    }
 
                     container.appendChild(messageEl);
                 }
             });
 
             // Scroll to bottom after render
-            requestAnimationFrame(function() {
-                container.scrollTop = container.scrollHeight;
-            });
+            scrollMessagesToBottom();
         }
 
         async function clearChatHistory() {
@@ -32715,7 +32737,7 @@
 
             // Show loading
             const assistantMsg = addMessage('', 'assistant');
-            const qaWrapper = assistantMsg.querySelector('.assistant-card-body .message-content-wrapper');
+            const qaWrapper = assistantMsg.querySelector('.message-content-wrapper');
             if (qaWrapper) qaWrapper.innerHTML = '<div class="thinking-orb-container"><div class="thinking-orb-dot"></div><span class="thinking-orb-label">Running...</span></div>';
 
             try {
@@ -33839,7 +33861,7 @@
                     ${archiveBtn}
                     <div class="agent-header">
                         <span class="agent-id">🎖️ ${displayName} ${subAgentBadge}</span>
-                        <span class="agent-status ${agent.status}">${statusIcon} ${agent.status.toUpperCase()}</span>
+                        <span class="agent-status ${agent.is_specops && agent.status === 'running' ? 'operating' : agent.status}">${statusIcon} ${agent.is_specops && agent.status === 'running' ? 'OPERATING' : agent.status.toUpperCase()}</span>
                     </div>
                     <div class="agent-task">${escapeHtml(agentTask.slice(0, 200))}${agentTask.length > 200 ? '...' : ''}</div>
                     ${toolsHtml ? `<div class="agent-tools">${toolsHtml}</div>` : ''}
@@ -33967,8 +33989,9 @@
             nameSpan.textContent = agent.call_sign || agent.id;
 
             const statusSpan = document.createElement('span');
-            statusSpan.className = 'compact-status ' + agent.status;
-            statusSpan.textContent = agent.status.toUpperCase();
+            var isSpecopsRunning = agent.is_specops && agent.status === 'running';
+            statusSpan.className = 'compact-status ' + (isSpecopsRunning ? 'operating' : agent.status);
+            statusSpan.textContent = isSpecopsRunning ? 'OPERATING' : agent.status.toUpperCase();
 
             header.appendChild(nameSpan);
             header.appendChild(statusSpan);
@@ -34514,6 +34537,7 @@
         let agentPanelAgentId = null;
         let _panelElapsedTimer = null;
         let _panelElapsedStart = null;
+        let _specopsElapsedTimer = null;
 
         function setAgentPanelState(state, agentId) {
             agentPanelState = state;
@@ -34531,8 +34555,9 @@
             // Deactivate all modes
             [leftCreate, leftDetail, rightEmpty, rightRunning, rightOutput].forEach(function(el) { el.classList.remove('active'); });
 
-            // Clear elapsed timer
+            // Clear elapsed timers
             if (_panelElapsedTimer) { clearInterval(_panelElapsedTimer); _panelElapsedTimer = null; }
+            if (_specopsElapsedTimer) { clearInterval(_specopsElapsedTimer); _specopsElapsedTimer = null; }
 
             if (state === 'create') {
                 leftCreate.classList.add('active');
@@ -34553,6 +34578,11 @@
                 if (agentId) {
                     var agent = agents[agentId];
                     if (agent) {
+                        // SpecOps agents show "OPERATING" in pink
+                        if (agent.is_specops && agent.status === 'running') {
+                            statusBadge.textContent = 'OPERATING';
+                            statusBadge.className = 'agent-status-badge operating';
+                        }
                         // Check for cycling status
                         if (agent.status === 'cycling') {
                             statusBadge.textContent = 'CYCLING';
@@ -34582,14 +34612,32 @@
                         buildPanelChainNav(agent);
                     }
                     // Start elapsed timer
-                    _panelElapsedStart = Date.now();
-                    var elapsedEl = document.getElementById('panel-running-elapsed');
-                    _panelElapsedTimer = setInterval(function() {
-                        var secs = Math.floor((Date.now() - _panelElapsedStart) / 1000);
-                        var m = Math.floor(secs / 60);
-                        var s = secs % 60;
-                        elapsedEl.textContent = m + ':' + s.toString().padStart(2, '0');
-                    }, 1000);
+                    var agent = agents[agentId];
+                    if (agent && agent.is_specops) {
+                        // SpecOps: count from actual cycle start time (started_at)
+                        var cycleStart = agent.started_at ? new Date(agent.started_at).getTime() : Date.now();
+                        var specopsElapsedEl = document.getElementById('specops-panel-elapsed');
+                        if (specopsElapsedEl) {
+                            var updateSpecopsElapsed = function() {
+                                var secs = Math.max(0, Math.floor((Date.now() - cycleStart) / 1000));
+                                var m = Math.floor(secs / 60);
+                                var s = secs % 60;
+                                specopsElapsedEl.textContent = m + ':' + s.toString().padStart(2, '0');
+                            };
+                            updateSpecopsElapsed(); // immediate first tick
+                            if (_specopsElapsedTimer) clearInterval(_specopsElapsedTimer);
+                            _specopsElapsedTimer = setInterval(updateSpecopsElapsed, 1000);
+                        }
+                    } else {
+                        _panelElapsedStart = Date.now();
+                        var elapsedEl = document.getElementById('panel-running-elapsed');
+                        _panelElapsedTimer = setInterval(function() {
+                            var secs = Math.floor((Date.now() - _panelElapsedStart) / 1000);
+                            var m = Math.floor(secs / 60);
+                            var s = secs % 60;
+                            elapsedEl.textContent = m + ':' + s.toString().padStart(2, '0');
+                        }, 1000);
+                    }
                 }
                 // Hide left actions when running
                 document.getElementById('panel-left-actions').style.display = 'none';
@@ -34600,10 +34648,12 @@
                 if (agentId) {
                     var agent = agents[agentId];
                     if (agent) {
-                        var statusText = (agent.status || 'completed').toUpperCase();
+                        var isSpecopsRunning = agent.is_specops && agent.status === 'running';
+                        var statusText = isSpecopsRunning ? 'OPERATING' : (agent.status || 'completed').toUpperCase();
+                        var statusCls = isSpecopsRunning ? 'operating' : agent.status;
                         statusBadge.style.display = '';
                         statusBadge.textContent = statusText;
-                        statusBadge.className = 'agent-status-badge ' + agent.status;
+                        statusBadge.className = 'agent-status-badge ' + statusCls;
                         var typeEmoji = (agent.type || 'worker') === 'researcher' ? '\uD83D\uDD0D' : (agent.type || 'worker') === 'coder' ? '\uD83D\uDCBB' : (agent.type || 'worker') === 'analyst' ? '\uD83D\uDCCA' : '\u26A1';
                         var parentSuffix = '';
                         if (agent.parent_agent_id && agents[agent.parent_agent_id]) {
@@ -34688,6 +34738,7 @@
             var chainNavClose = document.getElementById('panel-chain-nav');
             if (chainNavClose) chainNavClose.style.display = 'none';
             if (_panelElapsedTimer) { clearInterval(_panelElapsedTimer); _panelElapsedTimer = null; }
+            if (_specopsElapsedTimer) { clearInterval(_specopsElapsedTimer); _specopsElapsedTimer = null; }
             stopSpecopsCountdown();
             agentPanelState = null;
             agentPanelAgentId = null;
@@ -34729,7 +34780,10 @@
                 + projectOptions
                 + '</select></div>'
                 + '</div>'
-                + '<div class="agent-task-box">' + escapeHtml(agent.task) + '</div>'
+                + '<div class="agent-task-box" onclick="this.classList.toggle(\'expanded\');var t=this.nextElementSibling;if(t&&t.classList.contains(\'agent-task-toggle\'))t.textContent=this.classList.contains(\'expanded\')?\'Show less\':\'Show full task\'">'
+                + escapeHtml(agent.task)
+                + '</div>'
+                + (agent.task.length > 150 ? '<div class="agent-task-toggle" onclick="var box=this.previousElementSibling;box.classList.toggle(\'expanded\');this.textContent=box.classList.contains(\'expanded\')?\'Show less\':\'Show full task\'">Show full task</div>' : '')
                 + '</div>'
                 + '<div class="agent-section">'
                 + '<div class="agent-section-title">Tools Used (' + (agent.tools_used ? agent.tools_used.length : 0) + ')</div>'
@@ -36574,8 +36628,28 @@
                 if (agent.status === 'cycling') {
                     statusEl.textContent = 'Completed ' + agent.cycle_count + ' cycle(s) \u2014 Standing by';
                 } else {
-                    statusEl.textContent = 'Cycle #' + cycleNum + ' \u2014 Running';
+                    statusEl.textContent = 'Cycle #' + cycleNum + ' \u2014 Operating';
                 }
+            }
+
+            // Update cycle elapsed timer from started_at
+            var specopsElapsedEl = document.getElementById('specops-panel-elapsed');
+            if (specopsElapsedEl && agent.status === 'running' && agent.started_at) {
+                var cycleStart = new Date(agent.started_at).getTime();
+                if (!_specopsElapsedTimer) {
+                    var updateFn = function() {
+                        var secs = Math.max(0, Math.floor((Date.now() - cycleStart) / 1000));
+                        var m = Math.floor(secs / 60);
+                        var s = secs % 60;
+                        specopsElapsedEl.textContent = m + ':' + s.toString().padStart(2, '0');
+                    };
+                    updateFn();
+                    _specopsElapsedTimer = setInterval(updateFn, 1000);
+                }
+            } else if (specopsElapsedEl && agent.status === 'cycling') {
+                // During cycling, stop the cycle timer and show total mission elapsed instead
+                if (_specopsElapsedTimer) { clearInterval(_specopsElapsedTimer); _specopsElapsedTimer = null; }
+                specopsElapsedEl.textContent = formatDurationShort(agent.mission_elapsed || 0);
             }
 
             // Update stats
@@ -38968,8 +39042,12 @@ Please proceed with implementing this recommendation. You have full permissions.
             const nav = document.querySelector(`.nav-item[data-view="${viewName}"]`);
             if (nav) nav.classList.add('active');
 
-            // Scroll main content to top when switching views (except chat)
+            // Lock main-content scroll when in chat (messages-container handles its own scroll)
             const mainContent = document.querySelector('.main-content');
+            if (mainContent) {
+                mainContent.style.overflowY = (viewName === 'chat') ? 'hidden' : '';
+            }
+            // Scroll main content to top when switching views (except chat)
             if (mainContent && viewName !== 'chat') {
                 mainContent.scrollTo({ top: 0, behavior: 'instant' });
             }
@@ -38978,10 +39056,18 @@ Please proceed with implementing this recommendation. You have full permissions.
             const chatInput = document.querySelector('.chat-input-area');
             const chatFab = document.getElementById('chat-fab-container');
             if (viewName === 'chat') {
-                if (chatInput) chatInput.style.display = 'block';
+                if (chatInput) {
+                    chatInput.style.opacity = '0';
+                    chatInput.style.display = 'block';
+                    requestAnimationFrame(function() {
+                        chatInput.style.opacity = '1';
+                    });
+                }
                 if (chatFab) chatFab.classList.add('visible');
+                // Scroll to latest message when entering chat
+                setTimeout(function() { scrollMessagesToBottom(); }, 50);
             } else {
-                if (chatInput) chatInput.style.display = 'none';
+                if (chatInput) { chatInput.style.display = 'none'; chatInput.style.opacity = ''; }
                 if (chatFab) { chatFab.classList.remove('visible'); closeChatFab(); }
             }
 
@@ -39432,25 +39518,20 @@ Please proceed with implementing this recommendation. You have full permissions.
         // Initialize on load
         initModelSelector();
 
-        function scrollMessagesToBottom(instant) {
+        function scrollMessagesToBottom() {
             var container = document.getElementById('messages');
             if (!container) return;
 
             // Reset user-scrolled-up flag so auto-scroll resumes
             _userScrolledUp[container.id || 'messages'] = false;
 
-            // Force layout calculation first
-            container.offsetHeight;
-
-            // Set scroll position directly
+            // Scroll the messages container to bottom
             container._setProgrammaticScroll?.();
             container.scrollTop = container.scrollHeight;
 
-            // Also scroll the last message into view as a fallback
-            var lastMsg = container.lastElementChild;
-            if (lastMsg) {
-                lastMsg.scrollIntoView({ behavior: instant ? 'instant' : 'smooth', block: 'end' });
-            }
+            // Also ensure main-content is scrolled to top (chat-view should handle its own scroll)
+            var mainContent = document.querySelector('.main-content');
+            if (mainContent) mainContent.scrollTop = 0;
         }
 
         // Handle mobile keyboard - adjust layout when keyboard opens
@@ -39477,7 +39558,13 @@ Please proceed with implementing this recommendation. You have full permissions.
                         // Keyboard closed - show bottom nav and reset input
                         document.body.classList.remove('keyboard-open');
                         if (bottomNav) bottomNav.style.display = 'flex';
-                        chatInput.style.bottom = `calc(var(--nav-height) + var(--safe-bottom))`;
+                        chatInput.style.bottom = '';
+                        chatInput.style.left = '';
+                        chatInput.style.right = '';
+                        chatInput.style.width = '';
+                        chatInput.style.maxWidth = '';
+                        chatInput.style.margin = '';
+                        chatInput.style.borderRadius = '';
                         // Reset messages padding
                         if (messagesContainer) {
                             messagesContainer.style.paddingBottom = '';
@@ -40608,7 +40695,7 @@ Please proceed with implementing this recommendation. You have full permissions.
             if (!bar || !chipsContainer) return;
 
             const allAgents = Object.values(agents);
-            const running = allAgents.filter(a => a.status === 'running' || a.status === 'queued');
+            const running = allAgents.filter(a => a.status === 'running' || a.status === 'queued' || a.status === 'cycling');
 
             if (running.length === 0) {
                 bar.classList.remove('visible');
@@ -40618,11 +40705,12 @@ Please proceed with implementing this recommendation. You have full permissions.
             bar.classList.add('visible');
             chipsContainer.innerHTML = running.map(a => {
                 const name = a.call_sign || a.id;
-                const statusDot = a.status === 'queued' ? 'background:#f59e0b' : '';
-                return `<span class="agent-chip" title="${a.task || ''}">
+                const statusDot = a.status === 'queued' ? 'background:#f59e0b' : a.is_specops ? 'background:#f472b6' : '';
+                const chipTitle = escapeHtml((a.task || '').slice(0, 100));
+                return `<span class="agent-chip" title="${chipTitle}">
                     <span class="chip-dot" style="${statusDot}"></span>
-                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${name}</span>
-                    <button class="chip-stop" onclick="event.stopPropagation(); gracefulStopAgent('${a.id}', '${name}')" title="Stop ${name}">&#x2715;</button>
+                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(name)}</span>
+                    <button class="chip-stop" onclick="event.stopPropagation(); gracefulStopAgent('${a.id}', '${escapeHtml(name)}')" title="Stop ${escapeHtml(name)}">&#x2715;</button>
                 </span>`;
             }).join('');
         }
@@ -41251,24 +41339,24 @@ Please proceed with implementing this recommendation. You have full permissions.
         function _trackUserScroll(container, key) {
             if (!container || container._scrollTracked) return;
             container._scrollTracked = true;
-            let programmaticScroll = false;
-            container._setProgrammaticScroll = () => { programmaticScroll = true; };
-            container.addEventListener('scroll', () => {
-                if (programmaticScroll) { programmaticScroll = false; return; }
-                const distFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+            var ignoreUntil = 0;
+            container._setProgrammaticScroll = function() { ignoreUntil = Date.now() + 300; };
+            container.addEventListener('scroll', function() {
+                if (Date.now() < ignoreUntil) return;
+                var distFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
                 _userScrolledUp[key] = distFromBottom > 80;
             }, { passive: true });
         }
 
         function smartAutoScroll(container, force) {
             if (!container) return;
-            const key = container.id || 'unknown';
+            var key = container.id || 'unknown';
             _trackUserScroll(container, key);
 
-            // If forced (new message just added by us), always scroll
+            // If forced (new message just added by us), always scroll instantly
             if (force) {
                 _userScrolledUp[key] = false;
-                requestAnimationFrame(() => {
+                requestAnimationFrame(function() {
                     container._setProgrammaticScroll?.();
                     container.scrollTop = container.scrollHeight;
                 });
@@ -41278,12 +41366,12 @@ Please proceed with implementing this recommendation. You have full permissions.
             // Otherwise, only scroll if user hasn't scrolled up
             if (_userScrolledUp[key]) return;
 
-            const threshold = 400;
-            const isNearBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < threshold;
+            var threshold = 600;
+            var isNearBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < threshold;
             if (isNearBottom) {
-                requestAnimationFrame(() => {
+                requestAnimationFrame(function() {
                     container._setProgrammaticScroll?.();
-                    container.scrollTop = container.scrollHeight;
+                    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
                 });
             }
         }
@@ -49146,17 +49234,7 @@ Please proceed with implementing this recommendation. You have full permissions.
                 }
             });
 
-            // Dynamic padding: keep messages visible as input area resizes
-            const chatInputArea = document.querySelector('.chat-input-area');
-            const messagesContainer = document.getElementById('messages');
-            if (chatInputArea && messagesContainer) {
-                const inputObserver = new ResizeObserver(() => {
-                    const inputH = chatInputArea.offsetHeight;
-                    const navH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--nav-height')) || 70;
-                    messagesContainer.style.paddingBottom = (inputH + navH + 20) + 'px';
-                });
-                inputObserver.observe(chatInputArea);
-            }
+            // Padding for chat is handled by CSS (.messages-container padding-bottom: 160px)
 
             // Initialize particle background
             initParticleBackground();
