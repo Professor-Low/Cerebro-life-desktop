@@ -3898,6 +3898,25 @@
             width: 16px;
             height: 16px;
         }
+        .specops-pending-directive {
+            background: rgba(251, 191, 36, 0.1);
+            border: 1px solid rgba(251, 191, 36, 0.3);
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin: 8px 0;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+        .directive-badge {
+            background: #fbbf24;
+            color: #1a1a2e;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 0.7rem;
+            letter-spacing: 0.05em;
+            margin-right: 6px;
+        }
         .specops-completed-cycle-detail {
             animation: specops-fade-in 0.25s ease-out;
         }
@@ -23399,6 +23418,7 @@
                                     <div class="live-card-header">
                                         <span class="live-card-icon">&#x1F4BB;</span>
                                         <span class="live-card-title">Active Devices</span>
+                                        <button class="live-card-add-btn" onclick="event.stopPropagation(); refreshAllDevices()" title="Refresh all devices" id="refresh-devices-btn" style="font-size:0.85rem;">&#x21bb;</button>
                                         <button class="live-card-add-btn" onclick="event.stopPropagation(); openAddDeviceModal()" title="Add device">+</button>
                                     </div>
                                     <div class="live-card-body" id="live-devices-body">
@@ -24688,6 +24708,10 @@
                                         <span class="device-name" id="offload-current-name">-</span>
                                         <button class="btn-disable" onclick="disableOffload()">Disable</button>
                                     </div>
+                                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                                        <span style="font-size:0.75rem; color:var(--text-secondary);">Eligible Devices</span>
+                                        <button class="btn-sm" onclick="refreshDevicesForOffload()" id="offload-refresh-btn" style="font-size:0.7rem; padding:2px 8px;">Refresh</button>
+                                    </div>
                                     <div class="offload-device-list" id="offload-device-list">
                                         <div class="offload-empty">Loading eligible devices...</div>
                                     </div>
@@ -25171,6 +25195,13 @@
                                             <button type="button" class="timeout-btn" data-timeout="14400" onclick="selectAgentTimeout(this)">4 hours</button>
                                             <button type="button" class="timeout-btn" data-timeout="0" onclick="selectAgentTimeout(this)">Unlimited</button>
                                         </div>
+                                    </div>
+                                    <div class="form-group" id="project-folder-group" style="display:none;">
+                                        <label class="form-label">Project Folder (for remote execution)</label>
+                                        <select class="form-input" id="agent-project-folder">
+                                            <option value="">None (prompt only)</option>
+                                        </select>
+                                        <div style="font-size:0.68rem; color:var(--text-secondary); margin-top:4px;">Selected folder will be synced to the remote device before the agent runs</div>
                                     </div>
                                 </div>
                             </div>
@@ -25807,7 +25838,9 @@
                         <div style="display:flex; align-items:center; gap:12px;">
                             <span class="device-status-badge" id="device-detail-badge"></span>
                             <button class="btn-test-connection" id="device-test-btn" onclick="testDeviceConnection()">Test Connection</button>
+                            <button class="btn-test-connection" id="device-detect-btn" onclick="autoDetectDevice()" style="background:var(--accent-muted); color:var(--accent);">Auto-detect</button>
                         </div>
+                        <div class="device-detect-results" id="device-detect-results" style="display:none; margin-top:8px; padding:10px; border-radius:8px; background:var(--bg-secondary); font-size:0.78rem;"></div>
                         <div class="ping-results" id="device-ping-results" style="display:none;"></div>
                         <div class="device-connection-log" id="device-connection-log">
                             <span class="connection-log-dot" id="connection-log-dot"></span>
@@ -25902,15 +25935,19 @@
                         <input type="text" id="add-device-name" placeholder="e.g. My Development Server">
                         <label>Device Type</label>
                         <select id="add-device-type">
-                            <option value="unknown">Unknown</option>
-                            <option value="linux_pc">Linux PC</option>
-                            <option value="windows_pc">Windows PC</option>
-                            <option value="mac">Mac</option>
+                            <option value="unknown">Auto-detect on first ping</option>
                             <option value="gpu_server">GPU Server</option>
+                            <option value="gpu_workstation">GPU Workstation</option>
+                            <option value="server">Server</option>
+                            <option value="desktop">Desktop</option>
+                            <option value="mac_apple_silicon">Mac (Apple Silicon)</option>
+                            <option value="mac_intel">Mac (Intel)</option>
+                            <option value="arm_server">ARM Server</option>
+                            <option value="sbc">SBC (Pi, Jetson, etc.)</option>
+                            <option value="windows_pc">Windows PC</option>
+                            <option value="linux_pc">Linux PC</option>
                             <option value="linux_server">Linux Server</option>
                             <option value="linux_laptop">Linux Laptop</option>
-                            <option value="server">Server</option>
-                            <option value="raspberry_pi">Raspberry Pi</option>
                         </select>
                         <label>Description</label>
                         <input type="text" id="add-device-desc" placeholder="Brief description">
@@ -27492,11 +27529,14 @@
             infoGrid.textContent = '';
             var infoRows = [
                 ['Hostname', deviceData.hostname || deviceId],
+                ['Type', (deviceData.device_type || 'unknown').replace(/_/g, ' ')],
                 ['OS', deviceData.os || '—'],
                 ['Architecture', deviceData.architecture || '—'],
+                ['RAM', deviceData.ram_gb ? deviceData.ram_gb + ' GB' : '—'],
+                ['CPU Cores', deviceData.cpu_cores ? deviceData.cpu_cores.toString() : '—'],
+                ['GPU', deviceData.gpu_info ? (Array.isArray(deviceData.gpu_info) ? deviceData.gpu_info.join(', ') : deviceData.gpu_info) : '—'],
                 ['Registered', deviceData.registered_at ? new Date(deviceData.registered_at).toLocaleDateString() : '—'],
                 ['Last Seen', deviceData.last_seen ? getTimeAgo(deviceData.last_seen) : 'Never'],
-                ['Conversations', (deviceData.conversation_count || 0).toString()],
             ];
             infoRows.forEach(function(r) {
                 var row = document.createElement('div');
@@ -30340,6 +30380,8 @@
                     if (data.auto_continue !== undefined) agent.auto_continue = data.auto_continue;
                     if (data.status) agent.status = data.status;
                     if (data.mission_debrief !== undefined) agent.mission_debrief = data.mission_debrief;
+                    if (data.user_directive !== undefined) agent.user_directive = data.user_directive;
+                    if (data.user_directive_set_at !== undefined) agent.user_directive_set_at = data.user_directive_set_at;
                     renderAgents();
                     // Update specops panel if open for this agent
                     if (agentPanelAgentId === data.agent_id && (agentPanelState === 'running')) {
@@ -30349,6 +30391,20 @@
                         }
                     }
                 }
+            });
+
+            // Listen for directive_set events (hot-swap from Command Center)
+            socket.on('directive_set', (data) => {
+                var agent = agents[data.agent_id];
+                if (agent) {
+                    agent.user_directive = data.directive;
+                    agent.user_directive_set_at = data.directive_set_at;
+                    if (agentPanelAgentId === data.agent_id) {
+                        updateSpecopsRunningPanel(agent);
+                    }
+                }
+                showToast('Directive set for ' + (data.call_sign || data.agent_id) +
+                    (data.force_cycle ? ' \u2014 cycling now' : ' \u2014 next cycle'), 'info');
             });
 
             // Listen for agent project assignment
@@ -32320,6 +32376,161 @@
                 }
             } catch (e) {
                 showToast('Failed to update offload config', 'error');
+            }
+        }
+
+        // ==================== DEVICE REFRESH & AUTO-DETECT ====================
+
+        async function refreshAllDevices() {
+            const btn = document.getElementById('refresh-devices-btn');
+            if (btn) { btn.style.opacity = '0.5'; btn.style.pointerEvents = 'none'; }
+            try {
+                const token = localStorage.getItem('cerebro_token');
+                const res = await fetch(API_URL + '/api/devices/refresh', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token },
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    const online = (data.results || []).filter(r => r.reachable).length;
+                    const total = (data.results || []).length;
+                    showToast(online + '/' + total + ' devices reachable', online > 0 ? 'success' : 'warning');
+                    if (typeof loadLiveActivityData === 'function') loadLiveActivityData();
+                } else {
+                    showToast('Refresh failed', 'error');
+                }
+            } catch (e) {
+                showToast('Refresh error: ' + e.message, 'error');
+            }
+            if (btn) { btn.style.opacity = '1'; btn.style.pointerEvents = ''; }
+        }
+
+        async function refreshDevicesForOffload() {
+            const btn = document.getElementById('offload-refresh-btn');
+            if (btn) { btn.textContent = 'Refreshing...'; btn.disabled = true; }
+            try {
+                const token = localStorage.getItem('cerebro_token');
+                await fetch(API_URL + '/api/devices/refresh', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token },
+                });
+                _offloadConfigLoaded = false;
+                await initOffloadConfig();
+                showToast('Devices refreshed', 'success');
+            } catch (e) {
+                showToast('Refresh failed', 'error');
+            }
+            if (btn) { btn.textContent = 'Refresh'; btn.disabled = false; }
+        }
+
+        async function autoDetectDevice() {
+            if (!_currentDeviceId) return;
+            const btn = document.getElementById('device-detect-btn');
+            const resultsDiv = document.getElementById('device-detect-results');
+            if (btn) { btn.textContent = 'Detecting...'; btn.disabled = true; }
+            if (resultsDiv) { resultsDiv.style.display = 'none'; }
+            try {
+                const token = localStorage.getItem('cerebro_token');
+                const res = await fetch(API_URL + '/api/devices/' + _currentDeviceId + '/detect', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token },
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('Detected: ' + (data.device_type || '').replace(/_/g, ' '), 'success');
+                    document.getElementById('device-detail-subtitle').textContent = (data.device_type || '').replace(/_/g, ' ') + ' — ' + (_currentDeviceId);
+                    const badge = document.getElementById('device-detail-badge');
+                    if (badge) { badge.className = 'device-status-badge online'; badge.textContent = 'Online'; }
+                    // Show probe details using safe DOM methods
+                    if (resultsDiv) {
+                        var probe = data.probe || {};
+                        resultsDiv.textContent = '';
+                        var detailItems = [];
+                        if (probe.distro) detailItems.push('OS: ' + probe.distro);
+                        if (probe.architecture) detailItems.push('Arch: ' + probe.architecture);
+                        if (probe.ram_gb) detailItems.push('RAM: ' + probe.ram_gb + ' GB');
+                        if (probe.cpu_cores) detailItems.push('CPU: ' + probe.cpu_cores + ' cores');
+                        if (probe.gpu_info) detailItems.push('GPU: ' + probe.gpu_info.join(', '));
+                        if (probe.product_name) detailItems.push('Product: ' + probe.product_name);
+                        if (probe.board_model) detailItems.push('Board: ' + probe.board_model);
+                        detailItems.forEach(function(item, i) {
+                            if (i > 0) resultsDiv.appendChild(document.createElement('br'));
+                            var span = document.createElement('span');
+                            span.textContent = item;
+                            resultsDiv.appendChild(span);
+                        });
+                        if (detailItems.length === 0) resultsDiv.textContent = 'Detection complete — type: ' + (data.device_type || 'unknown');
+                        resultsDiv.style.display = '';
+                    }
+                    // Update info grid
+                    var infoGrid = document.getElementById('device-info-grid');
+                    if (infoGrid && data.device) {
+                        infoGrid.textContent = '';
+                        var d = data.device;
+                        var rows = [
+                            ['Hostname', d.hostname || _currentDeviceId],
+                            ['Type', (d.device_type || '').replace(/_/g, ' ')],
+                            ['OS', d.os || '—'],
+                            ['Architecture', d.architecture || '—'],
+                            ['RAM', d.ram_gb ? d.ram_gb + ' GB' : '—'],
+                            ['CPU Cores', d.cpu_cores ? d.cpu_cores.toString() : '—'],
+                            ['GPU', d.gpu_info ? d.gpu_info.join(', ') : '—'],
+                            ['Registered', d.registered_at ? new Date(d.registered_at).toLocaleDateString() : '—'],
+                            ['Last Seen', d.last_seen ? getTimeAgo(d.last_seen) : 'Never'],
+                        ];
+                        rows.forEach(function(r) {
+                            var row = document.createElement('div');
+                            row.className = 'device-info-row';
+                            var lbl = document.createElement('span');
+                            lbl.className = 'device-info-label';
+                            lbl.textContent = r[0];
+                            row.appendChild(lbl);
+                            var val = document.createElement('span');
+                            val.className = 'device-info-value';
+                            val.textContent = r[1];
+                            row.appendChild(val);
+                            infoGrid.appendChild(row);
+                        });
+                    }
+                    if (typeof loadLiveActivityData === 'function') loadLiveActivityData();
+                } else {
+                    showToast('Detection failed: ' + (data.error || 'unknown'), 'error');
+                    if (resultsDiv) { resultsDiv.textContent = 'Error: ' + (data.error || 'unknown'); resultsDiv.style.display = ''; }
+                }
+            } catch (e) {
+                showToast('Detection error: ' + e.message, 'error');
+            }
+            if (btn) { btn.textContent = 'Auto-detect'; btn.disabled = false; }
+        }
+
+        // Load project folders for offload when opening advanced options
+        async function loadProjectFolders() {
+            var group = document.getElementById('project-folder-group');
+            var select = document.getElementById('agent-project-folder');
+            if (!group || !select) return;
+            try {
+                const token = localStorage.getItem('cerebro_token');
+                const cfgRes = await fetch(API_URL + '/api/offload/config', { headers: { 'Authorization': 'Bearer ' + token } });
+                const cfg = cfgRes.ok ? await cfgRes.json() : {};
+                if (!cfg.enabled) { group.style.display = 'none'; return; }
+                group.style.display = '';
+                const res = await fetch(API_URL + '/api/offload/available-folders', { headers: { 'Authorization': 'Bearer ' + token } });
+                const data = res.ok ? await res.json() : { folders: [] };
+                var prev = select.value;
+                select.textContent = '';
+                var defaultOpt = document.createElement('option');
+                defaultOpt.value = '';
+                defaultOpt.textContent = 'None (prompt only)';
+                select.appendChild(defaultOpt);
+                (data.folders || []).forEach(function(f) {
+                    var opt = document.createElement('option');
+                    opt.value = f.path;
+                    opt.textContent = f.mount + ' / ' + f.name + (f.entries ? ' (' + f.entries + ' items)' : '');
+                    select.appendChild(opt);
+                });
+                if (prev) select.value = prev;
+            } catch (e) {
+                group.style.display = 'none';
             }
         }
 
@@ -36632,6 +36843,22 @@
                 }
             }
 
+            // Show/hide pending directive badge
+            var existingDirectiveBadge = document.getElementById('specops-pending-directive');
+            if (existingDirectiveBadge) existingDirectiveBadge.remove();
+            if (agent.user_directive) {
+                var directiveDiv = document.createElement('div');
+                directiveDiv.id = 'specops-pending-directive';
+                directiveDiv.className = 'specops-pending-directive';
+                var truncated = agent.user_directive.length > 120 ? agent.user_directive.substring(0, 120) + '...' : agent.user_directive;
+                directiveDiv.innerHTML = '<span class="directive-badge">PENDING DIRECTIVE</span> "' +
+                    truncated.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '"';
+                var statusContainer = document.getElementById('specops-panel-status');
+                if (statusContainer && statusContainer.parentNode) {
+                    statusContainer.parentNode.insertBefore(directiveDiv, statusContainer.nextSibling);
+                }
+            }
+
             // Update cycle elapsed timer from started_at
             var specopsElapsedEl = document.getElementById('specops-panel-elapsed');
             if (specopsElapsedEl && agent.status === 'running' && agent.started_at) {
@@ -37264,6 +37491,8 @@
             if (options.classList.contains('hidden')) {
                 options.classList.remove('hidden');
                 arrow.textContent = '▼';
+                // Load project folders when offload is active
+                loadProjectFolders();
             } else {
                 options.classList.add('hidden');
                 arrow.textContent = '▶';
@@ -37357,28 +37586,31 @@
             }
 
             const model = document.getElementById('agent-model-select')?.value || 'sonnet';
-            spawnAgentEnhanced(task, selectedAgentRole, context, expectedOutput, priority, resources, agentTimeout, model);
+            const projectFolder = document.getElementById('agent-project-folder')?.value || null;
+            spawnAgentEnhanced(task, selectedAgentRole, context, expectedOutput, priority, resources, agentTimeout, model, projectFolder);
             closeAgentPanel();
         }
 
-        async function spawnAgentEnhanced(task, agentType, context, expectedOutput, priority, resources, timeout = 3600, model = 'sonnet') {
+        async function spawnAgentEnhanced(task, agentType, context, expectedOutput, priority, resources, timeout = 3600, model = 'sonnet', projectFolder = null) {
             try {
+                var payload = {
+                    task,
+                    agent_type: agentType,
+                    context,
+                    expected_output: expectedOutput,
+                    priority,
+                    resources,
+                    timeout,
+                    model
+                };
+                if (projectFolder) payload.project_folder = projectFolder;
                 const response = await fetch(`${API_URL}/agents`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        task,
-                        agent_type: agentType,
-                        context,
-                        expected_output: expectedOutput,
-                        priority,
-                        resources,
-                        timeout,
-                        model
-                    })
+                    body: JSON.stringify(payload)
                 });
 
                 const data = await response.json();
