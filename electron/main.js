@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const net = require('net');
@@ -602,6 +602,16 @@ app.whenReady().then(async () => {
 
   autoUpdater.on('error', (err) => {
     console.log('[Main] Auto-updater error (non-fatal):', err.message);
+  });
+
+  // Grant microphone & audio permissions so voice/STT works without prompts
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    const allowed = ['media', 'audioCapture', 'mediaKeySystem'];
+    callback(allowed.includes(permission));
+  });
+  session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
+    const allowed = ['media', 'audioCapture', 'mediaKeySystem'];
+    return allowed.includes(permission);
   });
 
   createSplashWindow();
