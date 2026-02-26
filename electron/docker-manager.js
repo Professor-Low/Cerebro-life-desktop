@@ -498,24 +498,43 @@ class DockerManager extends EventEmitter {
 
   /**
    * Pull Docker images (for initial setup or updates).
+   * Core services (redis, backend) are required — failure blocks setup.
+   * Optional services (kokoro-tts) are pulled separately — failure is non-fatal.
    */
   async pullImages(onProgress) {
-    if (onProgress) onProgress({ stage: 'pulling', message: 'Pulling Docker images...' });
+    if (onProgress) onProgress({ stage: 'pulling', message: 'Pulling core images...' });
 
+    // Pull core services first (required)
     try {
       await this._spawnWithOutput(
         this._dockerCmd(),
-        ['compose', '-f', COMPOSE_FILE, '--env-file', ENV_FILE, 'pull'],
+        ['compose', '-f', COMPOSE_FILE, '--env-file', ENV_FILE, 'pull', 'redis', 'backend'],
         (line) => {
           if (onProgress) onProgress({ stage: 'pulling', message: line.trim() });
         }
       );
-      if (onProgress) onProgress({ stage: 'done', message: 'Images pulled successfully' });
-      return true;
     } catch (err) {
       if (onProgress) onProgress({ stage: 'error', message: err.message });
       throw err;
     }
+
+    // Pull optional services (non-fatal — TTS is large and may fail on slow connections)
+    if (onProgress) onProgress({ stage: 'pulling', message: 'Pulling voice engine (this may take a few minutes)...' });
+    try {
+      await this._spawnWithOutput(
+        this._dockerCmd(),
+        ['compose', '-f', COMPOSE_FILE, '--env-file', ENV_FILE, 'pull', 'kokoro-tts'],
+        (line) => {
+          if (onProgress) onProgress({ stage: 'pulling', message: line.trim() });
+        }
+      );
+    } catch (err) {
+      console.warn('[Docker] Kokoro TTS pull failed (non-fatal):', err.message);
+      if (onProgress) onProgress({ stage: 'pulling', message: 'Voice engine skipped — will retry on next update' });
+    }
+
+    if (onProgress) onProgress({ stage: 'done', message: 'Images pulled successfully' });
+    return true;
   }
 
   /**
