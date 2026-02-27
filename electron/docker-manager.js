@@ -1094,7 +1094,8 @@ class DockerManager extends EventEmitter {
    */
   _runElevated(exePath, args, options = {}) {
     return new Promise((resolve, reject) => {
-      const argsStr = args.map(a => `'${a}'`).join(',');
+      // Escape single quotes inside args by doubling them (PowerShell convention)
+      const argsStr = args.map(a => "'" + a.replace(/'/g, "''") + "'").join(',');
       const psArgs = [
         '-NoProfile', '-Command',
         `Start-Process -FilePath '${exePath}' -ArgumentList ${argsStr} -Verb RunAs -Wait -PassThru | ForEach-Object { exit $_.ExitCode }`,
@@ -1792,13 +1793,33 @@ class DockerManager extends EventEmitter {
   async isDefenderExcluded() {
     if (process.platform !== 'win32') return true;
     try {
-      const result = await this._run('powershell.exe', [
-        '-NoProfile', '-Command',
-        '(Get-MpPreference).ExclusionPath -join "|||"',
-      ], { timeout: 10000 });
-      const exclusions = result.split('|||').map(s => s.trim().toLowerCase());
-      const appDir = path.dirname(process.execPath).toLowerCase();
-      return exclusions.some(e => appDir.startsWith(e) || e.startsWith(appDir));
+      // Get-MpPreference requires admin to read exclusions.
+      // Use a temp script + elevation to check both path AND process exclusions.
+      const appDir = path.dirname(process.execPath);
+      const exeName = path.basename(process.execPath);
+      const resultFile = path.join(os.tmpdir(), `cerebro-defcheck-${Date.now()}.txt`);
+      const scriptPath = path.join(os.tmpdir(), `cerebro-defcheck-${Date.now()}.ps1`);
+      const scriptContent = [
+        '$ErrorActionPreference = "SilentlyContinue"',
+        '$p = Get-MpPreference',
+        `$hasPath = $p.ExclusionPath -contains "${appDir}"`,
+        `$hasProc = $p.ExclusionProcess -contains "${exeName}"`,
+        `Set-Content -Path "${resultFile}" -Value "$hasPath|$hasProc"`,
+      ].join('\r\n');
+      fs.writeFileSync(scriptPath, scriptContent, 'utf-8');
+
+      try {
+        await this._runElevated('powershell.exe', [
+          '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath,
+        ], { timeout: 15000 });
+
+        const result = fs.readFileSync(resultFile, 'utf-8').trim();
+        const [hasPath, hasProc] = result.split('|');
+        return hasPath === 'True' && hasProc === 'True';
+      } finally {
+        try { fs.unlinkSync(scriptPath); } catch {}
+        try { fs.unlinkSync(resultFile); } catch {}
+      }
     } catch {
       return false;
     }
@@ -1816,31 +1837,65 @@ class DockerManager extends EventEmitter {
     const appDir = path.dirname(process.execPath);
     const exeName = path.basename(process.execPath);
     const dataDir = CEREBRO_DIR;
+    const markerPath = path.join(CEREBRO_DIR, '.defender-excluded');
 
     try {
-      // Add path exclusions AND process exclusion, then clear threat history.
-      // The process exclusion (-ExclusionProcess) is critical because Defender's
-      // behavioral detection (Behavior:Win32/LummaStealer) monitors process
-      // activity, not just file paths.
-      // Clearing threat history is critical because once Defender flags an exe,
-      // it kills ALL future instances on sight until the threat is allowed.
-      await this._runElevated('powershell.exe', [
-        '-NoProfile', '-Command',
-        `$ErrorActionPreference = 'SilentlyContinue'; ` +
-        `Add-MpPreference -ExclusionPath '${appDir}'; ` +
-        `Add-MpPreference -ExclusionPath '${dataDir}'; ` +
-        `Add-MpPreference -ExclusionProcess '${exeName}'; ` +
-        `Get-MpThreat | Where-Object { $_.Resources -match 'Cerebro' } | ForEach-Object { ` +
-        `Add-MpPreference -ThreatIDDefaultAction_Ids $_.ThreatID -ThreatIDDefaultAction_Actions Allow }`,
-      ], { timeout: 30000 });
+      // Write a temp .ps1 script to avoid all PowerShell quoting issues.
+      // The script adds path + process exclusions, clears threat history,
+      // then self-verifies and writes a result file.
+      const resultFile = path.join(os.tmpdir(), `cerebro-defender-${Date.now()}.txt`);
+      const scriptPath = path.join(os.tmpdir(), `cerebro-defender-${Date.now()}.ps1`);
+      const scriptContent = [
+        '$ErrorActionPreference = "SilentlyContinue"',
+        `Add-MpPreference -ExclusionPath "${appDir}"`,
+        `Add-MpPreference -ExclusionPath "${dataDir}"`,
+        `Add-MpPreference -ExclusionProcess "${exeName}"`,
+        // Clear existing threat history for Cerebro
+        `Get-MpThreat | Where-Object { $_.Resources -match 'Cerebro' } | ForEach-Object {`,
+        `  Add-MpPreference -ThreatIDDefaultAction_Ids $_.ThreatID -ThreatIDDefaultAction_Actions Allow`,
+        `}`,
+        // Self-verify: check that both path AND process exclusions are present
+        `$prefs = Get-MpPreference`,
+        `$hasPath = $prefs.ExclusionPath -contains "${appDir}"`,
+        `$hasProc = $prefs.ExclusionProcess -contains "${exeName}"`,
+        `if ($hasPath -and $hasProc) {`,
+        `  Set-Content -Path "${resultFile}" -Value "OK"`,
+        `} else {`,
+        `  Set-Content -Path "${resultFile}" -Value "PARTIAL:path=$hasPath,proc=$hasProc"`,
+        `}`,
+      ].join('\r\n');
 
-      // Write marker so we don't prompt again
-      const markerPath = path.join(CEREBRO_DIR, '.defender-excluded');
-      fs.writeFileSync(markerPath, new Date().toISOString());
-      console.log(`[Docker] Defender exclusions added: ${appDir}, ${dataDir}, process:${exeName}`);
-      return { success: true };
+      fs.writeFileSync(scriptPath, scriptContent, 'utf-8');
+
+      try {
+        // Execute the script elevated
+        await this._runElevated('powershell.exe', [
+          '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath,
+        ], { timeout: 30000 });
+
+        // Read self-verification result
+        let verified = false;
+        try {
+          const result = fs.readFileSync(resultFile, 'utf-8').trim();
+          verified = result === 'OK';
+          if (!verified) console.warn('[Docker] Defender exclusion partial:', result);
+        } catch {
+          // Result file not created — script may not have run
+          console.warn('[Docker] Defender result file not found — UAC may have been denied');
+        }
+
+        // Write marker with verification status
+        fs.writeFileSync(markerPath, verified ? new Date().toISOString() : 'failed');
+        console.log(`[Docker] Defender exclusions ${verified ? 'verified' : 'attempted'}: ${appDir}, ${dataDir}, process:${exeName}`);
+        return { success: verified };
+      } finally {
+        // Clean up temp files
+        try { fs.unlinkSync(scriptPath); } catch {}
+        try { fs.unlinkSync(resultFile); } catch {}
+      }
     } catch (err) {
       console.error('[Docker] Failed to add Defender exclusion:', err.message);
+      try { fs.writeFileSync(markerPath, 'failed'); } catch {}
       return { success: false, error: err.message };
     }
   }

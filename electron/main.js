@@ -371,15 +371,36 @@ function showSetupWizard() {
 
 async function ensureDefenderExclusion() {
   if (process.platform !== 'win32') return;
-  if (dockerManager.hasDefenderExclusionMarker()) return;
 
-  // Check if actually excluded already (e.g. user added manually)
-  const excluded = await dockerManager.isDefenderExcluded();
-  if (excluded) {
-    // Write marker so we skip the check next time
-    const markerPath = path.join(require('os').homedir(), '.cerebro', '.defender-excluded');
-    fs.writeFileSync(markerPath, new Date().toISOString());
-    return;
+  // Check marker — but re-verify if marker is older than 7 days or says "failed"
+  const markerPath = path.join(require('os').homedir(), '.cerebro', '.defender-excluded');
+  let needsCheck = true;
+  try {
+    if (fs.existsSync(markerPath)) {
+      const content = fs.readFileSync(markerPath, 'utf-8').trim();
+      if (content.toLowerCase() === 'failed') {
+        needsCheck = true; // Previous attempt failed — must retry
+      } else {
+        // Check if marker is fresh (less than 7 days old)
+        const markerDate = new Date(content);
+        const ageMs = Date.now() - markerDate.getTime();
+        const sevenDays = 7 * 24 * 60 * 60 * 1000;
+        if (!isNaN(markerDate.getTime()) && ageMs < sevenDays) {
+          return; // Marker is fresh and valid — skip check
+        }
+        console.log('[Main] Defender exclusion marker is stale, re-verifying...');
+      }
+    }
+  } catch {}
+
+  if (needsCheck) {
+    // Verify actual exclusion state (runs elevated check)
+    const excluded = await dockerManager.isDefenderExcluded().catch(() => false);
+    if (excluded) {
+      // Refresh marker timestamp
+      try { fs.writeFileSync(markerPath, new Date().toISOString()); } catch {}
+      return;
+    }
   }
 
   console.log('[Main] Defender exclusion not found — requesting elevation to add it');
@@ -922,23 +943,37 @@ ipcMain.handle('apply-update', async () => {
     // on launch if the process exclusion isn't set. This must happen now,
     // while the CURRENT (already-running) process is still alive.
     if (process.platform === 'win32') {
+      // addDefenderExclusion() now self-verifies inside the elevated context,
+      // so we trust its result rather than re-checking with isDefenderExcluded()
+      // (which also needs elevation and would trigger a second UAC prompt).
+      let defenderOk = false;
       try {
+        // First attempt via ensureDefenderExclusion (checks marker freshness)
         await ensureDefenderExclusion();
-      } catch {}
-      // Verify the exclusion actually worked — if not, warn the user
-      const excluded = await dockerManager.isDefenderExcluded().catch(() => false);
-      if (!excluded) {
-        // Try one more time with direct elevation
-        try {
-          await dockerManager.addDefenderExclusion();
-        } catch {}
-        const retryOk = await dockerManager.isDefenderExcluded().catch(() => false);
-        if (!retryOk) {
-          return {
-            success: false,
-            error: 'Windows Defender is blocking Cerebro. Please open PowerShell as Administrator and run:\n\nAdd-MpPreference -ExclusionProcess "Cerebro.exe"\n\nThen try the update again.'
-          };
+        defenderOk = dockerManager.hasDefenderExclusionMarker();
+        // Marker content "failed" means it didn't work
+        if (defenderOk) {
+          const markerPath = path.join(require('os').homedir(), '.cerebro', '.defender-excluded');
+          try {
+            const content = fs.readFileSync(markerPath, 'utf-8').trim().toLowerCase();
+            if (content === 'failed') defenderOk = false;
+          } catch {}
         }
+      } catch {}
+
+      if (!defenderOk) {
+        // Direct retry with addDefenderExclusion (self-verifying)
+        try {
+          const result = await dockerManager.addDefenderExclusion();
+          defenderOk = result.success;
+        } catch {}
+      }
+
+      if (!defenderOk) {
+        return {
+          success: false,
+          error: 'Windows Defender is blocking Cerebro. Please open PowerShell as Administrator and run:\n\nAdd-MpPreference -ExclusionProcess "Cerebro.exe"\n\nThen try the update again.'
+        };
       }
     }
 
