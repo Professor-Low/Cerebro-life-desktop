@@ -24054,9 +24054,9 @@
                             </button>
                         </div>
                         <div class="agents-tab-control">
-                            <button class="agents-tab active" data-tab="user" onclick="switchAgentsTab('user')">My Agents</button>
-                            <button class="agents-tab" data-tab="cerebro" onclick="switchAgentsTab('cerebro')">Cerebro</button>
-                            <button class="agents-tab" data-tab="idle" onclick="switchAgentsTab('idle')">Idle</button>
+                            <button class="agents-tab active" data-tab="all" onclick="switchAgentsTab('all')">All Agents</button>
+                            <button class="agents-tab" data-tab="user" onclick="switchAgentsTab('user')">My Agents</button>
+                            <button class="agents-tab" data-tab="cerebro" onclick="switchAgentsTab('cerebro')">Cerebro's Agents</button>
                         </div>
                         <div class="agents-toolbar">
                             <input type="text" class="agents-search" id="agents-search-input" placeholder="Search agents..." oninput="filterAgents()">
@@ -34870,8 +34870,8 @@
                 );
             }
 
-            // Filter by active tab source
-            const tabAgents = agentSelectMode
+            // Filter by active tab source ('all' shows everything)
+            const tabAgents = (agentSelectMode || activeAgentsTab === 'all')
                 ? allAgents
                 : allAgents.filter(a => getAgentSource(a) === activeAgentsTab);
 
@@ -34913,9 +34913,9 @@
 
             // Empty state messages per tab
             const emptyMessages = {
+                all: 'Spawn agents from the + Spawn button or chat',
                 user: 'Spawn agents from the + Spawn button or chat',
-                cerebro: 'Cerebro will spawn agents when processing directives',
-                idle: 'Idle task agents appear during downtime'
+                cerebro: "Cerebro's autonomous agents will appear here"
             };
 
             // Render only leaf agents (parents hidden, accessible via chain nav breadcrumbs)
@@ -35166,12 +35166,14 @@
         }
 
         // ===== AGENTS TAB CONTROL =====
-        let activeAgentsTab = 'user';  // 'user', 'cerebro', 'idle'
+        let activeAgentsTab = 'all';  // 'all', 'user', 'cerebro'
 
         function getAgentSource(agent) {
-            // Completed/failed scheduler agents route to idle tab for review
-            if (agent.source === 'scheduler') return 'idle';
+            // Scheduler and idle agents route to cerebro tab
+            if (agent.source === 'scheduler') return 'cerebro';
             // Explicit source field (new agents)
+            if (agent.source === 'cerebro') return 'cerebro';
+            if (agent.source === 'idle') return 'cerebro';
             if (agent.source) return agent.source;
             // Legacy fallback: directive_id implies cerebro
             if (agent.directive_id) return 'cerebro';
@@ -35185,9 +35187,9 @@
             document.querySelectorAll('.agents-tab').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.tab === tab);
             });
-            // Show/hide spawn button (only on 'user' tab)
+            // Show/hide spawn button (on 'all' and 'user' tabs)
             const spawnBtn = document.querySelector('.spawn-agent-btn');
-            if (spawnBtn) spawnBtn.style.display = tab === 'user' ? '' : 'none';
+            if (spawnBtn) spawnBtn.style.display = (tab === 'all' || tab === 'user') ? '' : 'none';
             // Collapse archive when switching tabs
             archiveSectionExpanded = false;
             const icon = document.getElementById('archive-toggle-icon');
@@ -35470,9 +35472,9 @@
 
             if (sortedKeys.length === 0) {
                 const emptyMessages = {
+                    all: 'Spawn agents from the + Spawn button or chat',
                     user: 'Spawn agents from the + Spawn button or chat',
-                    cerebro: 'Cerebro will spawn agents when processing directives',
-                    idle: 'Idle task agents appear during downtime'
+                    cerebro: "Cerebro's autonomous agents will appear here"
                 };
                 const noAgentsDiv = document.createElement('div');
                 noAgentsDiv.className = 'no-agents';
