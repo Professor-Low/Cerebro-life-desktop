@@ -777,6 +777,12 @@ async def create_notification(notif_type: str, title: str, message: str, link: s
 active_agents = {}  # agent_id -> agent_info
 _specops_locks: dict[str, asyncio.Lock] = {}
 
+# Dev server reverse proxy registry
+_active_dev_servers: dict[int, dict] = {}  # port -> {port, name, agent_id, framework, registered_at}
+DEV_SERVER_PORT_MIN = 1024
+DEV_SERVER_PORT_MAX = 65535
+DEV_SERVER_BLOCKED_PORTS = {59000, 6379, 8880}  # backend, Redis, TTS
+
 
 def reload_agents_from_persistence():
     """Reload recent agents from persistence on server restart.
@@ -842,6 +848,8 @@ def reload_agents_from_persistence():
 
         # Populate used_call_signs from loaded agents to prevent collisions
         used_call_signs.update(active_agents.keys())
+        # Clear dev server registry on restart (no servers survive restart)
+        _active_dev_servers.clear()
         print(f"[Startup] Reloaded {loaded} agents from persistence ({len(used_call_signs)} call signs tracked)")
     except Exception as e:
         print(f"[Startup] Error reloading agents: {e}")
@@ -1195,6 +1203,33 @@ SSH keys at ~/.ssh/. Registered devices:
 {device_list}
 """
 
+_CEREBRO_CAP_DEV_SERVER = """### Dev Server Hosting (Show Apps to User)
+When you build a web app (React, Flask, etc.), the user can view it in their browser through Cerebro's reverse proxy.
+
+**Steps:**
+1. Start your dev server bound to all interfaces: `--host 0.0.0.0`
+   - React/Vite: `npm run dev -- --host 0.0.0.0 --port 3000`
+   - Python: `python -m http.server 8080 --bind 0.0.0.0`
+   - Flask: `flask run --host 0.0.0.0 --port 5000`
+2. Register with Cerebro so the app is **automatically opened** in the user's Chrome browser (new tab):
+   ```bash
+   curl -s -X POST http://localhost:59000/api/dev-servers \\
+     -H "Authorization: Bearer $TOKEN" \\
+     -H "Content-Type: application/json" \\
+     -d '{{"port": 3000, "name": "My App", "framework": "react"}}'
+   ```
+   The user will see the app immediately — no need to tell them to visit a URL.
+3. You can also manually navigate Chrome via `POST /api/browser/agent/navigate` if needed.
+4. When done, clean up:
+   ```bash
+   curl -s -X DELETE http://localhost:59000/api/dev-servers/3000 \\
+     -H "Authorization: Bearer $TOKEN"
+   ```
+
+The proxy handles HTML, JS, CSS, WebSocket (HMR/hot reload) — everything just works.
+IMPORTANT: Always use `--host 0.0.0.0` so the server binds to all interfaces, not just 127.0.0.1.
+"""
+
 # Layer 5: Chat identity (full hub persona for the chat page)
 _CEREBRO_CHAT_IDENTITY = """You are Cerebro — {user_name}'s persistent AI companion and operational hub.
 
@@ -1236,9 +1271,26 @@ You have --dangerously-skip-permissions enabled.
 - Use `hostname`, `uname -a`, `ip addr` to discover the system
 
 ### Cerebro HTTP API (localhost:59000)
-- Browser control: GET /api/browser/page_state, POST /api/browser/click, /fill, /scroll, /press_key
-- Screenshots: GET /api/browser/screenshot/file
 - Ask user: POST /api/agent/ask (blocks until user responds, 5min timeout)
+
+### Your Chrome Browser
+You have a **shared Chrome browser** that YOU control. It's your browser — you can open tabs, close tabs, navigate, click, fill forms, take screenshots. When the user says "close the browser tab" or "open Google", they mean YOUR Chrome.
+
+**Tab management:**
+- List all open tabs: `curl -s http://localhost:59000/internal/browser/tabs`
+- Open new tab: `curl -s -X POST http://localhost:59000/internal/browser/tab/new -H "Content-Type: application/json" -d '{{"url": "https://google.com"}}'`
+- Close a tab: `curl -s -X POST http://localhost:59000/internal/browser/tab/close -H "Content-Type: application/json" -d '{{"tab_id": "TAB_ID"}}'`
+- Navigate current tab: `curl -s -X POST http://localhost:59000/internal/browser/navigate -H "Content-Type: application/json" -d '{{"url": "https://google.com"}}'`
+
+**Page interaction (use with agent token if available):**
+- Page state: GET /api/browser/page_state
+- Click: POST /api/browser/click
+- Fill: POST /api/browser/fill
+- Scroll: POST /api/browser/scroll
+- Press key: POST /api/browser/press_key
+- Screenshot: GET /api/browser/screenshot/file
+
+**Workflow for closing tabs:** First list tabs to get the tab_id, then close the one matching the URL or title the user described. If the user says "close the browser" they mean close the tab(s) they're referring to, not shut down Chrome itself.
 
 ### Spawning Agents
 **Endpoint:** POST http://localhost:59000/internal/chat-spawn-agent
@@ -1391,10 +1443,22 @@ You are the orchestrator of the user's network. You have --dangerously-skip-perm
 - Use `cat /data/memory/network_config.json` to discover available SSH targets
 
 ### Cerebro HTTP API (localhost:59000)
-- Browser control: /api/browser/page_state, /api/browser/click, /api/browser/fill
 - Trading (Alpaca): /api/trading/positions, /api/trading/order
 - Ask user: /api/agent/ask (blocks until human responds)
 - Spawn agents: POST /internal/chat-spawn-agent
+
+### Your Chrome Browser
+You have a **shared Chrome browser** that YOU control. When the user mentions "the browser", "Chrome", or asks you to open/close tabs, they mean YOUR browser.
+
+**Tab management (no auth needed):**
+- List tabs: `curl -s http://localhost:59000/internal/browser/tabs`
+- Open tab: `curl -s -X POST http://localhost:59000/internal/browser/tab/new -H "Content-Type: application/json" -d '{{"url": "https://google.com"}}'`
+- Close tab: `curl -s -X POST http://localhost:59000/internal/browser/tab/close -H "Content-Type: application/json" -d '{{"tab_id": "TAB_ID"}}'`
+- Navigate: `curl -s -X POST http://localhost:59000/internal/browser/navigate -H "Content-Type: application/json" -d '{{"url": "https://google.com"}}'`
+- Page interaction: /api/browser/page_state, /api/browser/click, /api/browser/fill, /api/browser/scroll
+- Screenshot: GET /api/browser/screenshot/file
+
+**To close a tab:** List tabs first to find the tab_id, then close it.
   - Basic: `curl -s -X POST http://localhost:59000/internal/chat-spawn-agent -H "Content-Type: application/json" -d '{{"task":"...", "agent_type":"worker", "model":"sonnet"}}'`
   - SpecOps: Add `"specops_config": {{"mission_name":"...", "work_style":"cycle", "cycle_interval":3600, "mission_duration":259200}}`
   - IMPORTANT: Always use work_style "cycle" for SpecOps. Ask user for cycle_interval and mission_duration if not specified.
@@ -1519,17 +1583,29 @@ notepad.exe "C:\\\\path\\\\to\\\\file.txt" &
 NEVER use bare `start notepad` — it WILL trigger the Windows app picker dialog.
 NEVER use `open` — that's macOS, not Windows.
 
+### Your Chrome Browser
+You have a **shared Chrome browser** that YOU control via Cerebro's backend API. When the user mentions "the browser", "Chrome", or asks you to open/close tabs, they mean YOUR browser.
+
+**Tab management (no auth needed):**
+- List tabs: `curl -s http://localhost:61000/internal/browser/tabs`
+- Open tab: `curl -s -X POST http://localhost:61000/internal/browser/tab/new -H "Content-Type: application/json" -d '{{"url": "https://google.com"}}'`
+- Close tab: `curl -s -X POST http://localhost:61000/internal/browser/tab/close -H "Content-Type: application/json" -d '{{"tab_id": "TAB_ID"}}'`
+- Navigate: `curl -s -X POST http://localhost:61000/internal/browser/navigate -H "Content-Type: application/json" -d '{{"url": "https://google.com"}}'`
+- Screenshot: `curl -s http://localhost:61000/api/browser/screenshot/file`
+
+**To close a tab:** List tabs first to find the tab_id, then close it.
+
 ### Agent Control (Central Command)
 You can monitor and control running SpecOps agents from chat.
 
 **List active agents:**
 ```bash
-curl -s http://localhost:59000/internal/agents/active
+curl -s http://localhost:61000/internal/agents/active
 ```
 
 **Set directive for next cycle (hot-swap what agent does):**
 ```bash
-curl -s -X PUT http://localhost:59000/internal/agent/AGENT_ID/directive \
+curl -s -X PUT http://localhost:61000/internal/agent/AGENT_ID/directive \
   -H "Content-Type: application/json" \
   -d '{{"directive": "New instructions here", "force_cycle": false, "mode": "override"}}'
 ```
@@ -1539,19 +1615,19 @@ curl -s -X PUT http://localhost:59000/internal/agent/AGENT_ID/directive \
 
 **Force next cycle immediately:**
 ```bash
-curl -s -X POST http://localhost:59000/agents/AGENT_ID/specops/force-cycle -H "Authorization: Bearer $TOKEN"
+curl -s -X POST http://localhost:61000/agents/AGENT_ID/specops/force-cycle -H "Authorization: Bearer $TOKEN"
 ```
 
 **Pause/Resume agent:**
 ```bash
-curl -s -X PATCH http://localhost:59000/agents/AGENT_ID/specops \
+curl -s -X PATCH http://localhost:61000/agents/AGENT_ID/specops \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{{"auto_continue": false}}'
 ```
 
 **Stop agent:**
 ```bash
-curl -s -X DELETE http://localhost:59000/agents/AGENT_ID -H "Authorization: Bearer $TOKEN"
+curl -s -X DELETE http://localhost:61000/agents/AGENT_ID -H "Authorization: Bearer $TOKEN"
 ```
 
 RULES: When the user asks about agents, call /internal/agents/active first. Confirm agent identity before making changes. After setting a directive, tell the user when it takes effect.
@@ -1602,13 +1678,13 @@ RULES: When user asks to create an automation, extract: name, what it does (prom
 
 # Role → capability blocks mapping
 _ROLE_CAPABILITIES = {
-    "worker":       ["ask_user"],
+    "worker":       ["ask_user", "dev_server"],
     "researcher":   ["browser", "ask_user"],
-    "coder":        ["ask_user"],
+    "coder":        ["ask_user", "dev_server"],
     "analyst":      ["trading", "ask_user"],
-    "orchestrator": ["orchestrator", "ask_user"],
-    "browser":      ["browser", "ask_user"],
-    "specops":      ["browser", "ask_user"],
+    "orchestrator": ["orchestrator", "ask_user", "dev_server"],
+    "browser":      ["browser", "ask_user", "dev_server"],
+    "specops":      ["browser", "ask_user", "dev_server"],
 }
 
 def _get_user_name() -> str:
@@ -1661,6 +1737,7 @@ def _build_agent_capabilities(role: str, agent_token: str, call_sign: str, user_
         "ask_user": _CEREBRO_CAP_ASK_USER.format(user_name=user_name, call_sign=call_sign),
         "spawn": _CEREBRO_CAP_SPAWN.format(call_sign=call_sign),
         "orchestrator": _CEREBRO_CAP_ORCHESTRATOR.format(call_sign=call_sign),
+        "dev_server": _CEREBRO_CAP_DEV_SERVER,
     }
 
     for cap in caps:
@@ -3265,6 +3342,9 @@ async def run_agent(
             # Save to AI Memory for persistence
             await save_agent_to_memory(agent)
 
+            # Clean up any dev servers registered by this agent
+            await _cleanup_dev_servers_for_agent(agent_id)
+
             if not is_specops:
                 # Auto-categorize into project (non-blocking)
                 asyncio.create_task(auto_categorize_agent(agent))
@@ -4142,7 +4222,7 @@ def _build_chat_prompt(content: str, session_id: str) -> str:
     user_name = _get_user_name()
     platform_ctx = _CHAT_PLATFORM_STANDALONE if _IS_STANDALONE else (_CHAT_PLATFORM_LINUX if _IS_LINUX else _CHAT_PLATFORM_WINDOWS)
     chat_identity = _CEREBRO_CHAT_IDENTITY.format(user_name=user_name, platform_context=platform_ctx)
-    parts = [chat_identity]
+    parts = [chat_identity, _CEREBRO_CAP_DEV_SERVER]
 
     # Inject active agent roster so Cerebro is immediately aware of deployed agents
     roster = _build_active_agent_roster()
@@ -5661,6 +5741,9 @@ async def stop_agent(agent_id: str, user: str = Depends(verify_token)):
         print(f"[Stop] Agent {agent_id} persisted to NAS (output: {len(partial_output)} chars)")
     except Exception as e:
         print(f"[Stop] Failed to persist agent {agent_id}: {e}")
+
+    # Clean up any dev servers registered by this agent
+    await _cleanup_dev_servers_for_agent(agent_id)
 
     # Emit update to frontend
     await sio.emit("agent_update", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
@@ -13285,6 +13368,60 @@ async def browser_close_tab(tab_id: str, user: str = Depends(verify_token)):
     return {"success": success}
 
 
+# --- Internal (no-auth) browser routes for chat agent ---
+
+@app.get("/internal/browser/tabs")
+async def internal_browser_tabs():
+    """List all open browser tabs (no auth, for chat agent)."""
+    from cognitive_loop.browser_manager import get_browser_manager
+    mgr = get_browser_manager()
+    tabs = await mgr.get_all_pages()
+    return {"tabs": tabs}
+
+
+@app.post("/internal/browser/tab/close")
+async def internal_browser_close_tab(request: Request):
+    """Close a browser tab by tab_id (no auth, for chat agent)."""
+    from cognitive_loop.browser_manager import get_browser_manager
+    body = await request.json()
+    tab_id = body.get("tab_id", "")
+    if not tab_id:
+        raise HTTPException(400, "tab_id is required")
+    mgr = get_browser_manager()
+    success = await mgr.close_tab(tab_id)
+    if success:
+        await sio.emit("browser_tab_closed", {"tab_id": tab_id}, room=os.environ.get("CEREBRO_ROOM", "default"))
+    return {"success": success}
+
+
+@app.post("/internal/browser/tab/new")
+async def internal_browser_new_tab(request: Request):
+    """Open a new browser tab (no auth, for chat agent)."""
+    from cognitive_loop.browser_manager import get_browser_manager
+    body = await request.json()
+    url = body.get("url")
+    mgr = get_browser_manager()
+    result = await mgr.open_new_tab(url)
+    await sio.emit("browser_tab_opened", result, room=os.environ.get("CEREBRO_ROOM", "default"))
+    return result
+
+
+@app.post("/internal/browser/navigate")
+async def internal_browser_navigate(request: Request):
+    """Navigate the current browser tab to a URL (no auth, for chat agent)."""
+    from cognitive_loop.browser_manager import get_browser_manager
+    body = await request.json()
+    url = body.get("url", "")
+    if not url:
+        raise HTTPException(400, "url is required")
+    mgr = get_browser_manager()
+    page = await mgr.get_current_page()
+    if not page:
+        raise HTTPException(500, "No active browser page")
+    await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+    return {"success": True, "url": url}
+
+
 @app.post("/api/browser/user-done")
 async def browser_user_done(user: str = Depends(verify_token)):
     """User signals they're done with manual browser action (CAPTCHA, login, etc.)."""
@@ -15611,6 +15748,279 @@ async def reject_device_command(action_id: str, user: str = Depends(verify_token
         pass
 
     return {"action_id": action_id, "status": "rejected", "command": pending["command"]}
+
+
+# ============================================================================
+# Dev Server Reverse Proxy
+# ============================================================================
+
+async def _cleanup_dev_servers_for_agent(agent_id: str):
+    """Remove all dev servers registered by a specific agent."""
+    ports_to_remove = [
+        port for port, info in _active_dev_servers.items()
+        if info.get("agent_id") == agent_id
+    ]
+    for port in ports_to_remove:
+        info = _active_dev_servers.pop(port, None)
+        if info:
+            print(f"[DevServer] Auto-deregistered port {port} (agent {agent_id} finished)")
+            try:
+                await sio.emit("dev_server_update", {
+                    "action": "deregistered",
+                    "port": port,
+                    "name": info.get("name", ""),
+                }, room=os.environ.get("CEREBRO_ROOM", "default"))
+            except Exception:
+                pass
+
+
+async def _open_dev_server_in_browser(url: str, name: str):
+    """Open a dev server app in a new Chrome tab via the shared browser."""
+    try:
+        from cognitive_loop.browser_manager import get_browser_manager
+        mgr = get_browser_manager()
+        result = await mgr.open_new_tab(url)
+        await sio.emit("browser_tab_opened", result, room=os.environ.get("CEREBRO_ROOM", "default"))
+        print(f"[DevServer] Opened {name} in Chrome: {url}")
+    except Exception as e:
+        print(f"[DevServer] Could not open {name} in Chrome (browser may not be running): {e}")
+
+
+@app.post("/api/dev-servers")
+async def register_dev_server(request: Request, user: str = Depends(verify_token)):
+    """Register a dev server for reverse proxying."""
+    body = await request.json()
+    port = body.get("port")
+    name = body.get("name", f"Dev Server :{port}")
+    agent_id = body.get("agent_id", "")
+    framework = body.get("framework", "unknown")
+
+    if not isinstance(port, int) or port < DEV_SERVER_PORT_MIN or port > DEV_SERVER_PORT_MAX:
+        raise HTTPException(400, f"Port must be an integer between {DEV_SERVER_PORT_MIN} and {DEV_SERVER_PORT_MAX}")
+    if port in DEV_SERVER_BLOCKED_PORTS:
+        raise HTTPException(400, f"Port {port} is reserved and cannot be proxied")
+
+    _active_dev_servers[port] = {
+        "port": port,
+        "name": name,
+        "agent_id": agent_id,
+        "framework": framework,
+        "registered_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    # The external-facing URL uses port 61000 (Docker maps 61000→59000)
+    proxy_url = f"http://localhost:61000/app/{port}/"
+
+    print(f"[DevServer] Registered: {name} on port {port} (agent: {agent_id})")
+
+    # Emit WebSocket event so frontend can show notification
+    try:
+        await sio.emit("dev_server_update", {
+            "action": "registered",
+            "port": port,
+            "name": name,
+            "agent_id": agent_id,
+            "framework": framework,
+            "proxy_url": proxy_url,
+        }, room=os.environ.get("CEREBRO_ROOM", "default"))
+    except Exception:
+        pass
+
+    # Auto-open in Chrome (non-blocking)
+    asyncio.create_task(_open_dev_server_in_browser(proxy_url, name))
+
+    return {"status": "registered", "port": port, "proxy_url": proxy_url}
+
+
+@app.get("/api/dev-servers")
+async def list_dev_servers(user: str = Depends(verify_token)):
+    """List all active dev servers."""
+    servers = []
+    for port, info in _active_dev_servers.items():
+        servers.append({
+            **info,
+            "proxy_url": f"http://localhost:61000/app/{port}/",
+        })
+    return {"servers": servers}
+
+
+@app.delete("/api/dev-servers/{port}")
+async def deregister_dev_server(port: int, user: str = Depends(verify_token)):
+    """Deregister a dev server."""
+    info = _active_dev_servers.pop(port, None)
+    if not info:
+        raise HTTPException(404, f"No dev server registered on port {port}")
+
+    print(f"[DevServer] Deregistered: port {port}")
+
+    try:
+        await sio.emit("dev_server_update", {
+            "action": "deregistered",
+            "port": port,
+            "name": info.get("name", ""),
+        }, room=os.environ.get("CEREBRO_ROOM", "default"))
+    except Exception:
+        pass
+
+    return {"status": "deregistered", "port": port}
+
+
+# --- HTTP Reverse Proxy ---
+
+_HOP_BY_HOP_HEADERS = frozenset([
+    "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
+    "te", "trailers", "transfer-encoding", "upgrade",
+])
+
+
+def _inject_base_tag(html: str, port: int) -> str:
+    """Inject <base href> into HTML and rewrite absolute paths for the proxy prefix."""
+    # Rewrite absolute src/href/action paths FIRST (before base tag injection)
+    prefix = f"/app/{port}"
+    html = re.sub(r'(src|href|action)="/', rf'\1="{prefix}/', html)
+    html = re.sub(r"(src|href|action)='/", rf"\1='{prefix}/", html)
+
+    # Then inject <base href> tag
+    base_tag = f'<base href="/app/{port}/">'
+    if "<head>" in html:
+        html = html.replace("<head>", f"<head>{base_tag}", 1)
+    elif "<HEAD>" in html:
+        html = html.replace("<HEAD>", f"<HEAD>{base_tag}", 1)
+    elif "<html>" in html or "<HTML>" in html:
+        html = html.replace("<html>", f"<html><head>{base_tag}</head>", 1)
+        html = html.replace("<HTML>", f"<HTML><head>{base_tag}</head>", 1)
+    else:
+        html = base_tag + html
+    return html
+
+
+@app.get("/app/{port}")
+async def proxy_redirect_trailing_slash(port: int):
+    """Redirect /app/{port} to /app/{port}/ for consistent routing."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=f"/app/{port}/")
+
+
+@app.api_route("/app/{port}/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
+async def proxy_dev_server(port: int, path: str, request: Request):
+    """Reverse proxy requests to agent dev servers. No auth required for browsing."""
+    if port not in _active_dev_servers:
+        raise HTTPException(404, f"No dev server registered on port {port}. Register via POST /api/dev-servers")
+
+    if port < DEV_SERVER_PORT_MIN or port > DEV_SERVER_PORT_MAX or port in DEV_SERVER_BLOCKED_PORTS:
+        raise HTTPException(400, "Invalid port")
+
+    import httpx
+
+    target_url = f"http://127.0.0.1:{port}/{path}"
+    if request.url.query:
+        target_url += f"?{request.url.query}"
+
+    # Forward headers, stripping hop-by-hop
+    headers = {}
+    for key, value in request.headers.items():
+        if key.lower() not in _HOP_BY_HOP_HEADERS and key.lower() != "host":
+            headers[key] = value
+    headers["host"] = f"127.0.0.1:{port}"
+
+    body = await request.body()
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+            resp = await client.request(
+                method=request.method,
+                url=target_url,
+                headers=headers,
+                content=body if body else None,
+            )
+    except (httpx.ConnectError, httpx.ConnectTimeout):
+        raise HTTPException(502, f"Dev server on port {port} is not responding. Is it still running?")
+    except Exception as e:
+        raise HTTPException(502, f"Proxy error: {str(e)}")
+
+    # Build response headers, stripping hop-by-hop
+    resp_headers = {}
+    for key, value in resp.headers.items():
+        if key.lower() not in _HOP_BY_HOP_HEADERS and key.lower() != "content-encoding" and key.lower() != "content-length":
+            resp_headers[key] = value
+
+    content = resp.content
+    content_type = resp.headers.get("content-type", "")
+
+    # Inject base tag into HTML responses
+    if "text/html" in content_type:
+        try:
+            html = content.decode("utf-8", errors="replace")
+            html = _inject_base_tag(html, port)
+            content = html.encode("utf-8")
+        except Exception:
+            pass  # Return original content if injection fails
+
+    from fastapi.responses import Response
+    return Response(
+        content=content,
+        status_code=resp.status_code,
+        headers=resp_headers,
+        media_type=content_type.split(";")[0].strip() if content_type else None,
+    )
+
+
+# --- WebSocket Proxy for HMR ---
+
+@app.websocket("/app/{port}/{path:path}")
+async def proxy_dev_server_ws(websocket, port: int, path: str):
+    """Proxy WebSocket connections to dev servers for HMR/hot reload."""
+    if port not in _active_dev_servers:
+        await websocket.close(code=4004, reason="No dev server on this port")
+        return
+
+    if port < DEV_SERVER_PORT_MIN or port > DEV_SERVER_PORT_MAX or port in DEV_SERVER_BLOCKED_PORTS:
+        await websocket.close(code=4003, reason="Invalid port")
+        return
+
+    import websockets
+
+    target_url = f"ws://127.0.0.1:{port}/{path}"
+    if websocket.query_params:
+        qs = str(websocket.query_params)
+        target_url += f"?{qs}"
+
+    await websocket.accept()
+
+    try:
+        async with websockets.connect(target_url) as upstream:
+            async def client_to_upstream():
+                try:
+                    while True:
+                        data = await websocket.receive_text()
+                        await upstream.send(data)
+                except Exception:
+                    pass
+
+            async def upstream_to_client():
+                try:
+                    async for message in upstream:
+                        if isinstance(message, str):
+                            await websocket.send_text(message)
+                        else:
+                            await websocket.send_bytes(message)
+                except Exception:
+                    pass
+
+            # Run both directions concurrently
+            done, pending = await asyncio.wait(
+                [asyncio.create_task(client_to_upstream()), asyncio.create_task(upstream_to_client())],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for task in pending:
+                task.cancel()
+    except Exception as e:
+        print(f"[DevServer WS] Error proxying to port {port}: {e}")
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 
 # ============================================================================

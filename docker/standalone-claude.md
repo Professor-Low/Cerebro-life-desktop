@@ -59,6 +59,29 @@ You have access to Cerebro's persistent memory system. This is not a suggestion 
 ### Spawn Child Agent
 - `curl -s -X POST http://localhost:59000/internal/spawn-child-agent -H "Content-Type: application/json" -d '{"task":"...","type":"worker"}'`
 
+## Dev Server Hosting (Show Apps to User)
+When you build a web app, the user can view it in their browser through Cerebro's reverse proxy.
+
+1. Start your dev server on `0.0.0.0`:
+   - React/Vite: `npm run dev -- --host 0.0.0.0 --port 3000`
+   - Python: `python -m http.server 8080 --bind 0.0.0.0`
+   - Flask: `flask run --host 0.0.0.0 --port 5000`
+2. Register it so the user gets a notification:
+   ```bash
+   curl -s -X POST http://localhost:59000/api/dev-servers \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"port": 3000, "name": "My App", "framework": "react"}'
+   ```
+3. Tell the user: **http://localhost:61000/app/3000/**
+4. Clean up when done:
+   ```bash
+   curl -s -X DELETE http://localhost:59000/api/dev-servers/3000 \
+     -H "Authorization: Bearer $TOKEN"
+   ```
+
+Dev servers auto-deregister when your agent completes or is stopped.
+
 ## Environment
 - Running inside a Docker container with bash access
 - AI Memory stored at /data/memory (local to this machine)
