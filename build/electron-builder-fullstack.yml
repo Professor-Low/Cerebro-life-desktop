@@ -42,6 +42,7 @@ nsis:
 linux:
   icon: assets/icon.png
   category: Utility
+  executableName: cerebro-desktop
   target:
     - target: AppImage
       arch:
@@ -54,8 +55,12 @@ linux:
     Comment: Your AI, Everywhere
     Categories: Utility;ArtificialIntelligence;Science;
     StartupWMClass: cerebro-desktop
+    Exec: cerebro %U
+    Terminal: false
 
 deb:
+  afterInstall: build/after-install.sh
+  afterRemove: build/after-remove.sh
   depends:
     - libnotify4
     - libxtst6
