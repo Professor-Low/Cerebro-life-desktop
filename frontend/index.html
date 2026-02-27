@@ -687,7 +687,7 @@
             overflow-y: hidden;
         }
         /* In split mode, reduce bottom padding to just the nav (no extra breathing room) */
-        .main-content:has(.chat-view.split-mode) {
+        .main-content:has(.chat-view.active.split-mode) {
             padding-bottom: calc(var(--nav-height, 70px) + var(--safe-bottom, 0px)) !important;
             overflow: hidden !important;
         }
@@ -10429,10 +10429,10 @@
         .chat-input::placeholder {
             color: var(--text-muted);
         }
-        .chat-view.split-mode .chat-input {
+        .chat-view.active.split-mode .chat-input {
             display: none !important;
         }
-        .chat-view.split-mode .chat-input-wrapper {
+        .chat-view.active.split-mode .chat-input-wrapper {
             justify-content: space-between;
         }
 
@@ -10489,10 +10489,10 @@
             overflow: hidden;
             transition: opacity 0.25s ease 0.1s;
         }
-        .chat-view.split-mode .split-left-panel { opacity: 1; }
+        .chat-view.active.split-mode .split-left-panel { opacity: 1; }
         .chat-view:not(.split-mode) .split-left-panel { opacity: 0; }
 
-        .chat-view.split-mode {
+        .chat-view.active.split-mode {
             display: grid !important;
             grid-template-columns: 40% 60%;
             grid-template-rows: 1fr auto;
@@ -10505,20 +10505,20 @@
             max-height: calc(100vh - 56px - var(--nav-height, 70px) - var(--safe-bottom, 0px)) !important;
             overflow: hidden;
         }
-        .chat-view.split-mode .split-left-panel {
+        .chat-view.active.split-mode .split-left-panel {
             grid-area: left-panel;
             display: flex;
             overflow: hidden;
             min-height: 0;
         }
-        .chat-view.split-mode .messages-container {
+        .chat-view.active.split-mode .messages-container {
             grid-area: messages;
             grid-row: 1 / -1;
             padding-bottom: 24px !important;
             overflow-y: auto;
             min-height: 0;
         }
-        .chat-view.split-mode .chat-input-area {
+        .chat-view.active.split-mode .chat-input-area {
             grid-area: input;
             position: relative !important;
             bottom: unset !important;
@@ -11934,7 +11934,7 @@
 
         /* Split View Responsive */
         @media (max-width: 768px) {
-            .chat-view.split-mode {
+            .chat-view.active.split-mode {
                 grid-template-columns: 1fr !important;
                 grid-template-rows: 1fr auto auto;
                 grid-template-areas:
@@ -11942,13 +11942,13 @@
                     "left-panel"
                     "input" !important;
             }
-            .chat-view.split-mode .split-left-panel {
+            .chat-view.active.split-mode .split-left-panel {
                 max-height: 200px;
                 border-right: none;
                 border-top: 1px solid var(--border);
             }
-            .chat-view.split-mode .messages-container { border-left: none; }
-            .chat-view.split-mode .chat-input-area { border-radius: 0; border-right: none; }
+            .chat-view.active.split-mode .messages-container { border-left: none; }
+            .chat-view.active.split-mode .chat-input-area { border-radius: 0; border-right: none; }
         }
         @media (max-width: 480px) {
             .layout-toggle-btn { display: none; }
