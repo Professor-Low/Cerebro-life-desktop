@@ -1847,9 +1847,22 @@ class DockerManager extends EventEmitter {
 
   /**
    * Check if we've already added the Defender exclusion (marker file).
+   * Returns true only if marker exists AND contains "installed" (not "failed").
    */
   hasDefenderExclusionMarker() {
-    return fs.existsSync(path.join(CEREBRO_DIR, '.defender-excluded'));
+    const markerPath = path.join(CEREBRO_DIR, '.defender-excluded');
+    // Also check install directory (legacy location written by older NSIS installers)
+    const legacyPath = path.join(path.dirname(process.execPath), '.defender-excluded');
+    for (const p of [markerPath, legacyPath]) {
+      try {
+        if (fs.existsSync(p)) {
+          const content = fs.readFileSync(p, 'utf-8').trim().toLowerCase();
+          if (content === 'failed') return false; // Installer tried but failed — app should retry
+          return true; // "installed" or any other value means success
+        }
+      } catch {}
+    }
+    return false;
   }
 
   _getDefaultComposeContent() {
