@@ -641,10 +641,34 @@
     if (window.cerebroDesktop.onPullProgress) {
       window.cerebroDesktop.onPullProgress(function(data) {
         var el = document.getElementById('setup-status');
-        if (el && data.message) {
-          el.textContent = data.message;
+        var fill = document.getElementById('setup-progress-fill');
+        if (!el) return;
+        var stage = data.stage || '';
+        // Show clean messages instead of raw Docker output
+        if (stage === 'pulling_core') {
+          var pct = data.percent != null ? Math.round(data.percent) : null;
+          el.textContent = pct != null ? 'Downloading core services... ' + pct + '%' : 'Downloading core services...';
           el.className = 'status status-loading';
+          // Animate progress bar: 33% to 60% during core pull
+          if (fill && pct != null) fill.style.width = Math.round(33 + (pct / 100) * 27) + '%';
+        } else if (stage === 'pulling_optional') {
+          var pct = data.percent != null ? Math.round(data.percent) : null;
+          el.textContent = pct != null ? 'Downloading voice engine... ' + pct + '%' : 'Downloading voice engine...';
+          el.className = 'status status-loading';
+          if (fill && pct != null) fill.style.width = Math.round(60 + (pct / 100) * 15) + '%';
+        } else if (stage === 'pulling_optional_skip') {
+          el.textContent = 'Voice engine skipped';
+          el.className = 'status status-loading';
+          if (fill) fill.style.width = '75%';
+        } else if (stage === 'done') {
+          el.textContent = 'Downloads complete';
+          el.className = 'status status-success';
+          if (fill) fill.style.width = '80%';
+        } else if (stage === 'error') {
+          el.textContent = data.message || 'Download failed';
+          el.className = 'status status-error';
         }
+        // Ignore any other stages — never show raw Docker output
       });
     }
 
@@ -915,7 +939,7 @@
 
         // Step 2: Pull images
         markStep('ps-pull', 'active');
-        showStatus('setup-status', 'Pulling Docker images (this may take a few minutes)...', 'loading');
+        showStatus('setup-status', 'Downloading components (this may take a few minutes)...', 'loading');
         return window.cerebroDesktop.pullImages();
       }).then(function(pullResult) {
         if (!pullResult.success) {
