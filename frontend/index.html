@@ -25487,6 +25487,13 @@
                                             <button type="button" class="timeout-btn" data-timeout="0" onclick="selectAgentTimeout(this)">Unlimited</button>
                                         </div>
                                     </div>
+                                    <div class="form-group" id="agent-device-group">
+                                        <label class="form-label">Run On Device</label>
+                                        <select class="form-input" id="agent-offload-device">
+                                            <option value="">Local (this machine)</option>
+                                        </select>
+                                        <div style="font-size:0.68rem; color:var(--text-secondary); margin-top:4px;">Route this agent to a remote machine via SSH</div>
+                                    </div>
                                     <div class="form-group" id="project-folder-group" style="display:none;">
                                         <label class="form-label">Project Folder (for remote execution)</label>
                                         <select class="form-input" id="agent-project-folder">
@@ -35596,7 +35603,7 @@
             return `${Math.floor(seconds / 86400)}d ago`;
         }
 
-        async function spawnAgent(task, agentType = 'worker', model = 'sonnet') {
+        async function spawnAgent(task, agentType = 'worker', model = 'sonnet', offloadDeviceId = null) {
             try {
                 // Check if this is a follow-up from another agent
                 let parentAgentId = null;
@@ -35616,21 +35623,24 @@
                 // Get attached context refs
                 const contextRefs = getContextRefsForSend();
 
+                var payload = {
+                    task,
+                    agent_type: agentType,
+                    parent_agent_id: parentAgentId,
+                    project_id: parentProjectId,
+                    context: context,
+                    context_refs: contextRefs,
+                    model: parentModel
+                };
+                if (offloadDeviceId) payload.offload_device_id = offloadDeviceId;
+
                 const response = await fetch(`${API_URL}/agents`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        task,
-                        agent_type: agentType,
-                        parent_agent_id: parentAgentId,
-                        project_id: parentProjectId,
-                        context: context,
-                        context_refs: contextRefs,
-                        model: parentModel
-                    })
+                    body: JSON.stringify(payload)
                 });
 
                 const data = await response.json();
@@ -38421,9 +38431,48 @@
                 arrow.textContent = '▼';
                 // Load project folders when offload is active
                 loadProjectFolders();
+                // Load eligible devices for offload selector
+                loadAgentOffloadDevices();
             } else {
                 options.classList.add('hidden');
                 arrow.textContent = '▶';
+            }
+        }
+
+        async function loadAgentOffloadDevices() {
+            var select = document.getElementById('agent-offload-device');
+            if (!select) return;
+            try {
+                var resp = await fetch(API_URL + '/api/offload/eligible-devices', {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('cerebro_token') }
+                });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                var data = await resp.json();
+                var devices = data.devices || [];
+
+                // Reset options — keep the "Local" default
+                select.length = 1;
+
+                devices.forEach(function(dev) {
+                    var opt = document.createElement('option');
+                    opt.value = dev.id;
+                    var name = dev.friendly_name || dev.device_name || dev.id;
+                    var detail = dev.device_type || 'device';
+                    if (dev.ram_gb) detail += ' \u00B7 ' + dev.ram_gb + 'GB RAM';
+                    opt.textContent = name + '  (' + detail + ')';
+                    select.appendChild(opt);
+                });
+
+                // Show project folder group if a remote device is selected
+                select.onchange = function() {
+                    var folderGroup = document.getElementById('project-folder-group');
+                    if (folderGroup) {
+                        folderGroup.style.display = select.value ? '' : 'none';
+                    }
+                    if (select.value) loadProjectFolders();
+                };
+            } catch (e) {
+                console.warn('[Agent Offload] Failed to load devices:', e.message);
             }
         }
 
@@ -38515,11 +38564,12 @@
 
             const model = document.getElementById('agent-model-select')?.value || 'sonnet';
             const projectFolder = document.getElementById('agent-project-folder')?.value || null;
-            spawnAgentEnhanced(task, selectedAgentRole, context, expectedOutput, priority, resources, agentTimeout, model, projectFolder);
+            const offloadDeviceId = document.getElementById('agent-offload-device')?.value || null;
+            spawnAgentEnhanced(task, selectedAgentRole, context, expectedOutput, priority, resources, agentTimeout, model, projectFolder, offloadDeviceId);
             closeAgentPanel();
         }
 
-        async function spawnAgentEnhanced(task, agentType, context, expectedOutput, priority, resources, timeout = 3600, model = 'sonnet', projectFolder = null) {
+        async function spawnAgentEnhanced(task, agentType, context, expectedOutput, priority, resources, timeout = 3600, model = 'sonnet', projectFolder = null, offloadDeviceId = null) {
             try {
                 var payload = {
                     task,
@@ -38532,6 +38582,7 @@
                     model
                 };
                 if (projectFolder) payload.project_folder = projectFolder;
+                if (offloadDeviceId) payload.offload_device_id = offloadDeviceId;
                 const response = await fetch(`${API_URL}/agents`, {
                     method: 'POST',
                     headers: {

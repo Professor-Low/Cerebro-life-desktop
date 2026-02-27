@@ -2189,7 +2189,8 @@ async def create_agent(
     source_agents: list[str] = None,  # Agent IDs for context fusion (merge & spawn)
     project_id: str = None,  # Project assignment
     model: str = "sonnet",  # Model shorthand: sonnet, opus, haiku (or full model ID)
-    project_folder: str = None  # Path under /mounts/ to sync for offloaded agents
+    project_folder: str = None,  # Path under /mounts/ to sync for offloaded agents
+    offload_device_id: str = None  # Per-agent device targeting (overrides global offload)
 ) -> str:
     """Create a new background agent to handle a task."""
     # Auto-inherit project_id from parent if not explicitly set
@@ -2251,6 +2252,8 @@ async def create_agent(
         "model": model,
         # Remote execution
         "project_folder": project_folder,
+        # Per-agent offload device targeting
+        "offload_device_id": offload_device_id,
         # Special Ops fields
         "is_specops": is_specops,
     }
@@ -3026,10 +3029,17 @@ async def run_agent(
             agent_env["HOME"] = "/home/cerebro"
 
         # === SSH Offload Check ===
+        # Per-agent device targeting overrides global offload config
+        _per_agent_device = agent.get("offload_device_id")
         _offload_cfg = _load_offload_config()
         _offload_active = False
-        if _offload_cfg.get("enabled") and _offload_cfg.get("target_device_id"):
+        if _per_agent_device:
+            _offload_device_id = _per_agent_device
+        elif _offload_cfg.get("enabled") and _offload_cfg.get("target_device_id"):
             _offload_device_id = _offload_cfg["target_device_id"]
+        else:
+            _offload_device_id = None
+        if _offload_device_id:
             _offload_registry = _load_device_registry()
             _offload_device = _offload_registry.get("devices", {}).get(_offload_device_id)
             if _offload_device and _offload_device.get("ssh_config"):
@@ -3047,6 +3057,39 @@ async def run_agent(
                 # Bound to 127.0.0.1 only — not exposed to the remote machine's network
                 _ssh_args.extend(["-R", "127.0.0.1:59000:localhost:59000"])
                 _ssh_args.append(_ssh_target)
+
+                # === Auto-sync Claude credentials to remote machine ===
+                # This ensures the remote Claude CLI always has valid auth
+                # without requiring manual login on each device
+                try:
+                    _creds_path = Path.home() / ".claude" / ".credentials.json"
+                    if _creds_path.exists():
+                        _scp_args = ["scp", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new",
+                                     "-o", "ConnectTimeout=10", "-o", "IdentitiesOnly=yes", "-P", _ssh_port]
+                        if _ssh_key:
+                            _scp_args.extend(["-i", _ssh_key])
+                        # First ensure ~/.claude directory exists on remote
+                        _mkdir_args = ["ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new",
+                                       "-o", "ConnectTimeout=10", "-o", "IdentitiesOnly=yes", "-p", _ssh_port]
+                        if _ssh_key:
+                            _mkdir_args.extend(["-i", _ssh_key])
+                        _mkdir_args.extend([_ssh_target, "mkdir -p ~/.claude"])
+                        _mkdir_proc = await asyncio.to_thread(
+                            lambda: sp.run(_mkdir_args, capture_output=True, timeout=15)
+                        )
+                        # SCP the credentials file
+                        _scp_args.extend([str(_creds_path), f"{_ssh_target}:~/.claude/.credentials.json"])
+                        _scp_proc = await asyncio.to_thread(
+                            lambda: sp.run(_scp_args, capture_output=True, timeout=15)
+                        )
+                        if _scp_proc.returncode == 0:
+                            print(f"[Offload] Synced Claude credentials to {agent.get('offloaded_to_name', _offload_device_id)}")
+                        else:
+                            print(f"[Offload] Credential sync warning: {_scp_proc.stderr.decode('utf-8', errors='replace')[:200]}")
+                    else:
+                        print("[Offload] No local .credentials.json found, remote must have own auth")
+                except Exception as _cred_err:
+                    print(f"[Offload] Credential sync failed (non-fatal): {_cred_err}")
 
                 # Project file sync (if project_folder specified)
                 _project_folder = agent.get("project_folder", "")
@@ -4240,6 +4283,17 @@ def _build_chat_prompt(content: str, session_id: str) -> str:
     chat_identity = _CEREBRO_CHAT_IDENTITY.format(user_name=user_name, platform_context=platform_ctx)
     parts = [chat_identity, _CEREBRO_CAP_DEV_SERVER]
 
+    # Inject device list so Cerebro knows about available remote machines
+    device_list = _build_device_list()
+    if device_list and device_list != "No devices registered.":
+        parts.append(_CEREBRO_CAP_DEVICES.format(device_list=device_list))
+        parts.append("""### Agent Offloading
+When the user asks you to spawn an agent on a specific device (e.g., "spawn on my DGX", "run this on Darkhorse"), you should:
+1. Identify the device by its friendly name from the device list above
+2. Tell the user you'll route the agent to that device
+3. The frontend will handle the actual device routing when the agent is launched
+Note: Device names are case-insensitive. Match by friendly name.""")
+
     # Inject active agent roster so Cerebro is immediately aware of deployed agents
     roster = _build_active_agent_roster()
     if roster:
@@ -4467,6 +4521,29 @@ async def _process_chat_offloaded(content: str, session_id: str, model: str, dev
     # Bound to 127.0.0.1 only — not exposed to the remote machine's network
     _ssh_args.extend(["-R", "127.0.0.1:59000:localhost:59000"])
     _ssh_args.append(_ssh_target)
+
+    # Auto-sync Claude credentials to remote machine (same as agent offload)
+    try:
+        _creds_path = Path.home() / ".claude" / ".credentials.json"
+        if _creds_path.exists():
+            _mkdir_args2 = ["ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new",
+                            "-o", "ConnectTimeout=10", "-o", "IdentitiesOnly=yes", "-p", _ssh_port]
+            if _ssh_key:
+                _mkdir_args2.extend(["-i", _ssh_key])
+            _mkdir_args2.extend([_ssh_target, "mkdir -p ~/.claude"])
+            await asyncio.to_thread(lambda: subprocess.run(_mkdir_args2, capture_output=True, timeout=15))
+            _scp_args2 = ["scp", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new",
+                          "-o", "ConnectTimeout=10", "-o", "IdentitiesOnly=yes", "-P", _ssh_port]
+            if _ssh_key:
+                _scp_args2.extend(["-i", _ssh_key])
+            _scp_args2.extend([str(_creds_path), f"{_ssh_target}:~/.claude/.credentials.json"])
+            _scp_res2 = await asyncio.to_thread(lambda: subprocess.run(_scp_args2, capture_output=True, timeout=15))
+            if _scp_res2.returncode == 0:
+                print(f"[Chat Offload] Synced Claude credentials to {_device_name}")
+            else:
+                print(f"[Chat Offload] Credential sync warning: {_scp_res2.stderr.decode('utf-8', errors='replace')[:200]}")
+    except Exception as _ce:
+        print(f"[Chat Offload] Credential sync failed (non-fatal): {_ce}")
 
     # Build remote command: PATH fix + claude -p via temp file
     _chat_id = f"chat-{session_id}-{int(datetime.now(timezone.utc).timestamp())}"
@@ -5044,6 +5121,8 @@ class AgentRequest(BaseModel):
     success_criteria: Optional[str] = None
     # Remote execution: sync this folder to the remote device
     project_folder: Optional[str] = None  # Path under /mounts/ to sync for offloaded agents
+    # Per-agent device targeting (overrides global offload config)
+    offload_device_id: Optional[str] = None  # Specific device ID to offload this agent to
 
 class WorkflowRequest(BaseModel):
     task: str
@@ -5078,7 +5157,8 @@ async def spawn_agent(request: AgentRequest, user: str = Depends(verify_token)):
         source_agents=request.source_agents,
         project_id=request.project_id,
         model=request.model or "sonnet",
-        project_folder=request.project_folder
+        project_folder=request.project_folder,
+        offload_device_id=request.offload_device_id
     )
     create_agent._specops_config = None  # Clean up
     return {"agent_id": agent_id, "status": "spawned"}
