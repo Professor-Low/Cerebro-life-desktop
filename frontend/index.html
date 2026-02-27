@@ -33482,7 +33482,12 @@
                     if (btn) setUpdateBtnSpinner(btn, 'Restarting\u2026');
                     showToast('Update applied — restarting!', 'success');
                 } else {
-                    showToast('Update failed: ' + (result.error || 'Unknown error'), 'error');
+                    var errMsg = result.error || 'Unknown error';
+                    if (errMsg.includes('Defender') || errMsg.includes('PowerShell')) {
+                        await cerebroAlert(errMsg, { title: 'Windows Defender Blocking Update', danger: true });
+                    } else {
+                        showToast('Update failed: ' + errMsg, 'error');
+                    }
                     if (btn) { btn.disabled = false; btn.classList.remove('updating'); btn.textContent = 'Restart & Update'; }
                 }
             } catch (e) {

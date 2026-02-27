@@ -917,6 +917,31 @@ ipcMain.handle('check-for-updates', async () => {
 
 ipcMain.handle('apply-update', async () => {
   try {
+    // Ensure Defender exclusion is in place BEFORE updating.
+    // The new Cerebro.exe installed by the updater will be killed by Defender
+    // on launch if the process exclusion isn't set. This must happen now,
+    // while the CURRENT (already-running) process is still alive.
+    if (process.platform === 'win32') {
+      try {
+        await ensureDefenderExclusion();
+      } catch {}
+      // Verify the exclusion actually worked — if not, warn the user
+      const excluded = await dockerManager.isDefenderExcluded().catch(() => false);
+      if (!excluded) {
+        // Try one more time with direct elevation
+        try {
+          await dockerManager.addDefenderExclusion();
+        } catch {}
+        const retryOk = await dockerManager.isDefenderExcluded().catch(() => false);
+        if (!retryOk) {
+          return {
+            success: false,
+            error: 'Windows Defender is blocking Cerebro. Please open PowerShell as Administrator and run:\n\nAdd-MpPreference -ExclusionProcess "Cerebro.exe"\n\nThen try the update again.'
+          };
+        }
+      }
+    }
+
     const dockerResult = await dockerManager.checkForUpdates();
     const needsDocker = dockerResult.updateAvailable;
 
