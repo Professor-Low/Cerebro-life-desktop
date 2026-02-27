@@ -686,6 +686,11 @@
         .main-content:has(.chat-view.active) {
             overflow-y: hidden;
         }
+        /* In split mode, reduce bottom padding to just the nav (no extra breathing room) */
+        .main-content:has(.chat-view.split-mode) {
+            padding-bottom: calc(var(--nav-height, 70px) + var(--safe-bottom, 0px)) !important;
+            overflow: hidden !important;
+        }
 
         .view {
             display: none !important;
@@ -8997,20 +9002,20 @@
             overflow: visible;
         }
 
-        /* Streaming cursor */
+        /* Streaming cursor — inline blinking caret at end of typed text */
         .streaming-cursor {
             display: inline-block;
-            width: 8px;
-            height: 1.1em;
+            width: 2.5px;
+            height: 1.15em;
             background: var(--accent);
             vertical-align: text-bottom;
-            animation: blink-cursor 0.7s ease-in-out infinite;
-            margin-left: 2px;
+            animation: blink-cursor 0.6s step-end infinite;
+            margin-left: 1px;
             border-radius: 1px;
         }
         @keyframes blink-cursor {
             0%, 100% { opacity: 1; }
-            50% { opacity: 0.15; }
+            50% { opacity: 0; }
         }
 
         /* === MESSAGE COPY BUTTON === */
@@ -9091,27 +9096,21 @@
             background: rgba(139, 92, 246, 0.15);
         }
         .chat-context-menu-item .ctx-icon {
-            width: 16px;
-            height: 16px;
+            width: 18px;
             flex-shrink: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            text-align: center;
+            font-size: 14px;
+            pointer-events: none;
         }
-        .chat-context-menu-item .ctx-icon svg {
-            width: 15px;
-            height: 15px;
-            fill: none;
-            stroke: currentColor;
-            stroke-width: 2;
-            stroke-linecap: round;
-            stroke-linejoin: round;
+        .chat-context-menu-item .ctx-label {
+            flex: 1;
+            pointer-events: none;
         }
-        .chat-context-menu-item .ctx-label { flex: 1; }
         .chat-context-menu-item .ctx-hint {
             font-size: 0.7rem;
             color: var(--text-muted);
             margin-left: auto;
+            pointer-events: none;
         }
         /* Launch button on agent/specops draft messages */
         .msg-launch-btn {
@@ -10430,13 +10429,19 @@
         .chat-input::placeholder {
             color: var(--text-muted);
         }
+        .chat-view.split-mode .chat-input {
+            display: none !important;
+        }
+        .chat-view.split-mode .chat-input-wrapper {
+            justify-content: space-between;
+        }
 
         .input-actions {
             display: flex;
             gap: 8px;
         }
 
-        .voice-btn, .send-btn {
+        .send-btn {
             width: 48px;
             height: 48px;
             border-radius: 50%;
@@ -10449,30 +10454,152 @@
             flex-shrink: 0;
         }
 
-        .voice-btn {
+        /* Layout Toggle Button */
+        .layout-toggle-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: 1px solid var(--border);
             background: var(--glass-bg);
             color: var(--text-secondary);
-            border: 1px solid var(--border);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s var(--ease-out-expo);
+            flex-shrink: 0;
         }
-
-        .voice-btn:hover {
+        .layout-toggle-btn:hover {
             background: var(--bg-hover);
             color: var(--text-primary);
         }
+        .layout-toggle-btn.active {
+            background: rgba(139, 92, 246, 0.15);
+            color: var(--accent-light);
+            border-color: var(--accent);
+            box-shadow: 0 0 12px var(--glow-subtle);
+        }
 
-        .voice-btn:active, .voice-btn.recording {
-            background: var(--red);
+        /* Split View Layout */
+        .split-left-panel {
+            display: none;
+            flex-direction: column;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            overflow: hidden;
+            transition: opacity 0.25s ease 0.1s;
+        }
+        .chat-view.split-mode .split-left-panel { opacity: 1; }
+        .chat-view:not(.split-mode) .split-left-panel { opacity: 0; }
+
+        .chat-view.split-mode {
+            display: grid !important;
+            grid-template-columns: 40% 60%;
+            grid-template-rows: 1fr auto;
+            grid-template-areas:
+                "left-panel messages"
+                "input      messages";
+            flex-direction: unset !important;
+            /* Fill exactly between header padding-top and nav padding-bottom on main-content */
+            height: calc(100vh - 56px - var(--nav-height, 70px) - var(--safe-bottom, 0px)) !important;
+            max-height: calc(100vh - 56px - var(--nav-height, 70px) - var(--safe-bottom, 0px)) !important;
+            overflow: hidden;
+        }
+        .chat-view.split-mode .split-left-panel {
+            grid-area: left-panel;
+            display: flex;
+            overflow: hidden;
+            min-height: 0;
+        }
+        .chat-view.split-mode .messages-container {
+            grid-area: messages;
+            grid-row: 1 / -1;
+            padding-bottom: 24px !important;
+            overflow-y: auto;
+            min-height: 0;
+        }
+        .chat-view.split-mode .chat-input-area {
+            grid-area: input;
+            position: relative !important;
+            bottom: unset !important;
+            left: unset !important;
+            right: unset !important;
+            margin: 0 !important;
+            max-width: unset !important;
+            width: 100% !important;
+            z-index: auto;
+            border-radius: 0;
+            border-top: 1px solid var(--border);
+            box-shadow: none;
+        }
+
+        /* Split Panel Internals */
+        .split-left-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+            padding: 0 8px;
+        }
+        .split-tab {
+            flex: 1;
+            padding: 12px 16px;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .split-tab:hover { color: var(--text-secondary); }
+        .split-tab.active {
+            color: var(--accent-light);
+            border-bottom-color: var(--accent);
+        }
+        .split-tab-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 12px;
+            overflow-y: auto;
+            min-height: 0;
+        }
+        .split-notepad, .split-compose {
+            flex: 1;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            font-family: inherit;
+            padding: 14px;
+            resize: none;
+            outline: none;
+            min-height: 0;
+        }
+        .split-notepad:focus, .split-compose:focus {
+            border-color: var(--accent);
+        }
+        .save-memory-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: none;
+            background: var(--accent-gradient);
             color: white;
-            transform: scale(1.1);
-            box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s var(--ease-out-expo);
+            flex-shrink: 0;
+            box-shadow: 0 4px 15px var(--glow-medium);
         }
-
-        .voice-btn.disabled {
-            opacity: 0.35;
-            cursor: not-allowed;
-            pointer-events: none;
+        .save-memory-btn:hover {
+            transform: scale(1.08);
+            box-shadow: 0 6px 25px var(--glow-strong);
         }
-
         .browser-toggle-btn {
             width: 48px;
             height: 48px;
@@ -11805,56 +11932,26 @@
             border-radius: 4px;
         }
 
-        /* Voice Recording Overlay */
-        .voice-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.9);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 2000;
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.3s ease;
+        /* Split View Responsive */
+        @media (max-width: 768px) {
+            .chat-view.split-mode {
+                grid-template-columns: 1fr !important;
+                grid-template-rows: 1fr auto auto;
+                grid-template-areas:
+                    "messages"
+                    "left-panel"
+                    "input" !important;
+            }
+            .chat-view.split-mode .split-left-panel {
+                max-height: 200px;
+                border-right: none;
+                border-top: 1px solid var(--border);
+            }
+            .chat-view.split-mode .messages-container { border-left: none; }
+            .chat-view.split-mode .chat-input-area { border-radius: 0; border-right: none; }
         }
-
-        .voice-overlay.active {
-            opacity: 1;
-            visibility: visible;
-        }
-
-        .voice-indicator {
-            width: 100px;
-            height: 100px;
-            background: var(--accent-gradient);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 2.5rem;
-            margin-bottom: 24px;
-            animation: voicePulse 1.5s ease infinite;
-        }
-
-        @keyframes voicePulse {
-            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 var(--accent-glow-strong); }
-            50% { transform: scale(1.1); box-shadow: 0 0 0 20px transparent; }
-        }
-
-        .voice-text {
-            font-size: 1.2rem;
-            color: var(--text-secondary);
-            margin-bottom: 8px;
-        }
-
-        .voice-transcript {
-            font-size: 1rem;
-            color: var(--text-primary);
-            max-width: 80%;
-            text-align: center;
-            min-height: 24px;
+        @media (max-width: 480px) {
+            .layout-toggle-btn { display: none; }
         }
 
         /* ==================== RESPONSIVE ==================== */
@@ -23756,6 +23853,18 @@
 
                 <!-- Chat View -->
                 <div class="view chat-view" id="view-chat">
+                    <div class="split-left-panel" id="split-left-panel">
+                        <div class="split-left-tabs">
+                            <button class="split-tab active" data-tab="notepad" onclick="switchSplitTab('notepad')">Notepad</button>
+                            <button class="split-tab" data-tab="compose" onclick="switchSplitTab('compose')">Compose</button>
+                        </div>
+                        <div class="split-tab-content" id="split-tab-notepad">
+                            <textarea class="split-notepad" id="split-notepad" placeholder="Jot down ideas, notes, code snippets..."></textarea>
+                        </div>
+                        <div class="split-tab-content" id="split-tab-compose" style="display:none">
+                            <textarea class="split-compose" id="split-compose" placeholder="Draft a longer message to Cerebro..." onkeydown="handleComposeKeyDown(event)"></textarea>
+                        </div>
+                    </div>
                     <div class="messages-container" id="messages">
                         <div class="message assistant" data-text="Hey! I'm Cerebro, your AI command center. I can spawn agents, search your memory, run automations, or help with anything else. What do you need?">
                             <div class="msg-header">
@@ -23820,12 +23929,22 @@
                             </button>
                             <textarea class="chat-input" id="chat-input" placeholder="Message Cerebro..." rows="1" onkeydown="handleKeyDown(event)"></textarea>
                             <div class="input-actions">
-                                <button class="voice-btn" id="voice-btn" onmousedown="startVoice()" onmouseup="stopVoice()" ontouchstart="startVoice()" ontouchend="stopVoice()">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                                <button class="layout-toggle-btn" id="layout-toggle-btn" onclick="toggleChatLayout()" title="Toggle split view">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                        <line x1="9" y1="3" x2="9" y2="21"/>
+                                    </svg>
                                 </button>
                                 <button class="browser-toggle-btn" id="chat-browser-btn" onclick="toggleChatBrowser()" title="Launch/Stop Browser">
                                     <span class="chat-browser-dot" id="chat-browser-dot"></span>
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                                </button>
+                                <button class="save-memory-btn" id="split-save-btn" onclick="saveNotepadToMemory()" title="Save notepad to memory" style="display:none">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                                        <polyline points="17 21 17 13 7 13 7 21"/>
+                                        <polyline points="7 3 7 8 15 8"/>
+                                    </svg>
                                 </button>
                                 <button class="send-btn" onclick="sendMessage()" id="send-btn">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -25306,12 +25425,6 @@
             </nav>
         </div>
 
-        <!-- Voice Recording Overlay -->
-        <div class="voice-overlay" id="voice-overlay">
-            <div class="voice-indicator"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div>
-            <div class="voice-text">Listening...</div>
-            <div class="voice-transcript" id="voice-transcript"></div>
-        </div>
 
         <!-- Heartbeat Settings Modal -->
         <div class="modal-overlay" id="heartbeat-modal" onclick="if(event.target===this) closeHeartbeatModal()">
@@ -25500,6 +25613,13 @@
                                             <button type="button" class="timeout-btn" data-timeout="14400" onclick="selectAgentTimeout(this)">4 hours</button>
                                             <button type="button" class="timeout-btn" data-timeout="0" onclick="selectAgentTimeout(this)">Unlimited</button>
                                         </div>
+                                    </div>
+                                    <div class="form-group" id="agent-device-group">
+                                        <label class="form-label">Run On Device</label>
+                                        <select class="form-input" id="agent-offload-device">
+                                            <option value="">Local (this machine)</option>
+                                        </select>
+                                        <div style="font-size:0.68rem; color:var(--text-secondary); margin-top:4px;">Route this agent to a remote machine via SSH</div>
                                     </div>
                                     <div class="form-group" id="project-folder-group" style="display:none;">
                                         <label class="form-label">Project Folder (for remote execution)</label>
@@ -26833,16 +26953,15 @@
         let token = localStorage.getItem('cerebro_token');
         let socket = null;
         let sessionId = null;
-        let recognition = null;
-        let isRecording = false;
-
         // TTS Configuration
         const TTS_URL = CEREBRO_TTS_URL || `http://${currentHost}:8880`;
         const TTS_CONFIG = { voice: localStorage.getItem("cerebro_tts_voice") || "af_heart", speed: parseFloat(localStorage.getItem("cerebro_tts_speed") || "1.0"), format: "mp3", autoSpeak: localStorage.getItem("cerebro_tts_autospeak") === "true" };
         let currentAudio = null;
         let isSpeaking = false;
         let conversationalMode = false;
-        let silenceTimer = null;
+
+        // Chat layout state
+        let _chatSplitMode = false;
 
         // ==================== AUTH ====================
         async function login() {
@@ -26927,26 +27046,20 @@
             await fetchModelsFromServer();
             loadChatOffloadDevices();
             checkBrowserStatus();
-            initVoice();
+            initChatLayout();
             loadAudioDevices();
             initVoiceSettings();
             loadPersonality();
             loadLookStatus();
             initFileAccess();
 
-            // Init TTS orb click - conversational mode toggle
+            // Init TTS orb click - stop speaking
             const navOrb = document.getElementById('nav-orb-container');
             if (navOrb) {
                 navOrb.addEventListener('click', () => {
-                    if (conversationalMode) {
-                        stopConversationalMode();
-                        return;
-                    }
                     if (isSpeaking) { stopSpeaking(); return; }
-                    if (isRecording) { showToast('Stop recording first'); return; }
-                    startConversationalMode();
                 });
-                navOrb.title = 'Click to start/stop voice conversation';
+                navOrb.title = 'Click to stop speaking';
             }
 
             handleMobileKeyboard();
@@ -31256,6 +31369,7 @@
             currentAssistantMessage = addMessage('', 'assistant');
             currentAssistantMessage.setAttribute('data-text', '');
             _chatRenderPending = false;
+            _twReset();  // Fresh typewriter state for new message
             // Show thinking orb while waiting for response
             const thinkWrapper = currentAssistantMessage.querySelector('.message-content-wrapper');
             if (thinkWrapper) thinkWrapper.innerHTML = '<div class="thinking-orb-container"><div class="thinking-orb-dot"></div><span class="thinking-orb-label">Thinking...</span></div>';
@@ -31344,6 +31458,68 @@
 
         let _chatRenderPending = false;
 
+        /* === Typewriter streaming engine === */
+        var _twBuffer = '';       // Full text received from backend
+        var _twDisplayed = 0;    // Chars "typed" so far
+        var _twTimer = null;     // setInterval ID
+        var _twBaseSpeed = 12;   // ms per tick (base speed ~83 chars/sec)
+        var _twDone = false;     // Stream finished flag
+
+        function _twReset() {
+            _twBuffer = '';
+            _twDisplayed = 0;
+            _twDone = false;
+            if (_twTimer) { clearInterval(_twTimer); _twTimer = null; }
+        }
+
+        function _twRender() {
+            if (!currentAssistantMessage) return;
+            var visibleText = _twBuffer.substring(0, _twDisplayed);
+            var wrapper = currentAssistantMessage.querySelector('.message-content-wrapper');
+            if (!wrapper) return;
+            wrapper.innerHTML = safeMarkdown(visibleText);
+            // Append cursor INLINE at end of last block element
+            _twAppendCursorInline(wrapper);
+            var sc = document.getElementById('messages');
+            smartAutoScroll(sc);
+        }
+
+        function _twAppendCursorInline(wrapper) {
+            var cursor = document.createElement('span');
+            cursor.className = 'streaming-cursor';
+            // Find last text-bearing block and put cursor inside it
+            var blocks = wrapper.querySelectorAll('p, li, h1, h2, h3, h4, h5, h6, td, pre code, blockquote');
+            if (blocks.length > 0) {
+                blocks[blocks.length - 1].appendChild(cursor);
+            } else if (wrapper.childNodes.length > 0) {
+                // Inline content, no block elements
+                wrapper.appendChild(cursor);
+            } else {
+                wrapper.appendChild(cursor);
+            }
+        }
+
+        function _twTick() {
+            if (_twDisplayed >= _twBuffer.length) {
+                // Caught up to buffer — if stream is done, finish up
+                if (_twDone) {
+                    clearInterval(_twTimer);
+                    _twTimer = null;
+                }
+                return;
+            }
+            // Adaptive step: speed up if buffer is far ahead
+            var remaining = _twBuffer.length - _twDisplayed;
+            var step;
+            if (remaining > 500) step = 15;
+            else if (remaining > 200) step = 8;
+            else if (remaining > 80) step = 4;
+            else step = 2;
+
+            _twDisplayed = Math.min(_twDisplayed + step, _twBuffer.length);
+            _twRender();
+        }
+
         function handleChatResponse(data) {
             if (!currentAssistantMessage) return;
 
@@ -31353,31 +31529,15 @@
                 if (orb) orb.remove();
                 const spinner = currentAssistantMessage.querySelector('.spinner');
                 if (spinner) spinner.remove();
-                // Append new text to existing content
-                const existingText = currentAssistantMessage.getAttribute('data-text') || '';
-                const newText = existingText + data.content;
-                currentAssistantMessage.setAttribute('data-text', newText);
 
-                // Debounced render via rAF for smooth ~60fps streaming
-                if (!_chatRenderPending) {
-                    _chatRenderPending = true;
-                    requestAnimationFrame(function() {
-                        _chatRenderPending = false;
-                        if (!currentAssistantMessage) return;
-                        var fullText = currentAssistantMessage.getAttribute('data-text') || '';
-                        var wrapper = currentAssistantMessage.querySelector('.message-content-wrapper');
-                        if (wrapper) {
-                            wrapper.innerHTML = safeMarkdown(fullText);
-                            // Add streaming cursor at end
-                            var oldCursor = wrapper.querySelector('.streaming-cursor');
-                            if (oldCursor) oldCursor.remove();
-                            var cursor = document.createElement('span');
-                            cursor.className = 'streaming-cursor';
-                            wrapper.appendChild(cursor);
-                        }
-                        var sc = document.getElementById('messages');
-                        smartAutoScroll(sc);
-                    });
+                // Append to typewriter buffer
+                _twBuffer += data.content;
+                // Store full text in data-text (for copy, context menu, history)
+                currentAssistantMessage.setAttribute('data-text', _twBuffer);
+
+                // Start typewriter timer if not running
+                if (!_twTimer) {
+                    _twTimer = setInterval(_twTick, _twBaseSpeed);
                 }
             } else if (data.type === 'tool' || data.type === 'tool_result') {
                 // Tool tracking — silently track but don't show in UI
@@ -31403,6 +31563,12 @@
                 document.querySelectorAll('.message.tool').forEach(function(el) { el.remove(); });
                 // Re-enable send button
                 document.getElementById('send-btn').disabled = false;
+
+                // Mark typewriter stream as done — let it finish typing remaining text
+                _twDone = true;
+                // If typewriter is still behind, fast-forward and render final immediately
+                if (_twTimer) { clearInterval(_twTimer); _twTimer = null; }
+                _twDisplayed = _twBuffer.length;
 
                 // Final synchronous render — remove streaming cursor
                 var finalText = currentAssistantMessage.getAttribute('data-text') || '';
@@ -31445,17 +31611,6 @@
                     window._pendingSpecOpsDraft = false;
                 }
 
-                // Speak response in conversational mode
-                if (conversationalMode && currentAssistantMessage) {
-                    var responseText = currentAssistantMessage.getAttribute('data-text');
-                    console.log('[Conv] Response complete, will speak:', responseText?.substring(0, 50) + '...');
-                    if (responseText && responseText.trim()) {
-                        setTimeout(function() { speak(responseText); }, 500);
-                    } else {
-                        console.log('[Conv] No response text, resuming listen');
-                        setTimeout(function() { startConversationalListen(); }, 500);
-                    }
-                }
             }
 
             var container = document.getElementById('messages');
@@ -31539,17 +31694,49 @@
         function createCopyButton(messageEl) {
             const btn = document.createElement('button');
             btn.className = 'msg-copy-btn';
-            btn.innerHTML = '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Copy';
+            btn.textContent = '\u{1F4CB} Copy';
             btn.onclick = function() {
-                const text = messageEl.getAttribute('data-text') || messageEl.querySelector('.message-content-wrapper')?.innerText || '';
-                navigator.clipboard.writeText(text).then(function() {
-                    btn.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg> Copied';
+                // Selection-aware: copy highlighted text if any, else full message
+                var sel = window.getSelection();
+                var selText = sel ? sel.toString().trim() : '';
+                var text;
+                if (selText && messageEl.contains(sel.anchorNode)) {
+                    text = selText;
+                } else {
+                    text = messageEl.getAttribute('data-text') || messageEl.querySelector('.message-content-wrapper')?.innerText || '';
+                }
+                function onCopied() {
+                    btn.textContent = '\u2705 Copied';
                     btn.classList.add('copied');
                     setTimeout(function() {
-                        btn.innerHTML = '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Copy';
+                        btn.textContent = '\u{1F4CB} Copy';
                         btn.classList.remove('copied');
                     }, 2000);
-                });
+                }
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(onCopied).catch(function() {
+                        // Fallback
+                        var ta = document.createElement('textarea');
+                        ta.value = text;
+                        ta.style.position = 'fixed';
+                        ta.style.left = '-9999px';
+                        document.body.appendChild(ta);
+                        ta.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(ta);
+                        onCopied();
+                    });
+                } else {
+                    var ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.style.position = 'fixed';
+                    ta.style.left = '-9999px';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    onCopied();
+                }
             };
             return btn;
         }
@@ -31557,94 +31744,127 @@
         /* ==================== CHAT CONTEXT MENU ==================== */
         window._pendingAgentDraft = false;
         window._pendingSpecOpsDraft = false;
+        // Stash selection text at menu-open time (right-click can clear selection)
+        var _ctxStashedSelection = '';
+        var _ctxStashedMessageEl = null;
 
-        function getMessageContext(messageEl) {
-            var sel = window.getSelection();
-            var selText = sel ? sel.toString().trim() : '';
-            if (selText && messageEl.contains(sel.anchorNode)) {
-                return { text: selText, isSelection: true };
+        function _getCtxText() {
+            // Returns selection if we stashed one, otherwise full message text
+            if (_ctxStashedSelection) return _ctxStashedSelection;
+            if (_ctxStashedMessageEl) {
+                return _ctxStashedMessageEl.getAttribute('data-text') || _ctxStashedMessageEl.querySelector('.message-content-wrapper')?.innerText || '';
             }
-            return { text: messageEl.getAttribute('data-text') || messageEl.querySelector('.message-content-wrapper')?.innerText || '', isSelection: false };
+            return '';
+        }
+
+        function _getCtxFullText() {
+            if (_ctxStashedMessageEl) {
+                return _ctxStashedMessageEl.getAttribute('data-text') || _ctxStashedMessageEl.querySelector('.message-content-wrapper')?.innerText || '';
+            }
+            return '';
         }
 
         function hideChatContextMenu() {
             var existing = document.querySelector('.chat-context-menu');
             if (existing) existing.remove();
-            document.removeEventListener('click', _chatCtxDismiss);
-            document.removeEventListener('keydown', _chatCtxEscape);
+            document.removeEventListener('mousedown', _chatCtxDismiss, true);
+            document.removeEventListener('keydown', _chatCtxEscape, true);
         }
 
         function _chatCtxDismiss(e) {
             var menu = document.querySelector('.chat-context-menu');
-            if (menu && !menu.contains(e.target)) hideChatContextMenu();
+            if (menu && !menu.contains(e.target)) {
+                hideChatContextMenu();
+            }
         }
 
         function _chatCtxEscape(e) {
             if (e.key === 'Escape') hideChatContextMenu();
         }
 
-        function _buildCtxMenuItem(iconSvg, label) {
-            var row = document.createElement('div');
-            row.className = 'chat-context-menu-item';
-            var iconSpan = document.createElement('span');
-            iconSpan.className = 'ctx-icon';
-            iconSpan.textContent = iconSvg;
-            var labelSpan = document.createElement('span');
-            labelSpan.className = 'ctx-label';
-            labelSpan.textContent = label;
-            row.appendChild(iconSpan);
-            row.appendChild(labelSpan);
-            return row;
-        }
-
-        // SVG icon constants for context menu (static, safe strings)
-        var _CTX_ICONS = {
-            copy: '\u{1F4CB}',
-            markdown: '\u{1F4C4}',
-            reply: '\u{21A9}',
-            deeper: '\u{1F50D}',
-            regen: '\u{1F504}',
-            agent: '\u{1F916}',
-            specops: '\u{1F6E1}',
-            plan: '\u{1F4DD}',
-            memory: '\u{1F4BE}'
-        };
-
         function showChatContextMenu(event, messageEl) {
             event.preventDefault();
+            event.stopPropagation();
             hideChatContextMenu();
+
+            // Capture selection NOW before it gets cleared
+            var sel = window.getSelection();
+            var selText = sel ? sel.toString().trim() : '';
+            if (selText && messageEl.contains(sel.anchorNode)) {
+                _ctxStashedSelection = selText;
+            } else {
+                _ctxStashedSelection = '';
+            }
+            _ctxStashedMessageEl = messageEl;
+
+            var hasSelection = !!_ctxStashedSelection;
 
             var menu = document.createElement('div');
             menu.className = 'chat-context-menu';
 
-            var items = [
-                { emoji: _CTX_ICONS.copy, label: 'Copy Text', action: function() { ctxCopyText(messageEl); } },
-                { emoji: _CTX_ICONS.markdown, label: 'Copy Markdown', action: function() { ctxCopyMarkdown(messageEl); } },
-                { divider: true },
-                { emoji: _CTX_ICONS.reply, label: 'Reply to This', action: function() { ctxReplyToThis(messageEl); } },
-                { emoji: _CTX_ICONS.deeper, label: 'Ask Deeper', action: function() { ctxAskDeeper(messageEl); } },
-                { emoji: _CTX_ICONS.regen, label: 'Regenerate', action: function() { ctxRegenerate(messageEl); } },
-                { divider: true },
-                { emoji: _CTX_ICONS.agent, label: 'Spawn Agent', action: function() { ctxSpawnAgent(messageEl); } },
-                { emoji: _CTX_ICONS.specops, label: 'Delegate to SpecOps', action: function() { ctxDelegateSpecOps(messageEl); } },
-                { emoji: _CTX_ICONS.plan, label: 'Enter Plan Mode', action: function() { ctxEnterPlanMode(messageEl); } },
-                { divider: true },
-                { emoji: _CTX_ICONS.memory, label: 'Save to Memory', action: function() { ctxSaveToMemory(messageEl); } }
+            // Build menu items
+            var groups = [
+                [
+                    { emoji: '\u{1F4CB}', label: 'Copy Text', fn: ctxCopyText },
+                    { emoji: '\u2702\uFE0F', label: hasSelection ? 'Copy Highlighted' : 'Copy Highlighted', fn: ctxCopyHighlighted, disabled: !hasSelection }
+                ],
+                [
+                    { emoji: '\u21A9\uFE0F', label: 'Reply to This', fn: ctxReplyToThis },
+                    { emoji: '\u{1F50D}', label: 'Ask Deeper', fn: ctxAskDeeper },
+                    { emoji: '\u{1F504}', label: 'Regenerate', fn: ctxRegenerate }
+                ],
+                [
+                    { emoji: '\u{1F916}', label: 'Spawn Agent', fn: ctxSpawnAgent },
+                    { emoji: '\u{1F6E1}\uFE0F', label: 'Delegate to SpecOps', fn: ctxDelegateSpecOps },
+                    { emoji: '\u{1F4DD}', label: 'Enter Plan Mode', fn: ctxEnterPlanMode }
+                ],
+                [
+                    { emoji: '\u{1F4BE}', label: 'Save to Memory', fn: ctxSaveToMemory }
+                ]
             ];
 
-            items.forEach(function(item) {
-                if (item.divider) {
-                    var div = document.createElement('div');
-                    div.className = 'chat-context-menu-section';
-                    menu.appendChild(div);
-                    return;
+            groups.forEach(function(group, gi) {
+                if (gi > 0) {
+                    var sep = document.createElement('div');
+                    sep.className = 'chat-context-menu-section';
+                    menu.appendChild(sep);
                 }
-                var row = _buildCtxMenuItem(item.emoji, item.label);
-                row.addEventListener('click', function() {
-                    hideChatContextMenu();
-                    item.action();
+                group.forEach(function(item) {
+                    var row = document.createElement('div');
+                    row.className = 'chat-context-menu-item';
+                    if (item.disabled) {
+                        row.style.opacity = '0.35';
+                        row.style.pointerEvents = 'none';
+                    }
+                    row.setAttribute('data-action', item.label);
+                    var iconSpan = document.createElement('span');
+                    iconSpan.className = 'ctx-icon';
+                    iconSpan.textContent = item.emoji;
+                    var labelSpan = document.createElement('span');
+                    labelSpan.className = 'ctx-label';
+                    labelSpan.textContent = item.label;
+                    row.appendChild(iconSpan);
+                    row.appendChild(labelSpan);
+                    if (!item.disabled) {
+                        row.addEventListener('mousedown', function(e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                        });
+                        row.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            console.log('[CtxMenu] Action:', item.label);
+                            hideChatContextMenu();
+                            try {
+                                item.fn();
+                            } catch (err) {
+                                console.error('[CtxMenu] Action error:', err);
+                                showToast('Action failed: ' + err.message, 'error');
+                            }
+                        });
+                    }
+                    menu.appendChild(row);
                 });
-                menu.appendChild(row);
             });
 
             // Position with viewport clamping
@@ -31659,56 +31879,81 @@
             menu.style.left = x + 'px';
             menu.style.top = y + 'px';
 
-            // Dismiss handlers (delay to avoid immediate dismiss from the contextmenu click)
+            // Dismiss handlers — use capture phase so we get the event before anything else
             setTimeout(function() {
-                document.addEventListener('click', _chatCtxDismiss);
-                document.addEventListener('keydown', _chatCtxEscape);
-            }, 50);
+                document.addEventListener('mousedown', _chatCtxDismiss, true);
+                document.addEventListener('keydown', _chatCtxEscape, true);
+            }, 100);
         }
 
         /* --- Context Menu Actions --- */
+        // All actions read from _ctxStashedSelection / _ctxStashedMessageEl (captured at menu open)
 
-        function ctxCopyText(messageEl) {
-            var ctx = getMessageContext(messageEl);
-            navigator.clipboard.writeText(ctx.text).then(function() {
+        function ctxCopyText() {
+            var text = _getCtxText();
+            if (!text) { showToast('Nothing to copy', 'error'); return; }
+            navigator.clipboard.writeText(text).then(function() {
+                showToast('Copied to clipboard', 'success');
+            }).catch(function() {
+                // Fallback for Electron
+                var ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.left = '-9999px';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
                 showToast('Copied to clipboard', 'success');
             });
         }
 
-        function ctxCopyMarkdown(messageEl) {
-            var raw = messageEl.getAttribute('data-text') || '';
-            navigator.clipboard.writeText(raw).then(function() {
-                showToast('Markdown copied', 'success');
+        function ctxCopyHighlighted() {
+            var text = _ctxStashedSelection || _getCtxFullText();
+            if (!text) { showToast('Nothing to copy', 'error'); return; }
+            navigator.clipboard.writeText(text).then(function() {
+                showToast('Copied highlighted text', 'success');
+            }).catch(function() {
+                var ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.left = '-9999px';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                showToast('Copied highlighted text', 'success');
             });
         }
 
-        function ctxReplyToThis(messageEl) {
-            var ctx = getMessageContext(messageEl);
-            var text = ctx.text;
+        function ctxReplyToThis() {
+            var text = _getCtxText();
+            if (!text) return;
             if (text.length > 500) text = text.substring(0, 500) + '...';
             var quoted = text.split('\n').map(function(line) { return '> ' + line; }).join('\n');
             var input = document.getElementById('chat-input');
             input.value = quoted + '\n\n';
             input.focus();
             input.setSelectionRange(input.value.length, input.value.length);
-            // Auto-resize textarea
             input.style.height = 'auto';
             input.style.height = input.scrollHeight + 'px';
+            showToast('Quoted in input', 'info');
         }
 
-        function ctxAskDeeper(messageEl) {
-            var ctx = getMessageContext(messageEl);
-            var text = ctx.text;
+        function ctxAskDeeper() {
+            var text = _getCtxText();
+            if (!text) return;
             if (text.length > 1000) text = text.substring(0, 1000) + '...';
-            var prompt = "I'd like you to elaborate on this in more detail:\n\n> " + text.split('\n').join('\n> ') + "\n\nGo deeper \u2014 explain the reasoning, trade-offs, and any nuances I should understand.";
+            var quoted = text.split('\n').map(function(line) { return '> ' + line; }).join('\n> ');
+            var prompt = "I'd like you to elaborate on this in more detail:\n\n> " + quoted + "\n\nGo deeper \u2014 explain the reasoning, trade-offs, and any nuances I should understand.";
             var input = document.getElementById('chat-input');
             input.value = prompt;
             sendMessage();
         }
 
-        function ctxRegenerate(messageEl) {
-            // Find the previous user message in the DOM
-            var prev = messageEl.previousElementSibling;
+        function ctxRegenerate() {
+            if (!_ctxStashedMessageEl) return;
+            var prev = _ctxStashedMessageEl.previousElementSibling;
             while (prev && !prev.classList.contains('user')) {
                 prev = prev.previousElementSibling;
             }
@@ -31726,45 +31971,48 @@
             sendMessage();
         }
 
-        function ctxSpawnAgent(messageEl) {
-            var ctx = getMessageContext(messageEl);
-            var text = ctx.text;
+        function ctxSpawnAgent() {
+            var text = _getCtxText();
+            if (!text) return;
             if (text.length > 2000) text = text.substring(0, 2000) + '...';
-            var prompt = "Based on our conversation, specifically this:\n\n> " + text.split('\n').join('\n> ') + "\n\nI want to spawn an agent to handle this. Analyze what needs to be done and craft a detailed agent specification with:\n1. A clear, thorough task description\n2. The recommended agent role (worker/coder/researcher/analyst)\n3. The recommended model\n4. Key context the agent needs\n\nPresent it formatted so I can review before launching.";
+            var quoted = text.split('\n').map(function(line) { return '> ' + line; }).join('\n> ');
+            var prompt = "Based on our conversation, specifically this:\n\n> " + quoted + "\n\nI want to spawn an agent to handle this. Analyze what needs to be done and craft a detailed agent specification with:\n1. A clear, thorough task description\n2. The recommended agent role (worker/coder/researcher/analyst)\n3. The recommended model\n4. Key context the agent needs\n\nPresent it formatted so I can review before launching.";
             window._pendingAgentDraft = true;
             var input = document.getElementById('chat-input');
             input.value = prompt;
             sendMessage();
         }
 
-        function ctxDelegateSpecOps(messageEl) {
-            var ctx = getMessageContext(messageEl);
-            var text = ctx.text;
+        function ctxDelegateSpecOps() {
+            var text = _getCtxText();
+            if (!text) return;
             if (text.length > 2000) text = text.substring(0, 2000) + '...';
-            var prompt = "Based on our conversation, specifically this:\n\n> " + text.split('\n').join('\n> ') + "\n\nI want to launch a SpecOps mission for this. Craft a detailed mission specification with:\n1. Mission name (short, tactical)\n2. Mission objective and scope\n3. Recommended cycle interval (e.g., 300s, 900s)\n4. Success criteria\n5. Recommended sub-role (worker/coder/researcher/analyst)\n6. Duration estimate\n\nPresent it formatted so I can review before launching.";
+            var quoted = text.split('\n').map(function(line) { return '> ' + line; }).join('\n> ');
+            var prompt = "Based on our conversation, specifically this:\n\n> " + quoted + "\n\nI want to launch a SpecOps mission for this. Craft a detailed mission specification with:\n1. Mission name (short, tactical)\n2. Mission objective and scope\n3. Recommended cycle interval (e.g., 300s, 900s)\n4. Success criteria\n5. Recommended sub-role (worker/coder/researcher/analyst)\n6. Duration estimate\n\nPresent it formatted so I can review before launching.";
             window._pendingSpecOpsDraft = true;
             var input = document.getElementById('chat-input');
             input.value = prompt;
             sendMessage();
         }
 
-        function ctxEnterPlanMode(messageEl) {
-            var ctx = getMessageContext(messageEl);
-            var text = ctx.text;
+        function ctxEnterPlanMode() {
+            var text = _getCtxText();
+            if (!text) return;
             if (text.length > 1500) text = text.substring(0, 1500) + '...';
-            var prompt = "I want you to create a detailed, step-by-step implementation plan for this:\n\n> " + text.split('\n').join('\n> ') + "\n\nBreak it down into phases, identify the files that need to change, and flag any risks or decisions I need to make.";
+            var quoted = text.split('\n').map(function(line) { return '> ' + line; }).join('\n> ');
+            var prompt = "I want you to create a detailed, step-by-step implementation plan for this:\n\n> " + quoted + "\n\nBreak it down into phases, identify the files that need to change, and flag any risks or decisions I need to make.";
             var input = document.getElementById('chat-input');
             input.value = prompt;
             input.focus();
             input.setSelectionRange(input.value.length, input.value.length);
             input.style.height = 'auto';
             input.style.height = input.scrollHeight + 'px';
+            showToast('Plan prompt ready — hit Enter to send', 'info');
         }
 
-        function ctxSaveToMemory(messageEl) {
-            var ctx = getMessageContext(messageEl);
-            var text = ctx.text;
-            if (!text.trim()) {
+        function ctxSaveToMemory() {
+            var text = _getCtxText();
+            if (!text || !text.trim()) {
                 showToast('Nothing to save', 'error');
                 return;
             }
@@ -31791,6 +32039,158 @@
             });
         }
 
+        // ==================== CHAT LAYOUT (SPLIT VIEW) ====================
+
+        function initChatLayout() {
+            var saved = localStorage.getItem('cerebro_chat_layout');
+            if (saved === 'split') {
+                _chatSplitMode = true;
+                _activateSplitMode(false);
+            }
+            // Restore notepad content
+            var notepad = document.getElementById('split-notepad');
+            if (notepad) {
+                var savedNote = localStorage.getItem('cerebro_notepad');
+                if (savedNote) notepad.value = savedNote;
+                // Auto-save notepad with debounce
+                var notepadTimer = null;
+                notepad.addEventListener('input', function() {
+                    clearTimeout(notepadTimer);
+                    notepadTimer = setTimeout(function() {
+                        localStorage.setItem('cerebro_notepad', notepad.value);
+                    }, 500);
+                });
+            }
+        }
+
+        function toggleChatLayout() {
+            _chatSplitMode = !_chatSplitMode;
+            if (_chatSplitMode) {
+                _activateSplitMode(true);
+            } else {
+                _deactivateSplitMode();
+            }
+        }
+
+        function _activateSplitMode(animate) {
+            var chatView = document.getElementById('view-chat');
+            var btn = document.getElementById('layout-toggle-btn');
+            if (!chatView) return;
+
+            if (!animate) {
+                chatView.style.transition = 'none';
+                chatView.offsetHeight; // force reflow
+            }
+
+            chatView.classList.add('split-mode');
+            if (btn) btn.classList.add('active');
+            localStorage.setItem('cerebro_chat_layout', 'split');
+
+            if (!animate) {
+                requestAnimationFrame(function() {
+                    chatView.style.transition = '';
+                });
+            }
+
+            // Set initial button state based on active tab
+            var activeTab = document.querySelector('.split-tab.active');
+            var tabName = activeTab ? activeTab.getAttribute('data-tab') : 'notepad';
+            var sendBtn = document.getElementById('send-btn');
+            var saveBtn = document.getElementById('split-save-btn');
+            if (sendBtn && saveBtn) {
+                if (tabName === 'notepad') {
+                    sendBtn.style.display = 'none';
+                    saveBtn.style.display = 'flex';
+                } else {
+                    sendBtn.style.display = 'flex';
+                    saveBtn.style.display = 'none';
+                }
+            }
+
+            setTimeout(function() { scrollMessagesToBottom(true); }, 100);
+        }
+
+        function _deactivateSplitMode() {
+            var chatView = document.getElementById('view-chat');
+            var btn = document.getElementById('layout-toggle-btn');
+            if (!chatView) return;
+
+            chatView.classList.remove('split-mode');
+            if (btn) btn.classList.remove('active');
+            localStorage.setItem('cerebro_chat_layout', 'standard');
+
+            // Restore buttons to default state
+            var sendBtn = document.getElementById('send-btn');
+            var saveBtn = document.getElementById('split-save-btn');
+            if (sendBtn) sendBtn.style.display = '';
+            if (saveBtn) saveBtn.style.display = 'none';
+
+            setTimeout(function() { scrollMessagesToBottom(true); }, 100);
+        }
+
+        function switchSplitTab(tabName) {
+            var tabs = document.querySelectorAll('.split-tab');
+            tabs.forEach(function(t) {
+                t.classList.toggle('active', t.getAttribute('data-tab') === tabName);
+            });
+            document.getElementById('split-tab-notepad').style.display = tabName === 'notepad' ? '' : 'none';
+            document.getElementById('split-tab-compose').style.display = tabName === 'compose' ? '' : 'none';
+            // Swap action buttons based on tab
+            var sendBtn = document.getElementById('send-btn');
+            var saveBtn = document.getElementById('split-save-btn');
+            if (_chatSplitMode && sendBtn && saveBtn) {
+                if (tabName === 'notepad') {
+                    sendBtn.style.display = 'none';
+                    saveBtn.style.display = 'flex';
+                } else {
+                    sendBtn.style.display = 'flex';
+                    saveBtn.style.display = 'none';
+                }
+            }
+            // Focus the active textarea
+            var target = tabName === 'notepad' ? document.getElementById('split-notepad') : document.getElementById('split-compose');
+            if (target) setTimeout(function() { target.focus(); }, 50);
+        }
+
+        function handleComposeKeyDown(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendComposeMessage();
+            }
+        }
+
+        function sendComposeMessage() {
+            var compose = document.getElementById('split-compose');
+            if (!compose) return;
+            var text = compose.value.trim();
+            if (!text) return;
+            document.getElementById('chat-input').value = text;
+            compose.value = '';
+            sendMessage();
+        }
+
+        function saveNotepadToMemory() {
+            var notepad = document.getElementById('split-notepad');
+            if (!notepad || !notepad.value.trim()) {
+                showToast('Notepad is empty', 'warning');
+                return;
+            }
+            var text = notepad.value.trim();
+            fetch(API_URL + '/api/learnings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ type: 'insight', problem: 'Notepad entry', solution: text, tags: ['notepad', 'saved'] })
+            }).then(function(r) {
+                if (r.ok) {
+                    showToast('Saved to Memory');
+                } else {
+                    showToast('Failed to save', 'error');
+                }
+            }).catch(function() {
+                showToast('Failed to save', 'error');
+            });
+        }
+
         function addLaunchButton(messageEl, type) {
             var actions = messageEl.querySelector('.msg-actions');
             if (!actions) {
@@ -31808,8 +32208,8 @@
                 var fullText = messageEl.getAttribute('data-text') || '';
                 var preview = fullText.substring(0, 200) + (fullText.length > 200 ? '...' : '');
                 var title = type === 'agent' ? 'Launch Agent?' : 'Launch SpecOps Mission?';
-                var confirmText = type === 'agent' ? 'Launch Agent' : 'Launch SpecOps';
-                var confirmed = await cerebroConfirm(preview, { title: title, confirmText: confirmText, cancelText: 'Cancel' });
+                var cText = type === 'agent' ? 'Launch Agent' : 'Launch SpecOps';
+                var confirmed = await cerebroConfirm(preview, { title: title, confirmText: cText, cancelText: 'Cancel' });
                 if (!confirmed) return;
                 if (type === 'agent') {
                     spawnAgent(fullText, 'coder', getSelectedModel());
@@ -33263,14 +33663,12 @@
                     var result = await window.cerebroDesktop.checkForUpdates();
                     if (result && result.updateAvailable) {
                         showToast('Update available! Check the banner at the top.', 'success');
-                        // Show the update banner
                         var bar = document.getElementById('update-available-bar');
                         if (bar) bar.style.display = '';
                     } else {
                         showToast('You are on the latest version', 'success');
                     }
                 } else {
-                    // Non-Electron: check Docker image update via API
                     var resp = await fetch(API_URL + '/api/docker/check-update', {
                         headers: { 'Authorization': 'Bearer ' + token }
                     });
@@ -33678,129 +34076,6 @@
             }
         }
 
-        // ==================== VOICE ====================
-        function initVoice() {
-            const hasWebkit = 'webkitSpeechRecognition' in window;
-            const hasStandard = 'SpeechRecognition' in window;
-            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-            const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-            console.log('[Voice] initVoice - webkit:', hasWebkit, 'standard:', hasStandard, 'mobile:', isMobile, 'iOS:', isIOS);
-
-            if (!hasWebkit && !hasStandard) {
-                const msg = isMobile
-                    ? (isIOS ? 'Voice mode requires desktop Chrome (not supported on iOS)' : 'Voice not supported - try desktop Chrome')
-                    : 'Voice requires Chrome or Edge browser';
-                console.error('[Voice] Speech Recognition NOT available:', msg);
-                showToast(msg);
-                // Visually disable the mic button
-                const voiceBtn = document.getElementById('voice-btn');
-                if (voiceBtn) {
-                    voiceBtn.classList.add('disabled');
-                    voiceBtn.title = 'Voice not supported in this browser';
-                }
-                updateVoiceStatus();
-                return;
-            }
-            if (hasWebkit || hasStandard) {
-                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-                recognition = new SpeechRecognition();
-                recognition.continuous = true;
-                recognition.interimResults = true;
-                recognition.lang = 'en-US';
-                console.log('[Voice] Recognition initialized:', !!recognition);
-                updateVoiceStatus();
-
-                recognition.onresult = (event) => {
-                    let transcript = '';
-                    for (let i = event.resultIndex; i < event.results.length; i++) {
-                        transcript += event.results[i][0].transcript;
-                    }
-                    console.log('[Voice] Transcript:', transcript);
-                    document.getElementById('voice-transcript').textContent = transcript;
-                    document.getElementById('chat-input').value = transcript;
-
-                    // Auto-stop after silence in conversational mode
-                    if (conversationalMode && transcript.trim()) {
-                        clearTimeout(silenceTimer);
-                        console.log('[Conv] Setting 2s silence timer...');
-                        silenceTimer = setTimeout(() => {
-                            console.log('[Conv] Silence timer fired, stopping voice');
-                            if (isRecording && conversationalMode) {
-                                stopVoice();
-                            }
-                        }, 2000); // 2 second silence = end of utterance
-                    }
-                };
-
-                recognition.onerror = (event) => {
-                    console.error('Speech error:', event.error);
-                    stopVoice();
-                };
-
-                recognition.onend = () => {
-                    if (isRecording) {
-                        stopVoice();
-                    }
-                };
-            } else {
-                console.log('[Voice] Speech recognition NOT supported in this browser');
-                document.getElementById('voice-btn').style.display = 'none';
-                updateVoiceStatus();
-            }
-        }
-
-        function startVoice() {
-            if (!recognition) {
-                showToast('Voice requires Chrome or Edge browser', 'error');
-                return;
-            }
-
-            // Stop TTS if speaking (prevents mic picking up speaker output)
-            if (isSpeaking) stopSpeaking();
-
-            isRecording = true;
-            document.getElementById('voice-overlay').classList.add('active');
-            document.getElementById('voice-btn').classList.add('recording');
-            document.getElementById('voice-transcript').textContent = '';
-
-            try {
-                recognition.start();
-            } catch (e) {
-                console.error('Voice start error:', e);
-            }
-        }
-
-        function stopVoice() {
-            if (!recognition) return;
-
-            clearTimeout(silenceTimer);
-            isRecording = false;
-            document.getElementById('voice-overlay').classList.remove('active');
-            document.getElementById('voice-btn').classList.remove('recording');
-
-            try {
-                recognition.stop();
-            } catch (e) {
-                console.error('Voice stop error:', e);
-            }
-
-            // Auto-send if there's content
-            const input = document.getElementById('chat-input');
-            console.log('[Voice] stopVoice - input value:', input.value);
-            if (input.value.trim()) {
-                console.log('[Conv] Sending message:', input.value.trim().substring(0, 50));
-                setTimeout(() => {
-                    switchView('chat');
-                    sendMessage();
-                }, 300);
-            } else {
-                console.log('[Conv] No content to send');
-            }
-
-            // Remove listening state from orb
-            document.getElementById('nav-orb-container')?.classList.remove('listening');
-        }
-
         // ==================== TTS ====================
         async function speak(text) {
             if (isSpeaking) { stopSpeaking(); return; }
@@ -33848,11 +34123,6 @@
                     setSpeakingState(false);
                     URL.revokeObjectURL(audioUrl);
                     currentAudio = null;
-                    // Auto-listen after speaking in conversational mode
-                    if (conversationalMode) {
-                        console.log('[Conv] Will start listening in 300ms...');
-                        setTimeout(() => startConversationalListen(), 300);
-                    }
                 };
                 currentAudio.onerror = () => { setSpeakingState(false); showToast('Audio failed'); };
 
@@ -33871,9 +34141,6 @@
                         if (femaleVoice) utterance.voice = femaleVoice;
                         utterance.onend = () => {
                             setSpeakingState(false);
-                            if (conversationalMode) {
-                                setTimeout(() => startConversationalListen(), 300);
-                            }
                         };
                         setSpeakingState(true);
                         window.speechSynthesis.speak(utterance);
@@ -34455,64 +34722,8 @@
                 }
             }
 
-            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-                voiceStatus.textContent = isIOS ? 'Not supported on iOS' : (isMobile ? 'Use desktop Chrome' : (isFirefox ? 'STT: Chrome/Edge only' : 'Use Chrome/Edge'));
-                voiceStatus.className = 'settings-value';
-                voiceStatus.style.color = '#ef4444';
-            } else if (recognition) {
-                voiceStatus.textContent = 'Ready';
-                voiceStatus.className = 'settings-value success';
-            } else {
-                voiceStatus.textContent = 'TTS ready, STT not initialized';
-                voiceStatus.className = 'settings-value';
-            }
-        }
-
-        // ==================== CONVERSATIONAL MODE ====================
-        function startConversationalMode() {
-            // Ensure voice is initialized
-            if (!recognition) {
-                console.log('[Conv] Recognition not ready, initializing...');
-                initVoice();
-            }
-            if (!recognition) {
-                const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-                showToast(isIOS ? 'Voice mode requires desktop (not iOS)' : 'Voice not supported - use desktop Chrome');
-                return;
-            }
-            conversationalMode = true;
-            document.getElementById('nav-orb-container')?.classList.add('conversational');
-            showToast('Voice mode active');
-            speak(getCerebroGreeting());
-        }
-
-        function stopConversationalMode() {
-            conversationalMode = false;
-            document.getElementById('nav-orb-container')?.classList.remove('conversational', 'listening');
-            if (isRecording) stopVoice();
-            if (isSpeaking) stopSpeaking();
-            showToast('Voice mode ended');
-        }
-
-        function startConversationalListen() {
-            if (!conversationalMode || !recognition) {
-                console.log('[Conv] Cannot start listen - mode:', conversationalMode, 'recognition:', !!recognition);
-                return;
-            }
-
-            console.log('[Conv] Starting to listen...');
-            document.getElementById('nav-orb-container')?.classList.add('listening');
-            isRecording = true;
-            document.getElementById('voice-overlay').classList.add('active');
-            document.getElementById('voice-transcript').textContent = '';
-
-            try {
-                recognition.start();
-                console.log('[Conv] Recognition started');
-            } catch (e) {
-                console.error('[Conv] Listen error:', e);
-                stopConversationalMode();
-            }
+            voiceStatus.textContent = 'TTS ready (STT removed)';
+            voiceStatus.className = 'settings-value';
         }
 
         // ==================== AGENTS ====================
@@ -35513,7 +35724,7 @@
             return `${Math.floor(seconds / 86400)}d ago`;
         }
 
-        async function spawnAgent(task, agentType = 'worker', model = 'sonnet') {
+        async function spawnAgent(task, agentType = 'worker', model = 'sonnet', offloadDeviceId = null) {
             try {
                 // Check if this is a follow-up from another agent
                 let parentAgentId = null;
@@ -35533,21 +35744,24 @@
                 // Get attached context refs
                 const contextRefs = getContextRefsForSend();
 
+                var payload = {
+                    task,
+                    agent_type: agentType,
+                    parent_agent_id: parentAgentId,
+                    project_id: parentProjectId,
+                    context: context,
+                    context_refs: contextRefs,
+                    model: parentModel
+                };
+                if (offloadDeviceId) payload.offload_device_id = offloadDeviceId;
+
                 const response = await fetch(`${API_URL}/agents`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        task,
-                        agent_type: agentType,
-                        parent_agent_id: parentAgentId,
-                        project_id: parentProjectId,
-                        context: context,
-                        context_refs: contextRefs,
-                        model: parentModel
-                    })
+                    body: JSON.stringify(payload)
                 });
 
                 const data = await response.json();
@@ -38338,9 +38552,48 @@
                 arrow.textContent = '▼';
                 // Load project folders when offload is active
                 loadProjectFolders();
+                // Load eligible devices for offload selector
+                loadAgentOffloadDevices();
             } else {
                 options.classList.add('hidden');
                 arrow.textContent = '▶';
+            }
+        }
+
+        async function loadAgentOffloadDevices() {
+            var select = document.getElementById('agent-offload-device');
+            if (!select) return;
+            try {
+                var resp = await fetch(API_URL + '/api/offload/eligible-devices', {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('cerebro_token') }
+                });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                var data = await resp.json();
+                var devices = data.devices || [];
+
+                // Reset options — keep the "Local" default
+                select.length = 1;
+
+                devices.forEach(function(dev) {
+                    var opt = document.createElement('option');
+                    opt.value = dev.id;
+                    var name = dev.friendly_name || dev.device_name || dev.id;
+                    var detail = dev.device_type || 'device';
+                    if (dev.ram_gb) detail += ' \u00B7 ' + dev.ram_gb + 'GB RAM';
+                    opt.textContent = name + '  (' + detail + ')';
+                    select.appendChild(opt);
+                });
+
+                // Show project folder group if a remote device is selected
+                select.onchange = function() {
+                    var folderGroup = document.getElementById('project-folder-group');
+                    if (folderGroup) {
+                        folderGroup.style.display = select.value ? '' : 'none';
+                    }
+                    if (select.value) loadProjectFolders();
+                };
+            } catch (e) {
+                console.warn('[Agent Offload] Failed to load devices:', e.message);
             }
         }
 
@@ -38432,11 +38685,12 @@
 
             const model = document.getElementById('agent-model-select')?.value || 'sonnet';
             const projectFolder = document.getElementById('agent-project-folder')?.value || null;
-            spawnAgentEnhanced(task, selectedAgentRole, context, expectedOutput, priority, resources, agentTimeout, model, projectFolder);
+            const offloadDeviceId = document.getElementById('agent-offload-device')?.value || null;
+            spawnAgentEnhanced(task, selectedAgentRole, context, expectedOutput, priority, resources, agentTimeout, model, projectFolder, offloadDeviceId);
             closeAgentPanel();
         }
 
-        async function spawnAgentEnhanced(task, agentType, context, expectedOutput, priority, resources, timeout = 3600, model = 'sonnet', projectFolder = null) {
+        async function spawnAgentEnhanced(task, agentType, context, expectedOutput, priority, resources, timeout = 3600, model = 'sonnet', projectFolder = null, offloadDeviceId = null) {
             try {
                 var payload = {
                     task,
@@ -38449,6 +38703,7 @@
                     model
                 };
                 if (projectFolder) payload.project_folder = projectFolder;
+                if (offloadDeviceId) payload.offload_device_id = offloadDeviceId;
                 const response = await fetch(`${API_URL}/agents`, {
                     method: 'POST',
                     headers: {
@@ -40618,6 +40873,7 @@ Please proceed with implementing this recommendation. You have full permissions.
 
         // Handle mobile keyboard - adjust layout when keyboard opens
         function handleMobileKeyboard() {
+            if (_chatSplitMode) return; // Split mode handles its own layout via CSS Grid
             const chatInput = document.querySelector('.chat-input-area');
             const bottomNav = document.querySelector('.bottom-nav');
             const messagesContainer = document.getElementById('messages');
