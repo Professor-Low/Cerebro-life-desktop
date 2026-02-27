@@ -25191,6 +25191,10 @@
                                 <button class="btn btn-secondary btn-block" id="settings-check-update-btn" style="margin-top: 16px;" onclick="manualCheckForUpdates()">
                                     Check for Updates
                                 </button>
+                                <div style="margin-top: 12px; padding: 12px 14px; background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.15); border-radius: 10px; font-size: 0.78rem; color: var(--text-muted); line-height: 1.5;">
+                                    <span style="color: var(--accent-light); font-weight: 600;">Update tip:</span>
+                                    If "Restart &amp; Update" doesn't work, just close Cerebro and reopen it from your desktop shortcut or Start menu. The update installs automatically when the app restarts.
+                                </div>
 
                                 <div class="settings-divider"></div>
 
@@ -33244,16 +33248,12 @@
             var btn = document.getElementById('settings-check-update-btn');
             if (btn) { btn.disabled = true; btn.textContent = 'Checking\u2026'; }
             try {
-                // Check if the update banner is already showing (Electron auto-updater found one)
-                var bar = document.getElementById('update-available-bar');
-                var bannerVisible = bar && bar.style.display !== 'none';
-
                 if (window.cerebroDesktop) {
                     var result = await window.cerebroDesktop.checkForUpdates();
-                    var dockerUpdate = result && result.updateAvailable;
-
-                    if (dockerUpdate || bannerVisible) {
-                        showToast('Update available! Click "Restart & Update" in the banner.', 'success');
+                    if (result && result.updateAvailable) {
+                        showToast('Update available! Check the banner at the top.', 'success');
+                        // Show the update banner
+                        var bar = document.getElementById('update-available-bar');
                         if (bar) bar.style.display = '';
                     } else {
                         showToast('You are on the latest version', 'success');
@@ -33265,8 +33265,9 @@
                     });
                     if (resp.ok) {
                         var data = await resp.json();
-                        if (data.updateAvailable || bannerVisible) {
-                            showToast('Update available! Click "Restart & Update" in the banner.', 'success');
+                        if (data.updateAvailable) {
+                            showToast('Docker update available! Check the banner.', 'success');
+                            var bar = document.getElementById('update-available-bar');
                             if (bar) bar.style.display = '';
                         } else {
                             showToast('You are on the latest version', 'success');
