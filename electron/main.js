@@ -938,42 +938,16 @@ ipcMain.handle('check-for-updates', async () => {
 
 ipcMain.handle('apply-update', async () => {
   try {
-    // Ensure Defender exclusion is in place BEFORE updating.
-    // The new Cerebro.exe installed by the updater will be killed by Defender
-    // on launch if the process exclusion isn't set. This must happen now,
-    // while the CURRENT (already-running) process is still alive.
+    // Best-effort Defender exclusion — never block the update.
+    // The NSIS installer (installer.nsh) handles Defender exclusions during
+    // installation, so quitAndInstall() will handle it properly. We attempt
+    // it here as a courtesy but NEVER gate the update on it — blocking the
+    // update is worse than a potential Defender issue (which the installer fixes).
     if (process.platform === 'win32') {
-      // addDefenderExclusion() now self-verifies inside the elevated context,
-      // so we trust its result rather than re-checking with isDefenderExcluded()
-      // (which also needs elevation and would trigger a second UAC prompt).
-      let defenderOk = false;
       try {
-        // First attempt via ensureDefenderExclusion (checks marker freshness)
         await ensureDefenderExclusion();
-        defenderOk = dockerManager.hasDefenderExclusionMarker();
-        // Marker content "failed" means it didn't work
-        if (defenderOk) {
-          const markerPath = path.join(require('os').homedir(), '.cerebro', '.defender-excluded');
-          try {
-            const content = fs.readFileSync(markerPath, 'utf-8').trim().toLowerCase();
-            if (content === 'failed') defenderOk = false;
-          } catch {}
-        }
-      } catch {}
-
-      if (!defenderOk) {
-        // Direct retry with addDefenderExclusion (self-verifying)
-        try {
-          const result = await dockerManager.addDefenderExclusion();
-          defenderOk = result.success;
-        } catch {}
-      }
-
-      if (!defenderOk) {
-        return {
-          success: false,
-          error: 'Windows Defender is blocking Cerebro. Please open PowerShell as Administrator and run:\n\nAdd-MpPreference -ExclusionProcess "Cerebro.exe"\n\nThen try the update again.'
-        };
+      } catch (e) {
+        console.warn('[Update] Defender exclusion attempt failed (non-blocking):', e.message);
       }
     }
 

@@ -33244,12 +33244,16 @@
             var btn = document.getElementById('settings-check-update-btn');
             if (btn) { btn.disabled = true; btn.textContent = 'Checking\u2026'; }
             try {
+                // Check if the update banner is already showing (Electron auto-updater found one)
+                var bar = document.getElementById('update-available-bar');
+                var bannerVisible = bar && bar.style.display !== 'none';
+
                 if (window.cerebroDesktop) {
                     var result = await window.cerebroDesktop.checkForUpdates();
-                    if (result && result.updateAvailable) {
-                        showToast('Update available! Check the banner at the top.', 'success');
-                        // Show the update banner
-                        var bar = document.getElementById('update-available-bar');
+                    var dockerUpdate = result && result.updateAvailable;
+
+                    if (dockerUpdate || bannerVisible) {
+                        showToast('Update available! Click "Restart & Update" in the banner.', 'success');
                         if (bar) bar.style.display = '';
                     } else {
                         showToast('You are on the latest version', 'success');
@@ -33261,9 +33265,8 @@
                     });
                     if (resp.ok) {
                         var data = await resp.json();
-                        if (data.updateAvailable) {
-                            showToast('Docker update available! Check the banner.', 'success');
-                            var bar = document.getElementById('update-available-bar');
+                        if (data.updateAvailable || bannerVisible) {
+                            showToast('Update available! Click "Restart & Update" in the banner.', 'success');
                             if (bar) bar.style.display = '';
                         } else {
                             showToast('You are on the latest version', 'success');
