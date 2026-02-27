@@ -9022,7 +9022,6 @@
         .msg-actions {
             display: flex;
             justify-content: flex-end;
-            gap: 6px;
             margin-top: 8px;
             padding-top: 6px;
             opacity: 0;
@@ -9062,60 +9061,6 @@
             stroke-width: 2;
             stroke-linecap: round;
             stroke-linejoin: round;
-        }
-        /* === MESSAGE SPEAK BUTTON === */
-        .msg-speak-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: var(--text-muted);
-            font-size: 0.72rem;
-            padding: 4px 10px;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            position: relative;
-        }
-        .msg-speak-btn:hover {
-            background: rgba(139, 92, 246, 0.15);
-            border-color: rgba(139, 92, 246, 0.3);
-            color: var(--text-secondary);
-        }
-        .msg-speak-btn svg {
-            width: 13px;
-            height: 13px;
-            flex-shrink: 0;
-        }
-        .msg-speak-btn.speaking {
-            background: rgba(139, 92, 246, 0.2);
-            border-color: rgba(139, 92, 246, 0.4);
-            color: var(--accent-light);
-        }
-        .msg-speak-btn.speaking svg {
-            animation: speak-btn-pulse 1s ease-in-out infinite;
-        }
-        .msg-speak-btn.loading {
-            pointer-events: none;
-            color: transparent;
-        }
-        .msg-speak-btn.loading::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 12px;
-            height: 12px;
-            border: 2px solid rgba(139, 92, 246, 0.3);
-            border-top-color: var(--accent);
-            border-radius: 50%;
-            animation: spin-loader 0.6s linear infinite;
-        }
-        @keyframes speak-btn-pulse {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.15); opacity: 0.7; }
         }
 
         /* === CHAT CONTEXT MENU === */
@@ -9166,36 +9111,6 @@
             color: var(--text-muted);
             margin-left: auto;
             pointer-events: none;
-        }
-        /* Context menu toggle switch */
-        .ctx-toggle {
-            width: 34px;
-            height: 18px;
-            border-radius: 9px;
-            background: rgba(255, 255, 255, 0.12);
-            position: relative;
-            flex-shrink: 0;
-            margin-left: auto;
-            transition: background 0.2s ease;
-            cursor: pointer;
-        }
-        .ctx-toggle::after {
-            content: '';
-            position: absolute;
-            top: 2px;
-            left: 2px;
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.5);
-            transition: all 0.2s ease;
-        }
-        .ctx-toggle.active {
-            background: var(--accent);
-        }
-        .ctx-toggle.active::after {
-            left: 18px;
-            background: white;
         }
         /* Launch button on agent/specops draft messages */
         .msg-launch-btn {
@@ -31686,15 +31601,6 @@
                     }
                 }
 
-                // Auto Voice: speak the completed message if enabled
-                if (TTS_CONFIG.autoSpeak && currentAssistantMessage) {
-                    var autoText = currentAssistantMessage.getAttribute('data-text') || '';
-                    if (autoText && autoText.length > 5) {
-                        var speakBtn = currentAssistantMessage.querySelector('.msg-speak-btn');
-                        speakMessageContent(currentAssistantMessage, speakBtn);
-                    }
-                }
-
                 // Add launch button if pending agent/specops draft
                 if (window._pendingAgentDraft && currentAssistantMessage) {
                     addLaunchButton(currentAssistantMessage, 'agent');
@@ -31769,11 +31675,10 @@
                 conversation_id: null
             };
 
-            // Copy + Speak buttons (shown on hover)
+            // Copy button (shown on hover)
             const actions = document.createElement('div');
             actions.className = 'msg-actions';
             actions.appendChild(createCopyButton(message));
-            actions.appendChild(createSpeakButton(message));
             message.appendChild(actions);
 
             message.classList.add('attachable');
@@ -31832,44 +31737,6 @@
                     document.body.removeChild(ta);
                     onCopied();
                 }
-            };
-            return btn;
-        }
-
-        function createSpeakButton(messageEl) {
-            var btn = document.createElement('button');
-            btn.className = 'msg-speak-btn';
-            btn.title = 'Listen to this message';
-            // Build speaker icon via DOM (safe — no user content)
-            var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            svg.setAttribute('viewBox', '0 0 24 24');
-            svg.setAttribute('fill', 'currentColor');
-            var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            path.setAttribute('d', 'M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z');
-            svg.appendChild(path);
-            btn.appendChild(svg);
-            btn.appendChild(document.createTextNode(' Listen'));
-            btn._resetContent = function() {
-                btn.textContent = '';
-                var s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-                s.setAttribute('viewBox', '0 0 24 24');
-                s.setAttribute('fill', 'currentColor');
-                var p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                p.setAttribute('d', 'M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z');
-                s.appendChild(p);
-                btn.appendChild(s);
-                btn.appendChild(document.createTextNode(' Listen'));
-            };
-            btn.onclick = function(e) {
-                e.stopPropagation();
-                if (isSpeaking && currentSpeakingBtn === btn) {
-                    stopSpeaking();
-                    btn.classList.remove('speaking', 'loading');
-                    btn._resetContent();
-                    currentSpeakingBtn = null;
-                    return;
-                }
-                speakMessageContent(messageEl, btn);
             };
             return btn;
         }
@@ -31999,38 +31866,6 @@
                     menu.appendChild(row);
                 });
             });
-
-            // Auto Voice toggle row
-            var autoSep = document.createElement('div');
-            autoSep.className = 'chat-context-menu-section';
-            menu.appendChild(autoSep);
-            var autoRow = document.createElement('div');
-            autoRow.className = 'chat-context-menu-item';
-            autoRow.setAttribute('data-action', 'Auto Voice');
-            var autoIcon = document.createElement('span');
-            autoIcon.className = 'ctx-icon';
-            autoIcon.textContent = '\u{1F50A}';
-            var autoLabel = document.createElement('span');
-            autoLabel.className = 'ctx-label';
-            autoLabel.textContent = 'Auto Voice';
-            var autoToggle = document.createElement('div');
-            autoToggle.className = 'ctx-toggle' + (TTS_CONFIG.autoSpeak ? ' active' : '');
-            autoRow.appendChild(autoIcon);
-            autoRow.appendChild(autoLabel);
-            autoRow.appendChild(autoToggle);
-            autoRow.addEventListener('mousedown', function(e) { e.preventDefault(); e.stopPropagation(); });
-            autoRow.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                TTS_CONFIG.autoSpeak = !TTS_CONFIG.autoSpeak;
-                localStorage.setItem('cerebro_tts_autospeak', TTS_CONFIG.autoSpeak.toString());
-                autoToggle.classList.toggle('active', TTS_CONFIG.autoSpeak);
-                // Sync Settings page toggle if visible
-                var settingsToggle = document.getElementById('autospeak-toggle');
-                if (settingsToggle) settingsToggle.classList.toggle('active', TTS_CONFIG.autoSpeak);
-                showToast(TTS_CONFIG.autoSpeak ? 'Auto Voice enabled' : 'Auto Voice disabled', 'info');
-            });
-            menu.appendChild(autoRow);
 
             // Position with viewport clamping
             document.body.appendChild(menu);
@@ -34936,10 +34771,22 @@
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await response.json();
+                var undeleted = false;
                 data.agents.forEach(agent => {
-                    if (deletedAgentIds.has(agent.id)) return;
+                    if (deletedAgentIds.has(agent.id)) {
+                        // Re-spawned agent with a previously-deleted call_sign — un-delete it
+                        if (agent.status === 'running' || agent.status === 'cycling' || agent.status === 'queued') {
+                            deletedAgentIds.delete(agent.id);
+                            undeleted = true;
+                        } else {
+                            return;
+                        }
+                    }
                     agents[agent.id] = agent;
                 });
+                if (undeleted) {
+                    localStorage.setItem('cerebro_deleted_agents', JSON.stringify(Array.from(deletedAgentIds)));
+                }
 
                 // Also load from persistent history (including archived)
                 try {
@@ -35004,8 +34851,8 @@
             let allAgents = Object.values(agents);
             const dirMul = agentsSortDir === 'asc' ? 1 : -1;
             allAgents.sort((a, b) => {
-                const aRunning = a.status === 'running' || a.status === 'queued' ? 1 : 0;
-                const bRunning = b.status === 'running' || b.status === 'queued' ? 1 : 0;
+                const aRunning = a.status === 'running' || a.status === 'queued' || a.status === 'cycling' ? 1 : 0;
+                const bRunning = b.status === 'running' || b.status === 'queued' || b.status === 'cycling' ? 1 : 0;
                 if (bRunning !== aRunning) return bRunning - aRunning;
                 const aTime = a.created_at || a.updated_at;
                 const bTime = b.created_at || b.updated_at;
@@ -35032,7 +34879,7 @@
             if (agentsViewMode === 'project') {
                 renderAgentsProjectView(tabAgents);
                 // Still update running count
-                const runningCount = tabAgents.filter(a => !a.archived && (a.status === 'running' || a.status === 'queued')).length;
+                const runningCount = tabAgents.filter(a => !a.archived && (a.status === 'running' || a.status === 'queued' || a.status === 'cycling')).length;
                 document.getElementById('agents-count').textContent = `${runningCount} running`;
                 const pill = document.getElementById('header-agents-pill');
                 if (pill) { pill.textContent = runningCount > 0 ? `${runningCount} running` : 'idle'; pill.classList.toggle('idle', runningCount === 0); }
@@ -35058,7 +34905,7 @@
             const leafAgents = activeAgents.filter(a => !agentsWithChildren.has(a.id));
 
             // Count uses ALL agents (including hidden parents) for accuracy
-            const runningCount = activeAgents.filter(a => a.status === 'running' || a.status === 'queued').length;
+            const runningCount = activeAgents.filter(a => a.status === 'running' || a.status === 'queued' || a.status === 'cycling').length;
             document.getElementById('agents-count').textContent = `${runningCount} running`;
             const pill2 = document.getElementById('header-agents-pill');
             if (pill2) { pill2.textContent = runningCount > 0 ? `${runningCount} running` : 'idle'; pill2.classList.toggle('idle', runningCount === 0); }
@@ -35642,7 +35489,7 @@
             for (const projKey of sortedKeys) {
                 const projAgents = groups[projKey];
                 const isExpanded = expandedProjects.has(projKey);
-                const runningCount = projAgents.filter(a => a.status === 'running' || a.status === 'queued').length;
+                const runningCount = projAgents.filter(a => a.status === 'running' || a.status === 'queued' || a.status === 'cycling').length;
                 const projInfo = agentProjects[projKey] || {};
                 const projName = projKey === 'uncategorized' ? 'Uncategorized' : (projInfo.name || projKey);
                 const tags = projInfo.tech_tags || [];
