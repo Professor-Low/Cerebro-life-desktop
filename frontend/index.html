@@ -25258,6 +25258,12 @@
                                         <span class="settings-value" id="app-version">--</span>
                                     </div>
                                     <div class="settings-row">
+                                        <span class="settings-label">Updates</span>
+                                        <span class="settings-value">
+                                            <button class="btn btn-sm" id="check-updates-btn" onclick="manualCheckForUpdates()" style="font-size:0.75rem;padding:4px 14px;border-radius:8px;">Check for Updates</button>
+                                        </span>
+                                    </div>
+                                    <div class="settings-row">
                                         <span class="settings-label">Cost</span>
                                         <span class="settings-value success" id="settings-cost-display">Included (Claude Code subscription)</span>
                                     </div>
@@ -33482,6 +33488,57 @@
             } catch (e) {
                 showToast('Update failed: ' + e.message, 'error');
                 if (btn) { btn.disabled = false; btn.classList.remove('updating'); btn.textContent = 'Restart & Update'; }
+            }
+        }
+
+        async function manualCheckForUpdates() {
+            var btn = document.getElementById('check-updates-btn');
+            if (!btn || !window.cerebroDesktop) return;
+            var origText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Checking...';
+            try {
+                // Ask the main process to check Docker updates
+                var result = await window.cerebroDesktop.checkForUpdates();
+                if (result && result.updateAvailable) {
+                    _updateBannerDismissed = false;
+                    window.__cerebroShowUpdateBanner('docker');
+                    btn.textContent = 'Update available!';
+                    btn.style.color = 'var(--accent)';
+                    return;
+                }
+                // Also check via GitHub API from the frontend as fallback
+                try {
+                    var resp = await fetch('https://api.github.com/repos/Professor-Low/Cerebro-life-desktop/releases/latest');
+                    if (resp.ok) {
+                        var data = await resp.json();
+                        var latestTag = (data.tag_name || '').replace(/^v/, '');
+                        var currentVer = document.getElementById('app-version').textContent.trim();
+                        if (latestTag && currentVer && latestTag !== currentVer) {
+                            var curr = currentVer.split('.').map(Number);
+                            var lat = latestTag.split('.').map(Number);
+                            var newer = false;
+                            for (var i = 0; i < 3; i++) {
+                                if ((lat[i]||0) > (curr[i]||0)) { newer = true; break; }
+                                if ((lat[i]||0) < (curr[i]||0)) break;
+                            }
+                            if (newer) {
+                                _updateBannerDismissed = false;
+                                window.__cerebroShowUpdateBanner('electron');
+                                btn.textContent = 'Update available!';
+                                btn.style.color = 'var(--accent)';
+                                return;
+                            }
+                        }
+                    }
+                } catch(e) {}
+                btn.textContent = 'Up to date';
+                btn.style.color = 'var(--success)';
+                setTimeout(function() { btn.textContent = origText; btn.style.color = ''; btn.disabled = false; }, 3000);
+            } catch(e) {
+                btn.textContent = 'Check failed';
+                btn.style.color = 'var(--danger)';
+                setTimeout(function() { btn.textContent = origText; btn.style.color = ''; btn.disabled = false; }, 3000);
             }
         }
 

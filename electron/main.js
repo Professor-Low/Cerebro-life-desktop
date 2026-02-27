@@ -462,9 +462,12 @@ async function loadFrontend() {
     mainWindow.show();
     mainWindow.focus();
 
-    // Check for updates in the background
+    // Check for updates in the background — aggressive early, then every 30 min.
+    // Early checks catch releases published right after the user launched the app.
     checkForUpdatesQuietly();
-    setInterval(checkForUpdatesQuietly, 30 * 60 * 1000);
+    setTimeout(checkForUpdatesQuietly, 60 * 1000);       // 1 min after launch
+    setTimeout(checkForUpdatesQuietly, 5 * 60 * 1000);   // 5 min after launch
+    setInterval(checkForUpdatesQuietly, 30 * 60 * 1000); // then every 30 min
   });
 
   mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
