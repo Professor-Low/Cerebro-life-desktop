@@ -884,29 +884,84 @@ ipcMain.handle('apply-update', async () => {
       mainWindow.loadURL('data:text/html,' + encodeURIComponent(`<!DOCTYPE html>
 <html><head><style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:#0a0a0f; color:#e2e8f0; font-family:-apple-system,BlinkMacSystemFont,sans-serif;
-    display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; }
-  .spinner { width:48px; height:48px; border:3px solid rgba(139,92,246,0.2);
-    border-top-color:#8b5cf6; border-radius:50%; animation:spin 1s linear infinite; margin-bottom:24px; }
+  body { background:#0a0a0f; color:#e2e8f0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh;
+    overflow:hidden; }
+  .update-container { text-align:center; width:340px; }
+  .logo-ring { width:64px; height:64px; margin:0 auto 28px; position:relative; }
+  .logo-ring::before { content:''; position:absolute; inset:0; border-radius:50%;
+    border:2.5px solid rgba(139,92,246,0.15); }
+  .logo-ring::after { content:''; position:absolute; inset:0; border-radius:50%;
+    border:2.5px solid transparent; border-top-color:#8b5cf6; border-right-color:#a78bfa;
+    animation:spin 1.2s cubic-bezier(0.45,0.05,0.55,0.95) infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
-  h2 { color:#8b5cf6; margin-bottom:8px; font-size:1.2rem; }
-  #status { color:#94a3b8; font-size:0.85rem; }
+  .logo-dot { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:20px; height:20px; background:linear-gradient(135deg,#8b5cf6,#a78bfa);
+    border-radius:50%; box-shadow:0 0 20px rgba(139,92,246,0.4); }
+  h2 { color:#e2e8f0; font-size:1.15rem; font-weight:600; margin-bottom:6px; letter-spacing:-0.01em; }
+  #status { color:#94a3b8; font-size:0.8rem; margin-bottom:20px; min-height:1.2em; }
+  .bar-track { width:100%; height:6px; background:rgba(139,92,246,0.1); border-radius:3px;
+    overflow:hidden; position:relative; }
+  .bar-fill { height:100%; width:0%; border-radius:3px;
+    background:linear-gradient(90deg,#7c3aed,#8b5cf6,#a78bfa);
+    transition:width 0.6s cubic-bezier(0.25,0.46,0.45,0.94);
+    box-shadow:0 0 12px rgba(139,92,246,0.3); position:relative; }
+  .bar-fill::after { content:''; position:absolute; top:0; left:0; right:0; bottom:0;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,0.15),transparent);
+    animation:shimmer 1.8s ease-in-out infinite; }
+  @keyframes shimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
+  #percent { color:#a78bfa; font-size:0.75rem; margin-top:8px; font-variant-numeric:tabular-nums; }
 </style></head><body>
-  <div class="spinner"></div>
-  <h2>Updating Cerebro...</h2>
-  <p id="status">Preparing update...</p>
+  <div class="update-container">
+    <div class="logo-ring"><div class="logo-dot"></div></div>
+    <h2>Updating Cerebro</h2>
+    <p id="status">Preparing update...</p>
+    <div class="bar-track"><div class="bar-fill" id="bar"></div></div>
+    <p id="percent"></p>
+  </div>
 </body></html>`));
     }
+
+    // Helper to update the splash screen progress bar + status
+    const updateSplash = (message, percent) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      try {
+        mainWindow.webContents.executeJavaScript(`
+          var s=document.getElementById('status');
+          var b=document.getElementById('bar');
+          var p=document.getElementById('percent');
+          if(s)s.textContent=${JSON.stringify(message)};
+          if(b)b.style.width='${Math.min(100, Math.max(0, percent))}%';
+          if(p)p.textContent=${percent > 0 ? JSON.stringify(Math.round(percent) + '%') : "''"};
+        `).catch(() => {});
+      } catch {}
+    };
 
     // Step 1: Docker update (if needed)
     if (needsDocker) {
       await dockerManager.applyUpdate((progress) => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          try {
-            mainWindow.webContents.executeJavaScript(
-              `var s=document.getElementById('status');if(s)s.textContent=${JSON.stringify(progress.message || progress.stage || '')};`
-            ).catch(() => {});
-          } catch {}
+        // Map stages to clean messages + progress percentages
+        const stage = progress.stage || '';
+        const msg = progress.message || '';
+        if (stage === 'pulling_core') {
+          // 0-50%: core image download
+          const pct = progress.percent != null ? progress.percent * 0.5 : 10;
+          updateSplash('Downloading core services...', pct);
+        } else if (stage === 'pulling_optional') {
+          // 50-70%: optional image download
+          const pct = 50 + (progress.percent != null ? progress.percent * 0.2 : 5);
+          updateSplash('Downloading voice engine...', pct);
+        } else if (stage === 'pulling_optional_skip') {
+          updateSplash('Voice engine skipped', 70);
+        } else if (stage === 'stopping') {
+          updateSplash('Stopping services...', 75);
+        } else if (stage === 'starting') {
+          updateSplash('Starting services...', 85);
+        } else if (stage === 'done') {
+          updateSplash('Update complete!', 100);
+        } else {
+          // Fallback — still don't show raw Docker output
+          updateSplash('Updating...', 5);
         }
       });
       // Re-sync frontend and env after Docker update to ensure latest files are mounted
@@ -915,13 +970,7 @@ ipcMain.handle('apply-update', async () => {
 
     // Step 2: Electron update (if needed) — quits and reinstalls silently
     if (needsElectron) {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        try {
-          await mainWindow.webContents.executeJavaScript(
-            `var s=document.getElementById('status');if(s)s.textContent='Installing app update...';`
-          );
-        } catch {}
-      }
+      updateSplash('Installing app update...', 95);
       await new Promise(r => setTimeout(r, 1000));
       isAutoUpdating = true;  // Skip Docker shutdown in before-quit
       autoUpdater.quitAndInstall(true, true);  // silent install, force relaunch

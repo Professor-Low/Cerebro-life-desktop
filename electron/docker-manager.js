@@ -502,15 +502,47 @@ class DockerManager extends EventEmitter {
    * Optional services (kokoro-tts) are pulled separately — failure is non-fatal.
    */
   async pullImages(onProgress) {
-    if (onProgress) onProgress({ stage: 'pulling', message: 'Pulling core images...' });
+    // Parse Docker pull output to estimate download progress.
+    // Tracks per-layer downloaded/total bytes and computes overall percent.
+    const _parsePullProgress = (line, layers) => {
+      // Match lines like: "abc123: Downloading [===>  ] 10.5MB/50.2MB"
+      // or "abc123: Extracting [==>   ] 5MB/50MB"
+      const dlMatch = line.match(/([a-f0-9]+):\s*(Downloading|Extracting)\s*\[.*?\]\s*([\d.]+)([kKmMgG]?[bB]?)\/([\d.]+)([kKmMgG]?[bB]?)/);
+      if (dlMatch) {
+        const id = dlMatch[1];
+        const current = parseFloat(dlMatch[3]);
+        const total = parseFloat(dlMatch[5]);
+        if (total > 0) {
+          layers[id] = { current, total };
+        }
+      }
+      // Match "abc123: Pull complete" or "abc123: Download complete"
+      const doneMatch = line.match(/([a-f0-9]+):\s*(Pull complete|Download complete)/);
+      if (doneMatch && layers[doneMatch[1]]) {
+        layers[doneMatch[1]].current = layers[doneMatch[1]].total;
+      }
+      // Calculate overall percent from all tracked layers
+      let sumCurrent = 0, sumTotal = 0;
+      for (const l of Object.values(layers)) {
+        sumCurrent += l.current;
+        sumTotal += l.total;
+      }
+      return sumTotal > 0 ? Math.min(100, (sumCurrent / sumTotal) * 100) : null;
+    };
+
+    if (onProgress) onProgress({ stage: 'pulling_core', percent: 0 });
 
     // Pull core services first (required)
+    const coreLayers = {};
     try {
       await this._spawnWithOutput(
         this._dockerCmd(),
         ['compose', '-f', COMPOSE_FILE, '--env-file', ENV_FILE, 'pull', 'redis', 'backend'],
         (line) => {
-          if (onProgress) onProgress({ stage: 'pulling', message: line.trim() });
+          if (onProgress) {
+            const pct = _parsePullProgress(line, coreLayers);
+            onProgress({ stage: 'pulling_core', percent: pct });
+          }
         }
       );
     } catch (err) {
@@ -519,21 +551,25 @@ class DockerManager extends EventEmitter {
     }
 
     // Pull optional services (non-fatal — TTS is large and may fail on slow connections)
-    if (onProgress) onProgress({ stage: 'pulling', message: 'Pulling voice engine (this may take a few minutes)...' });
+    if (onProgress) onProgress({ stage: 'pulling_optional', percent: 0 });
+    const optLayers = {};
     try {
       await this._spawnWithOutput(
         this._dockerCmd(),
         ['compose', '-f', COMPOSE_FILE, '--env-file', ENV_FILE, 'pull', 'kokoro-tts'],
         (line) => {
-          if (onProgress) onProgress({ stage: 'pulling', message: line.trim() });
+          if (onProgress) {
+            const pct = _parsePullProgress(line, optLayers);
+            onProgress({ stage: 'pulling_optional', percent: pct });
+          }
         }
       );
     } catch (err) {
       console.warn('[Docker] Kokoro TTS pull failed (non-fatal):', err.message);
-      if (onProgress) onProgress({ stage: 'pulling', message: 'Voice engine skipped — will retry on next update' });
+      if (onProgress) onProgress({ stage: 'pulling_optional_skip' });
     }
 
-    if (onProgress) onProgress({ stage: 'done', message: 'Images pulled successfully' });
+    if (onProgress) onProgress({ stage: 'done' });
     return true;
   }
 
@@ -756,7 +792,9 @@ class DockerManager extends EventEmitter {
    */
   async applyUpdate(onProgress) {
     await this.pullImages(onProgress);
+    if (onProgress) onProgress({ stage: 'stopping' });
     await this.stopStack();
+    if (onProgress) onProgress({ stage: 'starting' });
     await this.startStack();
 
     // Save update state to prevent false-positive update checks
