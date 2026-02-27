@@ -25193,7 +25193,7 @@
                                 </button>
                                 <div style="margin-top: 12px; padding: 12px 14px; background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.15); border-radius: 10px; font-size: 0.78rem; color: var(--text-muted); line-height: 1.5;">
                                     <span style="color: var(--accent-light); font-weight: 600;">Update tip:</span>
-                                    If "Restart &amp; Update" doesn't work, just close Cerebro and reopen it from your desktop shortcut or Start menu. The update installs automatically when the app restarts.
+                                    If "Restart &amp; Update" doesn't work, fully quit Cerebro (File &rarr; Quit, or right-click the system tray icon &rarr; Quit), then reopen it from your desktop shortcut or Start menu. The update installs automatically on quit. Simply closing the window keeps Cerebro running in the background.
                                 </div>
 
                                 <div class="settings-divider"></div>
@@ -33235,7 +33235,18 @@
                     if (btn) setUpdateBtnSpinner(btn, 'Restarting\u2026');
                     showToast('Update applied — restarting!', 'success');
                 } else {
-                    showToast('Update failed: ' + (result.error || 'Unknown error'), 'error');
+                    var errMsg = result.error || 'Unknown error';
+                    if (errMsg.toLowerCase().includes('defender')) {
+                        cerebroAlert(
+                            'Windows Defender is preventing the update.\n\n' +
+                            'To update, fully quit Cerebro (File \u2192 Quit or right-click the tray icon \u2192 Quit), ' +
+                            'then reopen it from your desktop shortcut. The update installs automatically on quit.\n\n' +
+                            'If that doesn\u2019t work, open PowerShell as Admin and run:\nAdd-MpPreference -ExclusionProcess "Cerebro.exe"',
+                            { title: 'Update Blocked', buttonText: 'Got it' }
+                        );
+                    } else {
+                        showToast('Update failed: ' + errMsg, 'error');
+                    }
                     if (btn) { btn.disabled = false; btn.classList.remove('updating'); btn.textContent = 'Restart & Update'; }
                 }
             } catch (e) {
