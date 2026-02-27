@@ -304,8 +304,13 @@ async function writeMcpConfig(mcpServers) {
 async function refreshMcpConfigSilently() {
   try {
     const remote = await fetchMcpConfig();
+    // Inject current storage path so refresh doesn't overwrite custom mounts
+    const dynamicConfig = getDynamicMcpConfig();
+    if (remote.mcpServers) {
+      remote.mcpServers.cerebro = dynamicConfig.mcpServers.cerebro;
+    }
     await writeMcpConfig(remote.mcpServers);
-    console.log('[MCP] Config refreshed from remote');
+    console.log('[MCP] Config refreshed from remote (storage-aware)');
   } catch (err) {
     console.log(`[MCP] Background refresh skipped: ${err.message}`);
   }
@@ -477,6 +482,8 @@ async function loadFrontend() {
 }
 
 async function checkForUpdatesQuietly() {
+  let bannerShown = false;
+
   // Check Docker image updates (existing behavior)
   try {
     const result = await dockerManager.checkForUpdates();
@@ -486,13 +493,68 @@ async function checkForUpdatesQuietly() {
           window.__cerebroShowUpdateBanner('docker');
         }
       `).catch(() => {});
+      bannerShown = true;
     }
-  } catch {}
+  } catch (err) {
+    console.log('[Main] Docker update check failed:', err.message);
+  }
 
   // Check Electron app updates (auto-downloads if available)
   try {
     await autoUpdater.checkForUpdates();
-  } catch {}
+  } catch (err) {
+    console.log('[Main] Electron update check failed:', err.message);
+  }
+
+  // Fallback: compare app version against latest GitHub release.
+  // This catches cases where both docker manifest inspect and electron-updater
+  // fail silently (e.g. Docker experimental features disabled, AV blocking downloads).
+  if (!bannerShown) {
+    try {
+      const https = require('https');
+      const latestVersion = await new Promise((resolve, reject) => {
+        const req = https.get('https://api.github.com/repos/Professor-Low/Cerebro-life-desktop/releases/latest', {
+          headers: { 'User-Agent': 'Cerebro-Desktop/' + app.getVersion() },
+          timeout: 10000,
+        }, (res) => {
+          if (res.statusCode === 302 || res.statusCode === 301) {
+            return reject(new Error('redirect'));
+          }
+          let body = '';
+          res.on('data', (chunk) => { body += chunk; });
+          res.on('end', () => {
+            try {
+              const data = JSON.parse(body);
+              resolve(data.tag_name ? data.tag_name.replace(/^v/, '') : null);
+            } catch { resolve(null); }
+          });
+        });
+        req.on('error', reject);
+        req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+      });
+
+      if (latestVersion && latestVersion !== app.getVersion()) {
+        // Simple semver comparison: split on dots, compare numerically
+        const current = app.getVersion().split('.').map(Number);
+        const latest = latestVersion.split('.').map(Number);
+        let isNewer = false;
+        for (let i = 0; i < 3; i++) {
+          if ((latest[i] || 0) > (current[i] || 0)) { isNewer = true; break; }
+          if ((latest[i] || 0) < (current[i] || 0)) break;
+        }
+        if (isNewer && mainWindow && !mainWindow.isDestroyed()) {
+          console.log(`[Main] GitHub API fallback: update available (${app.getVersion()} → ${latestVersion})`);
+          mainWindow.webContents.executeJavaScript(`
+            if (typeof window.__cerebroShowUpdateBanner === 'function') {
+              window.__cerebroShowUpdateBanner('electron');
+            }
+          `).catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.log('[Main] GitHub version check failed:', err.message);
+    }
+  }
 }
 
 // --- Linux desktop integration (first launch) ---
@@ -1008,13 +1070,19 @@ ipcMain.handle('configure-mcp', async () => {
       mcpConfig = await fetchMcpConfig();
       source = 'remote';
     } catch (fetchErr) {
-      console.log(`[MCP] Remote fetch failed (${fetchErr.message}), using hardcoded config`);
-      mcpConfig = getHardcodedMcpConfig();
-      source = 'hardcoded';
+      console.log(`[MCP] Remote fetch failed (${fetchErr.message}), using dynamic config`);
+      mcpConfig = getDynamicMcpConfig();
+      source = 'dynamic';
+    }
+
+    // Always inject the current storage path into the cerebro MCP server entry
+    const dynamicConfig = getDynamicMcpConfig();
+    if (mcpConfig.mcpServers) {
+      mcpConfig.mcpServers.cerebro = dynamicConfig.mcpServers.cerebro;
     }
 
     const configPath = await writeMcpConfig(mcpConfig.mcpServers);
-    console.log(`[MCP] Config written from ${source} source`);
+    console.log(`[MCP] Config written from ${source} source (storage-aware)`);
     return { success: true, configPath };
   } catch (err) {
     return { success: false, error: err.message };
@@ -1366,6 +1434,30 @@ function saveMemoryConfig(config) {
   fs.writeFileSync(MEMORY_CONFIG_FILE, JSON.stringify(config, null, 2));
 }
 
+function getDynamicMcpConfig() {
+  const config = loadMemoryConfig();
+  const volumeArg = config.storagePath
+    ? `${config.storagePath.replace(/\\/g, '/')}:/data/memory`
+    : 'cerebro_cerebro-data:/data/memory';
+
+  return {
+    mcpServers: {
+      cerebro: {
+        command: 'docker',
+        args: [
+          'run', '--rm', '-i',
+          '-v', volumeArg,
+          '-e', 'AI_MEMORY_PATH=/data/memory',
+          '-e', 'CEREBRO_STANDALONE=1',
+          'ghcr.io/professor-low/cerebro-memory:latest',
+          'cerebro', 'serve',
+        ],
+        env: {},
+      },
+    },
+  };
+}
+
 ipcMain.handle('get-memory-config', () => {
   return loadMemoryConfig();
 });
@@ -1391,6 +1483,10 @@ ipcMain.handle('set-storage-path', async (_event, newPath) => {
     saveMemoryConfig(config);
     // Rewrite compose file with new mount
     await dockerManager.writeComposeFile();
+    // Sync MCP config so Claude Code uses the same storage path
+    const mcpConfig = getDynamicMcpConfig();
+    await writeMcpConfig(mcpConfig.mcpServers);
+    console.log(`[MCP] Config synced with storage path: ${newPath || 'Docker volume (default)'}`);
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -1431,6 +1527,188 @@ ipcMain.handle('get-storage-stats', async (_event, folderPath) => {
     return { totalSize, humanSize, fileCount };
   } catch (err) {
     return { totalSize: 0, humanSize: '0 B', fileCount: 0, error: err.message };
+  }
+});
+
+ipcMain.handle('scan-merge-preview', async (_event, sourcePath) => {
+  try {
+    const config = loadMemoryConfig();
+    const destPath = config.storagePath;
+
+    // Skip these folders/files during merge
+    const SKIP_DIRS = new Set(['embeddings', 'indexes', 'cache', '__pycache__']);
+    const SKIP_FILES = new Set(['keyword_index.db', 'quick_facts.json']);
+    const SKIP_EXTS = new Set(['.lock']);
+
+    function listFilesRecursive(dir, base) {
+      const results = [];
+      try {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          const rel = base ? base + '/' + entry.name : entry.name;
+          if (entry.isDirectory()) {
+            if (SKIP_DIRS.has(entry.name)) continue;
+            results.push(...listFilesRecursive(path.join(dir, entry.name), rel));
+          } else if (entry.isFile()) {
+            if (SKIP_FILES.has(entry.name) || SKIP_EXTS.has(path.extname(entry.name))) continue;
+            results.push(rel);
+          }
+        }
+      } catch (e) { /* skip inaccessible */ }
+      return results;
+    }
+
+    // Get source file list
+    const sourceFiles = new Set(listFilesRecursive(sourcePath, ''));
+
+    // Get destination file list
+    let destFiles;
+    if (!destPath) {
+      // Docker volume — list files via docker exec
+      const { execFile: ef } = require('child_process');
+      const listing = await new Promise((resolve, reject) => {
+        ef('docker', ['exec', 'cerebro-backend-1', 'find', '/data/memory', '-type', 'f', '-printf', '%P\\n'], { timeout: 30000 }, (err, stdout) => {
+          if (err) reject(new Error('Docker listing failed: ' + err.message));
+          else resolve(stdout);
+        });
+      });
+      destFiles = new Set(listing.trim().split('\n').filter(Boolean).map(f => f.replace(/\\/g, '/')));
+    } else {
+      destFiles = new Set(listFilesRecursive(destPath, ''));
+    }
+
+    // Build per-folder summary
+    const folderMap = {};
+    for (const f of sourceFiles) {
+      const folder = f.includes('/') ? f.split('/')[0] : '(root)';
+      if (!folderMap[folder]) folderMap[folder] = { name: folder, newFiles: 0, existingFiles: 0, skipped: 0, size: 0 };
+      if (destFiles.has(f)) {
+        folderMap[folder].existingFiles++;
+      } else {
+        folderMap[folder].newFiles++;
+        try { folderMap[folder].size += fs.statSync(path.join(sourcePath, f)).size; } catch (e) { /* skip */ }
+      }
+    }
+
+    const folders = Object.values(folderMap).sort((a, b) => b.newFiles - a.newFiles);
+    const totalNew = folders.reduce((s, f) => s + f.newFiles, 0);
+    const totalSkipped = folders.reduce((s, f) => s + f.existingFiles, 0);
+
+    // Total size from per-folder sizes
+    const sourceSize = folders.reduce((s, f) => s + f.size, 0);
+
+    let humanSize;
+    if (sourceSize < 1024) humanSize = sourceSize + ' B';
+    else if (sourceSize < 1024 * 1024) humanSize = (sourceSize / 1024).toFixed(1) + ' KB';
+    else if (sourceSize < 1024 * 1024 * 1024) humanSize = (sourceSize / (1024 * 1024)).toFixed(1) + ' MB';
+    else humanSize = (sourceSize / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+
+    return { folders, totalNew, totalSkipped, sourceSize, humanSize };
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+
+ipcMain.handle('merge-storage', async (_event, sourcePath, selectedFolders) => {
+  try {
+    const config = loadMemoryConfig();
+    const destPath = config.storagePath;
+
+    const SKIP_DIRS = new Set(['embeddings', 'indexes', 'cache', '__pycache__']);
+    const SKIP_FILES = new Set(['keyword_index.db', 'quick_facts.json']);
+    const SKIP_EXTS = new Set(['.lock']);
+
+    function listFilesRecursive(dir, base) {
+      const results = [];
+      try {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          const rel = base ? base + '/' + entry.name : entry.name;
+          if (entry.isDirectory()) {
+            if (SKIP_DIRS.has(entry.name)) continue;
+            results.push(...listFilesRecursive(path.join(dir, entry.name), rel));
+          } else if (entry.isFile()) {
+            if (SKIP_FILES.has(entry.name) || SKIP_EXTS.has(path.extname(entry.name))) continue;
+            results.push(rel);
+          }
+        }
+      } catch (e) { /* skip inaccessible */ }
+      return results;
+    }
+
+    let sourceFiles = listFilesRecursive(sourcePath, '');
+
+    // Filter by selected folders if provided
+    if (Array.isArray(selectedFolders) && selectedFolders.length > 0) {
+      const folderSet = new Set(selectedFolders);
+      sourceFiles = sourceFiles.filter(f => {
+        const folder = f.includes('/') ? f.split('/')[0] : '(root)';
+        return folderSet.has(folder);
+      });
+    }
+
+    let copied = 0;
+    let skipped = 0;
+    const errors = [];
+
+    if (!destPath) {
+      // Destination is Docker volume — use docker cp per file via temp staging
+      const { execFile: ef } = require('child_process');
+      const execPromise = (cmd, args, opts) => new Promise((resolve, reject) => {
+        ef(cmd, args, opts, (err, stdout) => {
+          if (err) reject(err);
+          else resolve(stdout);
+        });
+      });
+
+      // Get existing files in Docker volume
+      const listing = await execPromise('docker', ['exec', 'cerebro-backend-1', 'find', '/data/memory', '-type', 'f', '-printf', '%P\\n'], { timeout: 30000 });
+      const destFiles = new Set(listing.trim().split('\n').filter(Boolean).map(f => f.replace(/\\/g, '/')));
+
+      for (const relFile of sourceFiles) {
+        if (destFiles.has(relFile)) {
+          skipped++;
+          continue;
+        }
+        try {
+          // Ensure directory exists in container
+          const dirInContainer = '/data/memory/' + relFile.split('/').slice(0, -1).join('/');
+          if (dirInContainer !== '/data/memory/') {
+            await execPromise('docker', ['exec', 'cerebro-backend-1', 'mkdir', '-p', dirInContainer], { timeout: 10000 });
+          }
+          // Copy file into container
+          const srcFull = path.join(sourcePath, relFile);
+          await execPromise('docker', ['cp', srcFull, 'cerebro-backend-1:/data/memory/' + relFile], { timeout: 30000 });
+          copied++;
+        } catch (e) {
+          errors.push({ file: relFile, error: e.message });
+        }
+      }
+    } else {
+      // Destination is a local folder
+      const destFiles = new Set(listFilesRecursive(destPath, ''));
+
+      for (const relFile of sourceFiles) {
+        if (destFiles.has(relFile)) {
+          skipped++;
+          continue;
+        }
+        try {
+          const srcFull = path.join(sourcePath, relFile);
+          const dstFull = path.join(destPath, relFile);
+          // Ensure parent directory exists
+          fs.mkdirSync(path.dirname(dstFull), { recursive: true });
+          fs.copyFileSync(srcFull, dstFull);
+          copied++;
+        } catch (e) {
+          errors.push({ file: relFile, error: e.message });
+        }
+      }
+    }
+
+    return { success: true, copied, skipped, errors };
+  } catch (err) {
+    return { success: false, copied: 0, skipped: 0, error: err.message, errors: [] };
   }
 });
 

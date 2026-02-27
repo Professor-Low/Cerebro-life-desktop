@@ -4388,6 +4388,79 @@
             flex: 1;
         }
 
+        /* ==================== MERGE PREVIEW FOLDER LIST ==================== */
+        .merge-folder-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: border-color 0.15s;
+        }
+        .merge-folder-row:hover {
+            border-color: var(--accent);
+        }
+        .merge-folder-row.checked {
+            border-color: var(--accent);
+            background: rgba(139, 92, 246, 0.08);
+        }
+        .merge-folder-row input[type="checkbox"] {
+            accent-color: var(--accent);
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
+        }
+        .merge-folder-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .merge-folder-stats {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        .merge-folder-badge {
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 6px;
+            white-space: nowrap;
+        }
+        .merge-folder-badge.new-files {
+            background: rgba(34, 197, 94, 0.15);
+            color: #22c55e;
+        }
+        .merge-folder-badge.existing-files {
+            background: rgba(148, 163, 184, 0.15);
+            color: var(--text-muted);
+        }
+        .merge-folder-badge.size-badge {
+            background: rgba(139, 92, 246, 0.15);
+            color: var(--accent);
+        }
+        .btn-sm {
+            font-size: 0.75rem;
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-elevated);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn-sm:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
         /* ==================== SUB-AGENTS NESTED VIEW ==================== */
         .agent-card.has-children {
             padding-bottom: 12px;
@@ -6873,6 +6946,8 @@
             color: var(--text-secondary);
             font-size: 0.88rem;
             line-height: 1.5;
+            max-height: 50vh;
+            overflow-y: auto;
         }
         .cerebro-confirm-actions {
             display: flex;
@@ -24939,6 +25014,7 @@
                                     <div class="storage-path-row">
                                         <div class="storage-path-display" id="storage-path-display">Docker Volume (default)</div>
                                         <button class="btn-sm" onclick="changeStoragePath()">Change</button>
+                                        <button class="btn-sm" onclick="mergeStoragePath()" title="Merge data from another folder into current storage">Merge</button>
                                     </div>
                                     <div class="storage-stats-row">
                                         <div class="storage-stat">
@@ -26093,6 +26169,31 @@
                 <div class="modal-footer">
                     <button class="btn btn-secondary" onclick="closeMergeSpawnModal()">Cancel</button>
                     <button class="btn btn-primary" onclick="submitMergeSpawn()">Merge &amp; Spawn</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Merge Preview Modal -->
+        <div class="modal-overlay" id="merge-preview-modal" onclick="if(event.target===this) closeMergePreview()">
+            <div class="modal modal-large">
+                <div class="modal-header">
+                    <span class="modal-title">Merge Preview</span>
+                    <button class="modal-close" onclick="closeMergePreview()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                        <span class="form-label" style="margin:0">Select folders to merge</span>
+                        <div style="display:flex;gap:8px">
+                            <button class="btn-sm" onclick="toggleAllMergeFolders(true)">All</button>
+                            <button class="btn-sm" onclick="toggleAllMergeFolders(false)">None</button>
+                        </div>
+                    </div>
+                    <div id="merge-folder-list" style="max-height:50vh;overflow-y:auto;display:flex;flex-direction:column;gap:6px"></div>
+                    <div id="merge-totals" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:0.85rem;color:var(--text-secondary)"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeMergePreview()">Cancel</button>
+                    <button class="btn btn-primary" id="merge-confirm-btn" onclick="executeMerge()">Merge Now</button>
                 </div>
             </div>
         </div>
@@ -32868,6 +32969,166 @@
                     showToast('Restart failed: ' + (restartResult.error || 'Unknown error'), 'error');
                 }
             }
+        }
+
+        // — Merge Preview state —
+        let _mergePreviewData = null;
+        let _mergeSourcePath = null;
+
+        function formatBytes(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+            return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+        }
+
+        function _createBadge(text, cls) {
+            const span = document.createElement('span');
+            span.className = 'merge-folder-badge ' + cls;
+            span.textContent = text;
+            return span;
+        }
+
+        function showMergePreview(preview, sourcePath) {
+            _mergePreviewData = preview;
+            _mergeSourcePath = sourcePath;
+            const list = document.getElementById('merge-folder-list');
+            list.textContent = '';
+
+            for (const folder of preview.folders) {
+                if (folder.newFiles === 0) continue;
+                const row = document.createElement('label');
+                row.className = 'merge-folder-row checked';
+                row.dataset.folderName = folder.name;
+                row.dataset.newFiles = folder.newFiles;
+                row.dataset.size = folder.size || 0;
+
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.checked = true;
+                cb.addEventListener('change', function() { onMergeFolderToggle(this); });
+                row.appendChild(cb);
+
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'merge-folder-name';
+                nameSpan.textContent = folder.name;
+                row.appendChild(nameSpan);
+
+                const stats = document.createElement('span');
+                stats.className = 'merge-folder-stats';
+                stats.appendChild(_createBadge(folder.newFiles.toLocaleString() + ' new', 'new-files'));
+                if (folder.existingFiles > 0) {
+                    stats.appendChild(_createBadge(folder.existingFiles.toLocaleString() + ' exist', 'existing-files'));
+                }
+                stats.appendChild(_createBadge(formatBytes(folder.size || 0), 'size-badge'));
+                row.appendChild(stats);
+
+                list.appendChild(row);
+            }
+
+            updateMergeTotals();
+            document.getElementById('merge-preview-modal').classList.add('active');
+        }
+
+        function closeMergePreview() {
+            document.getElementById('merge-preview-modal').classList.remove('active');
+            _mergePreviewData = null;
+            _mergeSourcePath = null;
+        }
+
+        function onMergeFolderToggle(checkbox) {
+            const row = checkbox.closest('.merge-folder-row');
+            if (checkbox.checked) row.classList.add('checked');
+            else row.classList.remove('checked');
+            updateMergeTotals();
+        }
+
+        function toggleAllMergeFolders(checked) {
+            const boxes = document.querySelectorAll('#merge-folder-list input[type="checkbox"]');
+            boxes.forEach(cb => {
+                cb.checked = checked;
+                const row = cb.closest('.merge-folder-row');
+                if (checked) row.classList.add('checked');
+                else row.classList.remove('checked');
+            });
+            updateMergeTotals();
+        }
+
+        function updateMergeTotals() {
+            const rows = document.querySelectorAll('#merge-folder-list .merge-folder-row');
+            let totalFiles = 0, totalSize = 0, selectedCount = 0;
+            rows.forEach(row => {
+                const cb = row.querySelector('input[type="checkbox"]');
+                if (cb && cb.checked) {
+                    totalFiles += parseInt(row.dataset.newFiles) || 0;
+                    totalSize += parseInt(row.dataset.size) || 0;
+                    selectedCount++;
+                }
+            });
+            const el = document.getElementById('merge-totals');
+            el.textContent = selectedCount + ' of ' + rows.length + ' folders selected \u2014 ' +
+                totalFiles.toLocaleString() + ' files (' + formatBytes(totalSize) + ')';
+            const btn = document.getElementById('merge-confirm-btn');
+            btn.disabled = selectedCount === 0;
+            btn.textContent = selectedCount === 0 ? 'Select folders' : 'Merge ' + totalFiles.toLocaleString() + ' files';
+        }
+
+        async function executeMerge() {
+            const rows = document.querySelectorAll('#merge-folder-list .merge-folder-row');
+            const selectedFolders = [];
+            rows.forEach(row => {
+                const cb = row.querySelector('input[type="checkbox"]');
+                if (cb && cb.checked) selectedFolders.push(row.dataset.folderName);
+            });
+            if (selectedFolders.length === 0) return;
+
+            closeMergePreview();
+            showToast('Merging ' + selectedFolders.length + ' folders... this may take a moment');
+            const mergeResult = await window.cerebroDesktop.mergeStorage(_mergeSourcePath, selectedFolders);
+            if (!mergeResult.success) {
+                showToast('Merge failed: ' + (mergeResult.error || 'Unknown error'), 'error');
+                return;
+            }
+
+            let msg = 'Merged ' + mergeResult.copied.toLocaleString() + ' files successfully';
+            if (mergeResult.errors && mergeResult.errors.length > 0) {
+                msg += ' (' + mergeResult.errors.length + ' errors)';
+            }
+            showToast(msg, 'success');
+
+            _storageConfigLoaded = false;
+            initStorageConfig();
+        }
+
+        async function mergeStoragePath() {
+            if (!window.cerebroDesktop) {
+                showToast('Merge requires the desktop app', 'error');
+                return;
+            }
+
+            const proceed = await cerebroConfirm(
+                'Select a folder to merge into your current storage.\n\nOnly new files are copied \u2014 existing files are never overwritten.',
+                { title: 'Merge External Data', confirmText: 'Choose Folder', cancelText: 'Cancel' }
+            );
+            if (!proceed) return;
+
+            const result = await window.cerebroDesktop.browseStorageFolder();
+            if (result.canceled) return;
+            const sourcePath = result.path;
+
+            showToast('Scanning folders...');
+            const preview = await window.cerebroDesktop.scanMergePreview(sourcePath);
+            if (preview.error) {
+                showToast('Scan failed: ' + preview.error, 'error');
+                return;
+            }
+
+            if (preview.totalNew === 0) {
+                showToast('Nothing to merge \u2014 all files already exist in current storage', 'info');
+                return;
+            }
+
+            showMergePreview(preview, sourcePath);
         }
 
         async function initOffloadConfig() {
