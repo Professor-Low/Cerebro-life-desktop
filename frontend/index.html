@@ -686,6 +686,11 @@
         .main-content:has(.chat-view.active) {
             overflow-y: hidden;
         }
+        /* In split mode, reduce bottom padding to just the nav (no extra breathing room) */
+        .main-content:has(.chat-view.split-mode) {
+            padding-bottom: calc(var(--nav-height, 70px) + var(--safe-bottom, 0px)) !important;
+            overflow: hidden !important;
+        }
 
         .view {
             display: none !important;
@@ -10424,13 +10429,19 @@
         .chat-input::placeholder {
             color: var(--text-muted);
         }
+        .chat-view.split-mode .chat-input {
+            display: none !important;
+        }
+        .chat-view.split-mode .chat-input-wrapper {
+            justify-content: space-between;
+        }
 
         .input-actions {
             display: flex;
             gap: 8px;
         }
 
-        .voice-btn, .send-btn {
+        .send-btn {
             width: 48px;
             height: 48px;
             border-radius: 50%;
@@ -10443,30 +10454,152 @@
             flex-shrink: 0;
         }
 
-        .voice-btn {
+        /* Layout Toggle Button */
+        .layout-toggle-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: 1px solid var(--border);
             background: var(--glass-bg);
             color: var(--text-secondary);
-            border: 1px solid var(--border);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s var(--ease-out-expo);
+            flex-shrink: 0;
         }
-
-        .voice-btn:hover {
+        .layout-toggle-btn:hover {
             background: var(--bg-hover);
             color: var(--text-primary);
         }
+        .layout-toggle-btn.active {
+            background: rgba(139, 92, 246, 0.15);
+            color: var(--accent-light);
+            border-color: var(--accent);
+            box-shadow: 0 0 12px var(--glow-subtle);
+        }
 
-        .voice-btn:active, .voice-btn.recording {
-            background: var(--red);
+        /* Split View Layout */
+        .split-left-panel {
+            display: none;
+            flex-direction: column;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            overflow: hidden;
+            transition: opacity 0.25s ease 0.1s;
+        }
+        .chat-view.split-mode .split-left-panel { opacity: 1; }
+        .chat-view:not(.split-mode) .split-left-panel { opacity: 0; }
+
+        .chat-view.split-mode {
+            display: grid !important;
+            grid-template-columns: 40% 60%;
+            grid-template-rows: 1fr auto;
+            grid-template-areas:
+                "left-panel messages"
+                "input      messages";
+            flex-direction: unset !important;
+            /* Fill exactly between header padding-top and nav padding-bottom on main-content */
+            height: calc(100vh - 56px - var(--nav-height, 70px) - var(--safe-bottom, 0px)) !important;
+            max-height: calc(100vh - 56px - var(--nav-height, 70px) - var(--safe-bottom, 0px)) !important;
+            overflow: hidden;
+        }
+        .chat-view.split-mode .split-left-panel {
+            grid-area: left-panel;
+            display: flex;
+            overflow: hidden;
+            min-height: 0;
+        }
+        .chat-view.split-mode .messages-container {
+            grid-area: messages;
+            grid-row: 1 / -1;
+            padding-bottom: 24px !important;
+            overflow-y: auto;
+            min-height: 0;
+        }
+        .chat-view.split-mode .chat-input-area {
+            grid-area: input;
+            position: relative !important;
+            bottom: unset !important;
+            left: unset !important;
+            right: unset !important;
+            margin: 0 !important;
+            max-width: unset !important;
+            width: 100% !important;
+            z-index: auto;
+            border-radius: 0;
+            border-top: 1px solid var(--border);
+            box-shadow: none;
+        }
+
+        /* Split Panel Internals */
+        .split-left-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+            padding: 0 8px;
+        }
+        .split-tab {
+            flex: 1;
+            padding: 12px 16px;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .split-tab:hover { color: var(--text-secondary); }
+        .split-tab.active {
+            color: var(--accent-light);
+            border-bottom-color: var(--accent);
+        }
+        .split-tab-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 12px;
+            overflow-y: auto;
+            min-height: 0;
+        }
+        .split-notepad, .split-compose {
+            flex: 1;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            font-family: inherit;
+            padding: 14px;
+            resize: none;
+            outline: none;
+            min-height: 0;
+        }
+        .split-notepad:focus, .split-compose:focus {
+            border-color: var(--accent);
+        }
+        .save-memory-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: none;
+            background: var(--accent-gradient);
             color: white;
-            transform: scale(1.1);
-            box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s var(--ease-out-expo);
+            flex-shrink: 0;
+            box-shadow: 0 4px 15px var(--glow-medium);
         }
-
-        .voice-btn.disabled {
-            opacity: 0.35;
-            cursor: not-allowed;
-            pointer-events: none;
+        .save-memory-btn:hover {
+            transform: scale(1.08);
+            box-shadow: 0 6px 25px var(--glow-strong);
         }
-
         .browser-toggle-btn {
             width: 48px;
             height: 48px;
@@ -11799,56 +11932,26 @@
             border-radius: 4px;
         }
 
-        /* Voice Recording Overlay */
-        .voice-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.9);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 2000;
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.3s ease;
+        /* Split View Responsive */
+        @media (max-width: 768px) {
+            .chat-view.split-mode {
+                grid-template-columns: 1fr !important;
+                grid-template-rows: 1fr auto auto;
+                grid-template-areas:
+                    "messages"
+                    "left-panel"
+                    "input" !important;
+            }
+            .chat-view.split-mode .split-left-panel {
+                max-height: 200px;
+                border-right: none;
+                border-top: 1px solid var(--border);
+            }
+            .chat-view.split-mode .messages-container { border-left: none; }
+            .chat-view.split-mode .chat-input-area { border-radius: 0; border-right: none; }
         }
-
-        .voice-overlay.active {
-            opacity: 1;
-            visibility: visible;
-        }
-
-        .voice-indicator {
-            width: 100px;
-            height: 100px;
-            background: var(--accent-gradient);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 2.5rem;
-            margin-bottom: 24px;
-            animation: voicePulse 1.5s ease infinite;
-        }
-
-        @keyframes voicePulse {
-            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 var(--accent-glow-strong); }
-            50% { transform: scale(1.1); box-shadow: 0 0 0 20px transparent; }
-        }
-
-        .voice-text {
-            font-size: 1.2rem;
-            color: var(--text-secondary);
-            margin-bottom: 8px;
-        }
-
-        .voice-transcript {
-            font-size: 1rem;
-            color: var(--text-primary);
-            max-width: 80%;
-            text-align: center;
-            min-height: 24px;
+        @media (max-width: 480px) {
+            .layout-toggle-btn { display: none; }
         }
 
         /* ==================== RESPONSIVE ==================== */
@@ -23750,6 +23853,18 @@
 
                 <!-- Chat View -->
                 <div class="view chat-view" id="view-chat">
+                    <div class="split-left-panel" id="split-left-panel">
+                        <div class="split-left-tabs">
+                            <button class="split-tab active" data-tab="notepad" onclick="switchSplitTab('notepad')">Notepad</button>
+                            <button class="split-tab" data-tab="compose" onclick="switchSplitTab('compose')">Compose</button>
+                        </div>
+                        <div class="split-tab-content" id="split-tab-notepad">
+                            <textarea class="split-notepad" id="split-notepad" placeholder="Jot down ideas, notes, code snippets..."></textarea>
+                        </div>
+                        <div class="split-tab-content" id="split-tab-compose" style="display:none">
+                            <textarea class="split-compose" id="split-compose" placeholder="Draft a longer message to Cerebro..." onkeydown="handleComposeKeyDown(event)"></textarea>
+                        </div>
+                    </div>
                     <div class="messages-container" id="messages">
                         <div class="message assistant" data-text="Hey! I'm Cerebro, your AI command center. I can spawn agents, search your memory, run automations, or help with anything else. What do you need?">
                             <div class="msg-header">
@@ -23814,12 +23929,22 @@
                             </button>
                             <textarea class="chat-input" id="chat-input" placeholder="Message Cerebro..." rows="1" onkeydown="handleKeyDown(event)"></textarea>
                             <div class="input-actions">
-                                <button class="voice-btn" id="voice-btn" onmousedown="startVoice()" onmouseup="stopVoice()" ontouchstart="startVoice()" ontouchend="stopVoice()">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                                <button class="layout-toggle-btn" id="layout-toggle-btn" onclick="toggleChatLayout()" title="Toggle split view">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                        <line x1="9" y1="3" x2="9" y2="21"/>
+                                    </svg>
                                 </button>
                                 <button class="browser-toggle-btn" id="chat-browser-btn" onclick="toggleChatBrowser()" title="Launch/Stop Browser">
                                     <span class="chat-browser-dot" id="chat-browser-dot"></span>
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                                </button>
+                                <button class="save-memory-btn" id="split-save-btn" onclick="saveNotepadToMemory()" title="Save notepad to memory" style="display:none">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                                        <polyline points="17 21 17 13 7 13 7 21"/>
+                                        <polyline points="7 3 7 8 15 8"/>
+                                    </svg>
                                 </button>
                                 <button class="send-btn" onclick="sendMessage()" id="send-btn">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -25292,12 +25417,6 @@
             </nav>
         </div>
 
-        <!-- Voice Recording Overlay -->
-        <div class="voice-overlay" id="voice-overlay">
-            <div class="voice-indicator"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div>
-            <div class="voice-text">Listening...</div>
-            <div class="voice-transcript" id="voice-transcript"></div>
-        </div>
 
         <!-- Heartbeat Settings Modal -->
         <div class="modal-overlay" id="heartbeat-modal" onclick="if(event.target===this) closeHeartbeatModal()">
@@ -26826,16 +26945,15 @@
         let token = localStorage.getItem('cerebro_token');
         let socket = null;
         let sessionId = null;
-        let recognition = null;
-        let isRecording = false;
-
         // TTS Configuration
         const TTS_URL = CEREBRO_TTS_URL || `http://${currentHost}:8880`;
         const TTS_CONFIG = { voice: localStorage.getItem("cerebro_tts_voice") || "af_heart", speed: parseFloat(localStorage.getItem("cerebro_tts_speed") || "1.0"), format: "mp3", autoSpeak: localStorage.getItem("cerebro_tts_autospeak") === "true" };
         let currentAudio = null;
         let isSpeaking = false;
         let conversationalMode = false;
-        let silenceTimer = null;
+
+        // Chat layout state
+        let _chatSplitMode = false;
 
         // ==================== AUTH ====================
         async function login() {
@@ -26920,26 +27038,20 @@
             await fetchModelsFromServer();
             loadChatOffloadDevices();
             checkBrowserStatus();
-            initVoice();
+            initChatLayout();
             loadAudioDevices();
             initVoiceSettings();
             loadPersonality();
             loadLookStatus();
             initFileAccess();
 
-            // Init TTS orb click - conversational mode toggle
+            // Init TTS orb click - stop speaking
             const navOrb = document.getElementById('nav-orb-container');
             if (navOrb) {
                 navOrb.addEventListener('click', () => {
-                    if (conversationalMode) {
-                        stopConversationalMode();
-                        return;
-                    }
                     if (isSpeaking) { stopSpeaking(); return; }
-                    if (isRecording) { showToast('Stop recording first'); return; }
-                    startConversationalMode();
                 });
-                navOrb.title = 'Click to start/stop voice conversation';
+                navOrb.title = 'Click to stop speaking';
             }
 
             handleMobileKeyboard();
@@ -31491,17 +31603,6 @@
                     window._pendingSpecOpsDraft = false;
                 }
 
-                // Speak response in conversational mode
-                if (conversationalMode && currentAssistantMessage) {
-                    var responseText = currentAssistantMessage.getAttribute('data-text');
-                    console.log('[Conv] Response complete, will speak:', responseText?.substring(0, 50) + '...');
-                    if (responseText && responseText.trim()) {
-                        setTimeout(function() { speak(responseText); }, 500);
-                    } else {
-                        console.log('[Conv] No response text, resuming listen');
-                        setTimeout(function() { startConversationalListen(); }, 500);
-                    }
-                }
             }
 
             var container = document.getElementById('messages');
@@ -31922,6 +32023,158 @@
             }).then(function(resp) {
                 if (resp.ok) {
                     showToast('Saved to Memory', 'success');
+                } else {
+                    showToast('Failed to save', 'error');
+                }
+            }).catch(function() {
+                showToast('Failed to save', 'error');
+            });
+        }
+
+        // ==================== CHAT LAYOUT (SPLIT VIEW) ====================
+
+        function initChatLayout() {
+            var saved = localStorage.getItem('cerebro_chat_layout');
+            if (saved === 'split') {
+                _chatSplitMode = true;
+                _activateSplitMode(false);
+            }
+            // Restore notepad content
+            var notepad = document.getElementById('split-notepad');
+            if (notepad) {
+                var savedNote = localStorage.getItem('cerebro_notepad');
+                if (savedNote) notepad.value = savedNote;
+                // Auto-save notepad with debounce
+                var notepadTimer = null;
+                notepad.addEventListener('input', function() {
+                    clearTimeout(notepadTimer);
+                    notepadTimer = setTimeout(function() {
+                        localStorage.setItem('cerebro_notepad', notepad.value);
+                    }, 500);
+                });
+            }
+        }
+
+        function toggleChatLayout() {
+            _chatSplitMode = !_chatSplitMode;
+            if (_chatSplitMode) {
+                _activateSplitMode(true);
+            } else {
+                _deactivateSplitMode();
+            }
+        }
+
+        function _activateSplitMode(animate) {
+            var chatView = document.getElementById('view-chat');
+            var btn = document.getElementById('layout-toggle-btn');
+            if (!chatView) return;
+
+            if (!animate) {
+                chatView.style.transition = 'none';
+                chatView.offsetHeight; // force reflow
+            }
+
+            chatView.classList.add('split-mode');
+            if (btn) btn.classList.add('active');
+            localStorage.setItem('cerebro_chat_layout', 'split');
+
+            if (!animate) {
+                requestAnimationFrame(function() {
+                    chatView.style.transition = '';
+                });
+            }
+
+            // Set initial button state based on active tab
+            var activeTab = document.querySelector('.split-tab.active');
+            var tabName = activeTab ? activeTab.getAttribute('data-tab') : 'notepad';
+            var sendBtn = document.getElementById('send-btn');
+            var saveBtn = document.getElementById('split-save-btn');
+            if (sendBtn && saveBtn) {
+                if (tabName === 'notepad') {
+                    sendBtn.style.display = 'none';
+                    saveBtn.style.display = 'flex';
+                } else {
+                    sendBtn.style.display = 'flex';
+                    saveBtn.style.display = 'none';
+                }
+            }
+
+            setTimeout(function() { scrollMessagesToBottom(true); }, 100);
+        }
+
+        function _deactivateSplitMode() {
+            var chatView = document.getElementById('view-chat');
+            var btn = document.getElementById('layout-toggle-btn');
+            if (!chatView) return;
+
+            chatView.classList.remove('split-mode');
+            if (btn) btn.classList.remove('active');
+            localStorage.setItem('cerebro_chat_layout', 'standard');
+
+            // Restore buttons to default state
+            var sendBtn = document.getElementById('send-btn');
+            var saveBtn = document.getElementById('split-save-btn');
+            if (sendBtn) sendBtn.style.display = '';
+            if (saveBtn) saveBtn.style.display = 'none';
+
+            setTimeout(function() { scrollMessagesToBottom(true); }, 100);
+        }
+
+        function switchSplitTab(tabName) {
+            var tabs = document.querySelectorAll('.split-tab');
+            tabs.forEach(function(t) {
+                t.classList.toggle('active', t.getAttribute('data-tab') === tabName);
+            });
+            document.getElementById('split-tab-notepad').style.display = tabName === 'notepad' ? '' : 'none';
+            document.getElementById('split-tab-compose').style.display = tabName === 'compose' ? '' : 'none';
+            // Swap action buttons based on tab
+            var sendBtn = document.getElementById('send-btn');
+            var saveBtn = document.getElementById('split-save-btn');
+            if (_chatSplitMode && sendBtn && saveBtn) {
+                if (tabName === 'notepad') {
+                    sendBtn.style.display = 'none';
+                    saveBtn.style.display = 'flex';
+                } else {
+                    sendBtn.style.display = 'flex';
+                    saveBtn.style.display = 'none';
+                }
+            }
+            // Focus the active textarea
+            var target = tabName === 'notepad' ? document.getElementById('split-notepad') : document.getElementById('split-compose');
+            if (target) setTimeout(function() { target.focus(); }, 50);
+        }
+
+        function handleComposeKeyDown(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendComposeMessage();
+            }
+        }
+
+        function sendComposeMessage() {
+            var compose = document.getElementById('split-compose');
+            if (!compose) return;
+            var text = compose.value.trim();
+            if (!text) return;
+            document.getElementById('chat-input').value = text;
+            compose.value = '';
+            sendMessage();
+        }
+
+        function saveNotepadToMemory() {
+            var notepad = document.getElementById('split-notepad');
+            if (!notepad || !notepad.value.trim()) {
+                showToast('Notepad is empty', 'warning');
+                return;
+            }
+            var text = notepad.value.trim();
+            fetch(API_URL + '/api/learnings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ type: 'insight', problem: 'Notepad entry', solution: text, tags: ['notepad', 'saved'] })
+            }).then(function(r) {
+                if (r.ok) {
+                    showToast('Saved to Memory');
                 } else {
                     showToast('Failed to save', 'error');
                 }
@@ -33768,129 +34021,6 @@
             }
         }
 
-        // ==================== VOICE ====================
-        function initVoice() {
-            const hasWebkit = 'webkitSpeechRecognition' in window;
-            const hasStandard = 'SpeechRecognition' in window;
-            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-            const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-            console.log('[Voice] initVoice - webkit:', hasWebkit, 'standard:', hasStandard, 'mobile:', isMobile, 'iOS:', isIOS);
-
-            if (!hasWebkit && !hasStandard) {
-                const msg = isMobile
-                    ? (isIOS ? 'Voice mode requires desktop Chrome (not supported on iOS)' : 'Voice not supported - try desktop Chrome')
-                    : 'Voice requires Chrome or Edge browser';
-                console.error('[Voice] Speech Recognition NOT available:', msg);
-                showToast(msg);
-                // Visually disable the mic button
-                const voiceBtn = document.getElementById('voice-btn');
-                if (voiceBtn) {
-                    voiceBtn.classList.add('disabled');
-                    voiceBtn.title = 'Voice not supported in this browser';
-                }
-                updateVoiceStatus();
-                return;
-            }
-            if (hasWebkit || hasStandard) {
-                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-                recognition = new SpeechRecognition();
-                recognition.continuous = true;
-                recognition.interimResults = true;
-                recognition.lang = 'en-US';
-                console.log('[Voice] Recognition initialized:', !!recognition);
-                updateVoiceStatus();
-
-                recognition.onresult = (event) => {
-                    let transcript = '';
-                    for (let i = event.resultIndex; i < event.results.length; i++) {
-                        transcript += event.results[i][0].transcript;
-                    }
-                    console.log('[Voice] Transcript:', transcript);
-                    document.getElementById('voice-transcript').textContent = transcript;
-                    document.getElementById('chat-input').value = transcript;
-
-                    // Auto-stop after silence in conversational mode
-                    if (conversationalMode && transcript.trim()) {
-                        clearTimeout(silenceTimer);
-                        console.log('[Conv] Setting 2s silence timer...');
-                        silenceTimer = setTimeout(() => {
-                            console.log('[Conv] Silence timer fired, stopping voice');
-                            if (isRecording && conversationalMode) {
-                                stopVoice();
-                            }
-                        }, 2000); // 2 second silence = end of utterance
-                    }
-                };
-
-                recognition.onerror = (event) => {
-                    console.error('Speech error:', event.error);
-                    stopVoice();
-                };
-
-                recognition.onend = () => {
-                    if (isRecording) {
-                        stopVoice();
-                    }
-                };
-            } else {
-                console.log('[Voice] Speech recognition NOT supported in this browser');
-                document.getElementById('voice-btn').style.display = 'none';
-                updateVoiceStatus();
-            }
-        }
-
-        function startVoice() {
-            if (!recognition) {
-                showToast('Voice requires Chrome or Edge browser', 'error');
-                return;
-            }
-
-            // Stop TTS if speaking (prevents mic picking up speaker output)
-            if (isSpeaking) stopSpeaking();
-
-            isRecording = true;
-            document.getElementById('voice-overlay').classList.add('active');
-            document.getElementById('voice-btn').classList.add('recording');
-            document.getElementById('voice-transcript').textContent = '';
-
-            try {
-                recognition.start();
-            } catch (e) {
-                console.error('Voice start error:', e);
-            }
-        }
-
-        function stopVoice() {
-            if (!recognition) return;
-
-            clearTimeout(silenceTimer);
-            isRecording = false;
-            document.getElementById('voice-overlay').classList.remove('active');
-            document.getElementById('voice-btn').classList.remove('recording');
-
-            try {
-                recognition.stop();
-            } catch (e) {
-                console.error('Voice stop error:', e);
-            }
-
-            // Auto-send if there's content
-            const input = document.getElementById('chat-input');
-            console.log('[Voice] stopVoice - input value:', input.value);
-            if (input.value.trim()) {
-                console.log('[Conv] Sending message:', input.value.trim().substring(0, 50));
-                setTimeout(() => {
-                    switchView('chat');
-                    sendMessage();
-                }, 300);
-            } else {
-                console.log('[Conv] No content to send');
-            }
-
-            // Remove listening state from orb
-            document.getElementById('nav-orb-container')?.classList.remove('listening');
-        }
-
         // ==================== TTS ====================
         async function speak(text) {
             if (isSpeaking) { stopSpeaking(); return; }
@@ -33938,11 +34068,6 @@
                     setSpeakingState(false);
                     URL.revokeObjectURL(audioUrl);
                     currentAudio = null;
-                    // Auto-listen after speaking in conversational mode
-                    if (conversationalMode) {
-                        console.log('[Conv] Will start listening in 300ms...');
-                        setTimeout(() => startConversationalListen(), 300);
-                    }
                 };
                 currentAudio.onerror = () => { setSpeakingState(false); showToast('Audio failed'); };
 
@@ -33961,9 +34086,6 @@
                         if (femaleVoice) utterance.voice = femaleVoice;
                         utterance.onend = () => {
                             setSpeakingState(false);
-                            if (conversationalMode) {
-                                setTimeout(() => startConversationalListen(), 300);
-                            }
                         };
                         setSpeakingState(true);
                         window.speechSynthesis.speak(utterance);
@@ -34545,64 +34667,8 @@
                 }
             }
 
-            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-                voiceStatus.textContent = isIOS ? 'Not supported on iOS' : (isMobile ? 'Use desktop Chrome' : (isFirefox ? 'STT: Chrome/Edge only' : 'Use Chrome/Edge'));
-                voiceStatus.className = 'settings-value';
-                voiceStatus.style.color = '#ef4444';
-            } else if (recognition) {
-                voiceStatus.textContent = 'Ready';
-                voiceStatus.className = 'settings-value success';
-            } else {
-                voiceStatus.textContent = 'TTS ready, STT not initialized';
-                voiceStatus.className = 'settings-value';
-            }
-        }
-
-        // ==================== CONVERSATIONAL MODE ====================
-        function startConversationalMode() {
-            // Ensure voice is initialized
-            if (!recognition) {
-                console.log('[Conv] Recognition not ready, initializing...');
-                initVoice();
-            }
-            if (!recognition) {
-                const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-                showToast(isIOS ? 'Voice mode requires desktop (not iOS)' : 'Voice not supported - use desktop Chrome');
-                return;
-            }
-            conversationalMode = true;
-            document.getElementById('nav-orb-container')?.classList.add('conversational');
-            showToast('Voice mode active');
-            speak(getCerebroGreeting());
-        }
-
-        function stopConversationalMode() {
-            conversationalMode = false;
-            document.getElementById('nav-orb-container')?.classList.remove('conversational', 'listening');
-            if (isRecording) stopVoice();
-            if (isSpeaking) stopSpeaking();
-            showToast('Voice mode ended');
-        }
-
-        function startConversationalListen() {
-            if (!conversationalMode || !recognition) {
-                console.log('[Conv] Cannot start listen - mode:', conversationalMode, 'recognition:', !!recognition);
-                return;
-            }
-
-            console.log('[Conv] Starting to listen...');
-            document.getElementById('nav-orb-container')?.classList.add('listening');
-            isRecording = true;
-            document.getElementById('voice-overlay').classList.add('active');
-            document.getElementById('voice-transcript').textContent = '';
-
-            try {
-                recognition.start();
-                console.log('[Conv] Recognition started');
-            } catch (e) {
-                console.error('[Conv] Listen error:', e);
-                stopConversationalMode();
-            }
+            voiceStatus.textContent = 'TTS ready (STT removed)';
+            voiceStatus.className = 'settings-value';
         }
 
         // ==================== AGENTS ====================
@@ -40752,6 +40818,7 @@ Please proceed with implementing this recommendation. You have full permissions.
 
         // Handle mobile keyboard - adjust layout when keyboard opens
         function handleMobileKeyboard() {
+            if (_chatSplitMode) return; // Split mode handles its own layout via CSS Grid
             const chatInput = document.querySelector('.chat-input-area');
             const bottomNav = document.querySelector('.bottom-nav');
             const messagesContainer = document.getElementById('messages');
