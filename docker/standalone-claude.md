@@ -60,25 +60,39 @@ You have access to Cerebro's persistent memory system. This is not a suggestion 
 - `curl -s -X POST http://localhost:59000/internal/spawn-child-agent -H "Content-Type: application/json" -d '{"task":"...","type":"worker"}'`
 
 ## Dev Server Hosting (Show Apps to User)
-When you build a web app, the user can view it in their browser through Cerebro's reverse proxy.
+When you build a web app, the user can view it through Cerebro's reverse proxy at `/app/PORT/`.
 
+### Option A — Dev Server (live reload)
 1. Start your dev server on `0.0.0.0`:
-   - React/Vite: `npm run dev -- --host 0.0.0.0 --port 3000`
-   - Python: `python -m http.server 8080 --bind 0.0.0.0`
+   - React/Vite: `npm run dev -- --host 0.0.0.0 --port 3001`
    - Flask: `flask run --host 0.0.0.0 --port 5000`
-2. Register it so the user gets a notification:
+2. Register (auto-opens in Chrome):
    ```bash
    curl -s -X POST http://localhost:59000/api/dev-servers \
      -H "Authorization: Bearer $TOKEN" \
      -H "Content-Type: application/json" \
-     -d '{"port": 3000, "name": "My App", "framework": "react"}'
+     -d '{"port": 3001, "name": "My App", "framework": "react"}'
    ```
-3. Tell the user: **http://localhost:61000/app/3000/**
-4. Clean up when done:
-   ```bash
-   curl -s -X DELETE http://localhost:59000/api/dev-servers/3000 \
-     -H "Authorization: Bearer $TOKEN"
-   ```
+
+### Option B — Serve a built app
+```bash
+curl -s -X POST http://localhost:59000/api/dev-servers/serve \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"directory": "/path/to/dist", "port": 3001, "spa": true, "name": "My App"}'
+```
+Starts a static server with SPA fallback and auto-opens in Chrome.
+
+### Base path config (important for Vite/React)
+- Vite: add `base: '/app/PORT/'` to `vite.config.js`
+- The proxy auto-patches `fetch()` and `XHR` at runtime, but setting the base is more reliable.
+- Use relative URLs for API calls: `fetch("api/data")` instead of `fetch("/api/data")`
+
+### Clean up
+```bash
+curl -s -X DELETE http://localhost:59000/api/dev-servers/3001 \
+  -H "Authorization: Bearer $TOKEN"
+```
 
 Dev servers auto-deregister when your agent completes or is stopped.
 

@@ -1204,29 +1204,45 @@ SSH keys at ~/.ssh/. Registered devices:
 """
 
 _CEREBRO_CAP_DEV_SERVER = """### Dev Server Hosting (Show Apps to User)
-When you build a web app (React, Flask, etc.), the user can view it in their browser through Cerebro's reverse proxy.
+When you build a web app (React, Flask, etc.), the user can view it in their browser through Cerebro's reverse proxy at `/app/PORT/`.
 
-**Steps:**
-1. Start your dev server bound to all interfaces: `--host 0.0.0.0`
-   - React/Vite: `npm run dev -- --host 0.0.0.0 --port 3000`
-   - Python: `python -m http.server 8080 --bind 0.0.0.0`
+**Option A — Dev Server (live reload):**
+1. Start your dev server bound to all interfaces (`--host 0.0.0.0`):
+   - React/Vite: `npm run dev -- --host 0.0.0.0 --port 3001`
    - Flask: `flask run --host 0.0.0.0 --port 5000`
-2. Register with Cerebro so the app is **automatically opened** in the user's Chrome browser (new tab):
+2. Register with Cerebro (auto-opens in Chrome):
    ```bash
    curl -s -X POST http://localhost:59000/api/dev-servers \\
      -H "Authorization: Bearer $TOKEN" \\
      -H "Content-Type: application/json" \\
-     -d '{{"port": 3000, "name": "My App", "framework": "react"}}'
-   ```
-   The user will see the app immediately — no need to tell them to visit a URL.
-3. You can also manually navigate Chrome via `POST /api/browser/agent/navigate` if needed.
-4. When done, clean up:
-   ```bash
-   curl -s -X DELETE http://localhost:59000/api/dev-servers/3000 \\
-     -H "Authorization: Bearer $TOKEN"
+     -d '{{"port": 3001, "name": "My App", "framework": "react"}}'
    ```
 
-The proxy handles HTML, JS, CSS, WebSocket (HMR/hot reload) — everything just works.
+**Option B — Serve a built app (production build):**
+```bash
+curl -s -X POST http://localhost:59000/api/dev-servers/serve \\
+  -H "Authorization: Bearer $TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{{"directory": "/path/to/dist", "port": 3001, "spa": true, "name": "My App"}}'
+```
+This starts a built-in static server with SPA fallback and auto-opens in Chrome. No need to run `python -m http.server`.
+
+**Framework base path config (IMPORTANT for Vite/React):**
+- Vite: add `base: '/app/PORT/'` to `vite.config.js` (or `.ts`)
+- Create React App: set `"homepage": "/app/PORT/"` in `package.json`
+- If you skip this, the proxy's JS shim will patch `fetch()`, `XHR`, and `history.pushState()` at runtime (automatic), but setting the base path is more reliable.
+
+**API calls from your app:**
+- `fetch()` and `XMLHttpRequest` are **auto-patched** by the proxy — `/api/data` is rewritten to `/app/PORT/api/data`
+- For maximum reliability, use relative URLs: `fetch("api/data")` instead of `fetch("/api/data")`
+
+**Clean up when done:**
+```bash
+curl -s -X DELETE http://localhost:59000/api/dev-servers/3001 \\
+  -H "Authorization: Bearer $TOKEN"
+```
+
+The proxy handles HTML rewriting, JS module imports, CSS, WebSocket (HMR), and SPA route fallback — everything just works.
 IMPORTANT: Always use `--host 0.0.0.0` so the server binds to all interfaces, not just 127.0.0.1.
 """
 
@@ -15754,8 +15770,37 @@ async def reject_device_command(action_id: str, user: str = Depends(verify_token
 # Dev Server Reverse Proxy
 # ============================================================================
 
+def _kill_dev_server_port(port: int, info: dict):
+    """Kill a dev server process by tracked PID or by freeing the port."""
+    import signal
+    # Kill tracked PID
+    pid = info.get("pid")
+    if pid:
+        try:
+            os.kill(pid, signal.SIGTERM)
+            print(f"[DevServer] Killed PID {pid} for port {port}")
+        except (ProcessLookupError, PermissionError):
+            pass
+    # Shut down builtin server if applicable
+    if port in _builtin_servers:
+        try:
+            httpd = _builtin_servers[port].get("httpd")
+            if httpd:
+                httpd.shutdown()
+        except Exception:
+            pass
+        _builtin_servers.pop(port, None)
+    # Fallback: kill whatever holds the port (Linux only)
+    if not pid and port not in _builtin_servers:
+        try:
+            import subprocess
+            subprocess.run(["fuser", "-k", f"{port}/tcp"], capture_output=True, timeout=5)
+        except Exception:
+            pass
+
+
 async def _cleanup_dev_servers_for_agent(agent_id: str):
-    """Remove all dev servers registered by a specific agent."""
+    """Remove all dev servers registered by a specific agent, killing their processes."""
     ports_to_remove = [
         port for port, info in _active_dev_servers.items()
         if info.get("agent_id") == agent_id
@@ -15763,6 +15808,7 @@ async def _cleanup_dev_servers_for_agent(agent_id: str):
     for port in ports_to_remove:
         info = _active_dev_servers.pop(port, None)
         if info:
+            _kill_dev_server_port(port, info)
             print(f"[DevServer] Auto-deregistered port {port} (agent {agent_id} finished)")
             try:
                 await sio.emit("dev_server_update", {
@@ -15794,19 +15840,24 @@ async def register_dev_server(request: Request, user: str = Depends(verify_token
     name = body.get("name", f"Dev Server :{port}")
     agent_id = body.get("agent_id", "")
     framework = body.get("framework", "unknown")
+    pid = body.get("pid")  # Optional PID for cleanup
 
     if not isinstance(port, int) or port < DEV_SERVER_PORT_MIN or port > DEV_SERVER_PORT_MAX:
         raise HTTPException(400, f"Port must be an integer between {DEV_SERVER_PORT_MIN} and {DEV_SERVER_PORT_MAX}")
     if port in DEV_SERVER_BLOCKED_PORTS:
         raise HTTPException(400, f"Port {port} is reserved and cannot be proxied")
 
-    _active_dev_servers[port] = {
+    server_entry = {
         "port": port,
         "name": name,
         "agent_id": agent_id,
         "framework": framework,
         "registered_at": datetime.now(timezone.utc).isoformat(),
+        "health_failures": 0,
     }
+    if pid and isinstance(pid, int):
+        server_entry["pid"] = pid
+    _active_dev_servers[port] = server_entry
 
     # The external-facing URL uses port 61000 (Docker maps 61000→59000)
     proxy_url = f"http://localhost:61000/app/{port}/"
@@ -15829,7 +15880,7 @@ async def register_dev_server(request: Request, user: str = Depends(verify_token
     # Auto-open in Chrome (non-blocking)
     asyncio.create_task(_open_dev_server_in_browser(proxy_url, name))
 
-    return {"status": "registered", "port": port, "proxy_url": proxy_url}
+    return {"status": "registered", "port": port, "proxy_url": proxy_url, "base_path": f"/app/{port}/"}
 
 
 @app.get("/api/dev-servers")
@@ -15846,11 +15897,12 @@ async def list_dev_servers(user: str = Depends(verify_token)):
 
 @app.delete("/api/dev-servers/{port}")
 async def deregister_dev_server(port: int, user: str = Depends(verify_token)):
-    """Deregister a dev server."""
+    """Deregister a dev server and kill its process."""
     info = _active_dev_servers.pop(port, None)
     if not info:
         raise HTTPException(404, f"No dev server registered on port {port}")
 
+    _kill_dev_server_port(port, info)
     print(f"[DevServer] Deregistered: port {port}")
 
     try:
@@ -15865,6 +15917,159 @@ async def deregister_dev_server(port: int, user: str = Depends(verify_token)):
     return {"status": "deregistered", "port": port}
 
 
+# --- Built-in SPA Static File Server ---
+
+_builtin_servers: dict[int, dict] = {}  # port -> {server, thread, directory, name, agent_id}
+
+_DEV_SERVER_HEALTH_MAX_FAILURES = 3
+
+
+async def _health_check_dev_servers():
+    """Background task: ping registered dev servers every 60s, auto-deregister stale ones."""
+    import httpx
+    await asyncio.sleep(30)  # Initial delay to let things start up
+    while True:
+        try:
+            ports = list(_active_dev_servers.keys())
+            for port in ports:
+                info = _active_dev_servers.get(port)
+                if not info:
+                    continue
+                try:
+                    async with httpx.AsyncClient(timeout=5.0) as client:
+                        resp = await client.get(f"http://127.0.0.1:{port}/")
+                    if resp.status_code < 500:
+                        info["health_failures"] = 0
+                        continue
+                except Exception:
+                    pass
+                # Increment failure count
+                failures = info.get("health_failures", 0) + 1
+                info["health_failures"] = failures
+                if failures >= _DEV_SERVER_HEALTH_MAX_FAILURES:
+                    _active_dev_servers.pop(port, None)
+                    _kill_dev_server_port(port, info)
+                    print(f"[DevServer] Health check: auto-deregistered port {port} after {failures} failures")
+                    try:
+                        await sio.emit("dev_server_update", {
+                            "action": "deregistered",
+                            "port": port,
+                            "name": info.get("name", ""),
+                            "reason": "health_check_failed",
+                        }, room=os.environ.get("CEREBRO_ROOM", "default"))
+                    except Exception:
+                        pass
+        except Exception as e:
+            print(f"[DevServer] Health check error: {e}")
+        await asyncio.sleep(60)
+
+
+@app.on_event("startup")
+async def _start_dev_server_health_check():
+    asyncio.create_task(_health_check_dev_servers())
+
+
+def _run_builtin_static_server(directory: str, port: int, spa: bool = True):
+    """Run a simple HTTP file server in a thread. Serves index.html for SPA routes."""
+    import http.server
+    import socketserver
+
+    class SPAHandler(http.server.SimpleHTTPRequestHandler):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=directory, **kwargs)
+
+        def do_GET(self):
+            # SPA fallback: if file doesn't exist and path has no extension, serve index.html
+            if spa:
+                import os.path
+                file_path = os.path.join(directory, self.path.lstrip("/"))
+                if not os.path.exists(file_path) and "." not in self.path.split("/")[-1]:
+                    self.path = "/index.html"
+            return super().do_GET()
+
+        def log_message(self, format, *args):
+            pass  # Silence request logging
+
+    try:
+        with socketserver.TCPServer(("0.0.0.0", port), SPAHandler) as httpd:
+            _builtin_servers[port]["httpd"] = httpd
+            httpd.serve_forever()
+    except Exception as e:
+        print(f"[DevServer] Built-in server on port {port} stopped: {e}")
+
+
+@app.post("/api/dev-servers/serve")
+async def serve_static_directory(request: Request, user: str = Depends(verify_token)):
+    """Start a built-in static file server with SPA fallback and register it with the proxy."""
+    body = await request.json()
+    directory = body.get("directory")
+    port = body.get("port", 3001)
+    spa = body.get("spa", True)
+    name = body.get("name", f"Static Server :{port}")
+    agent_id = body.get("agent_id", "")
+
+    if not directory:
+        raise HTTPException(400, "directory is required")
+    if not isinstance(port, int) or port < DEV_SERVER_PORT_MIN or port > DEV_SERVER_PORT_MAX:
+        raise HTTPException(400, f"Port must be between {DEV_SERVER_PORT_MIN} and {DEV_SERVER_PORT_MAX}")
+    if port in DEV_SERVER_BLOCKED_PORTS:
+        raise HTTPException(400, f"Port {port} is reserved")
+
+    import os
+    if not os.path.isdir(directory):
+        raise HTTPException(400, f"Directory does not exist: {directory}")
+    if not os.path.isfile(os.path.join(directory, "index.html")):
+        raise HTTPException(400, f"No index.html found in {directory}")
+
+    # Stop existing builtin server on this port if any
+    if port in _builtin_servers:
+        try:
+            _builtin_servers[port].get("httpd", None) and _builtin_servers[port]["httpd"].shutdown()
+        except Exception:
+            pass
+        _builtin_servers.pop(port, None)
+
+    import threading
+    server_info = {"directory": directory, "name": name, "agent_id": agent_id, "spa": spa}
+    _builtin_servers[port] = server_info
+
+    t = threading.Thread(target=_run_builtin_static_server, args=(directory, port, spa), daemon=True)
+    t.start()
+    server_info["thread"] = t
+
+    # Wait briefly for the server to start
+    await asyncio.sleep(0.3)
+
+    # Register with the proxy system
+    _active_dev_servers[port] = {
+        "port": port,
+        "name": name,
+        "agent_id": agent_id,
+        "framework": "static",
+        "registered_at": datetime.now(timezone.utc).isoformat(),
+        "builtin": True,
+    }
+
+    proxy_url = f"http://localhost:61000/app/{port}/"
+    print(f"[DevServer] Built-in server started: {name} serving {directory} on port {port}")
+
+    try:
+        await sio.emit("dev_server_update", {
+            "action": "registered",
+            "port": port,
+            "name": name,
+            "agent_id": agent_id,
+            "framework": "static",
+            "proxy_url": proxy_url,
+        }, room=os.environ.get("CEREBRO_ROOM", "default"))
+    except Exception:
+        pass
+
+    asyncio.create_task(_open_dev_server_in_browser(proxy_url, name))
+
+    return {"status": "serving", "port": port, "proxy_url": proxy_url, "base_path": f"/app/{port}/", "directory": directory}
+
+
 # --- HTTP Reverse Proxy ---
 
 _HOP_BY_HOP_HEADERS = frozenset([
@@ -15873,25 +16078,93 @@ _HOP_BY_HOP_HEADERS = frozenset([
 ])
 
 
-def _inject_base_tag(html: str, port: int) -> str:
-    """Inject <base href> into HTML and rewrite absolute paths for the proxy prefix."""
-    # Rewrite absolute src/href/action paths FIRST (before base tag injection)
+def _rewrite_proxied_html(html: str, port: int) -> str:
+    """Rewrite HTML for reverse-proxied dev servers: base tag, attribute paths, JS runtime shim."""
     prefix = f"/app/{port}"
-    html = re.sub(r'(src|href|action)="/', rf'\1="{prefix}/', html)
-    html = re.sub(r"(src|href|action)='/", rf"\1='{prefix}/", html)
 
-    # Then inject <base href> tag
-    base_tag = f'<base href="/app/{port}/">'
+    # 1. Rewrite absolute src/href/action paths (safety net for static HTML)
+    #    Negative lookahead prevents double-prefixing paths that already start with /app/
+    html = re.sub(r'(src|href|action)="/(?!app/)', rf'\1="{prefix}/', html)
+    html = re.sub(r"(src|href|action)='/(?!app/)", rf"\1='{prefix}/", html)
+
+    # 2. Build the <base> tag and JS runtime shim
+    base_tag = f'<base href="{prefix}/">'
+    js_shim = f'''<script data-cerebro-proxy>
+(function() {{
+  var BASE = "{prefix}/";
+  window.__CEREBRO_BASE = BASE;
+
+  // Helper: rewrite absolute path to prefixed path
+  function rewrite(url) {{
+    if (typeof url !== "string") return url;
+    // Only rewrite absolute paths that don't already have the prefix
+    if (url.startsWith("/") && !url.startsWith(BASE)) {{
+      return BASE + url.slice(1);
+    }}
+    return url;
+  }}
+
+  // Patch fetch()
+  var _fetch = window.fetch;
+  window.fetch = function(input, init) {{
+    if (typeof input === "string") {{
+      input = rewrite(input);
+    }} else if (input instanceof Request) {{
+      input = new Request(rewrite(input.url), input);
+    }}
+    return _fetch.call(this, input, init);
+  }};
+
+  // Patch XMLHttpRequest.open()
+  var _xhrOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function(method, url) {{
+    arguments[1] = rewrite(url);
+    return _xhrOpen.apply(this, arguments);
+  }};
+
+  // Patch history.pushState / replaceState for SPA routers
+  var _pushState = history.pushState;
+  history.pushState = function(state, title, url) {{
+    return _pushState.call(this, state, title, rewrite(url));
+  }};
+  var _replaceState = history.replaceState;
+  history.replaceState = function(state, title, url) {{
+    return _replaceState.call(this, state, title, rewrite(url));
+  }};
+}})();
+</script>'''
+
+    injection = base_tag + js_shim
+
+    # 3. Inject into <head>
     if "<head>" in html:
-        html = html.replace("<head>", f"<head>{base_tag}", 1)
+        html = html.replace("<head>", f"<head>{injection}", 1)
     elif "<HEAD>" in html:
-        html = html.replace("<HEAD>", f"<HEAD>{base_tag}", 1)
+        html = html.replace("<HEAD>", f"<HEAD>{injection}", 1)
     elif "<html>" in html or "<HTML>" in html:
-        html = html.replace("<html>", f"<html><head>{base_tag}</head>", 1)
-        html = html.replace("<HTML>", f"<HTML><head>{base_tag}</head>", 1)
+        html = html.replace("<html>", f"<html><head>{injection}</head>", 1)
+        html = html.replace("<HTML>", f"<HTML><head>{injection}</head>", 1)
     else:
-        html = base_tag + html
+        html = injection + html
     return html
+
+
+def _rewrite_proxied_js(js: str, port: int) -> str:
+    """Rewrite absolute import paths in JS module responses for proxied dev servers.
+
+    Vite sends modules with bare absolute imports like:
+      import '/src/main.tsx'
+      import { foo } from '/@vite/client'
+    These need to be rewritten to /app/{port}/src/main.tsx etc.
+    """
+    prefix = f"/app/{port}"
+    # Rewrite: import '/...' and from '/...' (single or double quotes)
+    # Negative lookahead prevents double-prefixing paths already under /app/
+    js = re.sub(r'''(import\s+['"])/(?!app/)''', rf'\1{prefix}/', js)
+    js = re.sub(r'''(from\s+['"])/(?!app/)''', rf'\1{prefix}/', js)
+    # Also rewrite dynamic import() calls with string literals
+    js = re.sub(r'''(import\(['"])/(?!app/)''', rf'\1{prefix}/', js)
+    return js
 
 
 @app.get("/app/{port}")
@@ -15947,14 +16220,49 @@ async def proxy_dev_server(port: int, path: str, request: Request):
     content = resp.content
     content_type = resp.headers.get("content-type", "")
 
-    # Inject base tag into HTML responses
+    # --- SPA Fallback (Phase B) ---
+    # If upstream returned 404 and the path looks like an SPA route (no file extension,
+    # not an asset/vite internal path), re-request / to get index.html
+    if resp.status_code == 404 and request.method == "GET":
+        _asset_prefixes = ("assets/", "static/", "@vite/", "@fs/", "node_modules/", "__vite_ping")
+        has_extension = "." in path.split("/")[-1] if path else False
+        is_asset = any(path.startswith(p) for p in _asset_prefixes)
+        if not has_extension and not is_asset:
+            try:
+                async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as fallback_client:
+                    fallback_resp = await fallback_client.get(
+                        f"http://127.0.0.1:{port}/",
+                        headers=headers,
+                    )
+                if fallback_resp.status_code == 200 and "text/html" in fallback_resp.headers.get("content-type", ""):
+                    resp = fallback_resp
+                    content = resp.content
+                    content_type = resp.headers.get("content-type", "")
+                    # Rebuild response headers for the fallback
+                    resp_headers = {}
+                    for key, value in resp.headers.items():
+                        if key.lower() not in _HOP_BY_HOP_HEADERS and key.lower() != "content-encoding" and key.lower() != "content-length":
+                            resp_headers[key] = value
+            except Exception:
+                pass  # Fall through to original 404
+
+    # --- Rewrite HTML responses (base tag + JS shim) ---
     if "text/html" in content_type:
         try:
             html = content.decode("utf-8", errors="replace")
-            html = _inject_base_tag(html, port)
+            html = _rewrite_proxied_html(html, port)
             content = html.encode("utf-8")
         except Exception:
-            pass  # Return original content if injection fails
+            pass  # Return original content if rewriting fails
+
+    # --- Rewrite JS module responses (absolute import paths) ---
+    if any(t in content_type for t in ("application/javascript", "text/javascript")):
+        try:
+            js = content.decode("utf-8", errors="replace")
+            js = _rewrite_proxied_js(js, port)
+            content = js.encode("utf-8")
+        except Exception:
+            pass
 
     from fastapi.responses import Response
     return Response(
