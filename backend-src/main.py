@@ -1246,6 +1246,59 @@ The proxy handles HTML rewriting, JS module imports, CSS, WebSocket (HMR), and S
 IMPORTANT: Always use `--host 0.0.0.0` so the server binds to all interfaces, not just 127.0.0.1.
 """
 
+_CEREBRO_CAP_AGENT_MANAGEMENT = """### Agent Group/Project Management
+You can organize agents into groups (projects) via HTTP API.
+
+**List all groups:**
+```bash
+curl -s http://localhost:59000/agents/projects -H "Authorization: Bearer $TOKEN"
+```
+
+**List all agents:**
+```bash
+curl -s http://localhost:59000/agents -H "Authorization: Bearer $TOKEN"
+```
+
+**Create a group:**
+```bash
+curl -s -X POST http://localhost:59000/agents/projects/create \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{{"name": "Research"}}'
+```
+
+**Rename a group:**
+```bash
+curl -s -X POST http://localhost:59000/agents/projects/PROJECT_ID/rename \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{{"name": "New Name"}}'
+```
+
+**Delete a group** (agents become uncategorized):
+```bash
+curl -s -X DELETE http://localhost:59000/agents/projects/PROJECT_ID \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Move one agent to a group:**
+```bash
+curl -s -X POST http://localhost:59000/agents/AGENT_ID/project \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{{"project_id": "PROJECT_ID"}}'
+```
+
+**Bulk move agents:**
+```bash
+curl -s -X POST http://localhost:59000/agents/projects/bulk-assign \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{{"agent_ids": ["id1", "id2"], "project_id": "PROJECT_ID"}}'
+```
+
+**Best practices:**
+- Always list groups first to get valid project_ids
+- Use bulk-assign for 2+ agents
+- Set project_id to "" (empty string) to uncategorize an agent
+"""
+
 # Layer 5: Chat identity (full hub persona for the chat page)
 _CEREBRO_CHAT_IDENTITY = """You are Cerebro — {user_name}'s persistent AI companion and operational hub.
 
@@ -1439,6 +1492,49 @@ curl -s -X DELETE http://localhost:59000/internal/automations/SCHEDULE_ID
 
 RULES: When user asks to create an automation, extract: name, what it does (prompt), when/how often (schedule), and agent type. Use sensible defaults (daily at 09:00, researcher, 1hr timeout) for anything not specified. After creating, tell the user the schedule and that it appears on the Auto page.
 
+### Agent Group Management
+You can organize agents into groups (projects). These correspond to the folders/groups on the Agents tab.
+
+**List all groups:**
+```bash
+curl -s http://localhost:59000/internal/projects
+```
+
+**Create a group:**
+```bash
+curl -s -X POST http://localhost:59000/internal/projects/create \
+  -H "Content-Type: application/json" \
+  -d '{{"name": "Research"}}'
+```
+
+**Rename a group:**
+```bash
+curl -s -X POST http://localhost:59000/internal/projects/PROJECT_ID/rename \
+  -H "Content-Type: application/json" \
+  -d '{{"name": "New Name"}}'
+```
+
+**Delete a group** (agents become uncategorized):
+```bash
+curl -s -X DELETE http://localhost:59000/internal/projects/PROJECT_ID
+```
+
+**Move one agent to a group:**
+```bash
+curl -s -X POST http://localhost:59000/internal/agents/AGENT_ID/project \
+  -H "Content-Type: application/json" \
+  -d '{{"project_id": "PROJECT_ID"}}'
+```
+
+**Bulk move agents:**
+```bash
+curl -s -X POST http://localhost:59000/internal/projects/bulk-assign \
+  -H "Content-Type: application/json" \
+  -d '{{"agent_ids": ["id1", "id2"], "project_id": "PROJECT_ID"}}'
+```
+
+RULES: List groups first to get valid project_ids. Use bulk-assign for 2+ agents. Set project_id to "" (empty string) to uncategorize an agent. Match agents by call_sign from the agent roster — look up their ID before moving.
+
 ### Rules
 - Do NOT assume external servers, NAS, or SSH targets exist
 - Always verify actions worked (check exit codes, read output)
@@ -1562,6 +1658,49 @@ curl -s -X DELETE http://localhost:59000/internal/automations/SCHEDULE_ID
 ```
 
 RULES: When user asks to create an automation, extract: name, what it does (prompt), when/how often (schedule), and agent type. Use sensible defaults (daily at 09:00, researcher, 1hr timeout) for anything not specified. After creating, tell the user the schedule and that it appears on the Auto page.
+
+### Agent Group Management
+You can organize agents into groups (projects). These correspond to the folders/groups on the Agents tab.
+
+**List all groups:**
+```bash
+curl -s http://localhost:59000/internal/projects
+```
+
+**Create a group:**
+```bash
+curl -s -X POST http://localhost:59000/internal/projects/create \
+  -H "Content-Type: application/json" \
+  -d '{{"name": "Research"}}'
+```
+
+**Rename a group:**
+```bash
+curl -s -X POST http://localhost:59000/internal/projects/PROJECT_ID/rename \
+  -H "Content-Type: application/json" \
+  -d '{{"name": "New Name"}}'
+```
+
+**Delete a group** (agents become uncategorized):
+```bash
+curl -s -X DELETE http://localhost:59000/internal/projects/PROJECT_ID
+```
+
+**Move one agent to a group:**
+```bash
+curl -s -X POST http://localhost:59000/internal/agents/AGENT_ID/project \
+  -H "Content-Type: application/json" \
+  -d '{{"project_id": "PROJECT_ID"}}'
+```
+
+**Bulk move agents:**
+```bash
+curl -s -X POST http://localhost:59000/internal/projects/bulk-assign \
+  -H "Content-Type: application/json" \
+  -d '{{"agent_ids": ["id1", "id2"], "project_id": "PROJECT_ID"}}'
+```
+
+RULES: List groups first to get valid project_ids. Use bulk-assign for 2+ agents. Set project_id to "" (empty string) to uncategorize an agent. Match agents by call_sign from the agent roster — look up their ID before moving.
 
 ### Key Principle
 You can run commands on ANY machine via SSH. You orchestrate the entire infrastructure.
@@ -1690,6 +1829,49 @@ curl -s -X DELETE http://localhost:59000/internal/automations/SCHEDULE_ID
 ```
 
 RULES: When user asks to create an automation, extract: name, what it does (prompt), when/how often (schedule), and agent type. Use sensible defaults (daily at 09:00, researcher, 1hr timeout) for anything not specified. After creating, tell the user the schedule and that it appears on the Auto page.
+
+### Agent Group Management
+You can organize agents into groups (projects). These correspond to the folders/groups on the Agents tab.
+
+**List all groups:**
+```bash
+curl -s http://localhost:61000/internal/projects
+```
+
+**Create a group:**
+```bash
+curl -s -X POST http://localhost:61000/internal/projects/create \
+  -H "Content-Type: application/json" \
+  -d '{{"name": "Research"}}'
+```
+
+**Rename a group:**
+```bash
+curl -s -X POST http://localhost:61000/internal/projects/PROJECT_ID/rename \
+  -H "Content-Type: application/json" \
+  -d '{{"name": "New Name"}}'
+```
+
+**Delete a group** (agents become uncategorized):
+```bash
+curl -s -X DELETE http://localhost:61000/internal/projects/PROJECT_ID
+```
+
+**Move one agent to a group:**
+```bash
+curl -s -X POST http://localhost:61000/internal/agents/AGENT_ID/project \
+  -H "Content-Type: application/json" \
+  -d '{{"project_id": "PROJECT_ID"}}'
+```
+
+**Bulk move agents:**
+```bash
+curl -s -X POST http://localhost:61000/internal/projects/bulk-assign \
+  -H "Content-Type: application/json" \
+  -d '{{"agent_ids": ["id1", "id2"], "project_id": "PROJECT_ID"}}'
+```
+
+RULES: List groups first to get valid project_ids. Use bulk-assign for 2+ agents. Set project_id to "" (empty string) to uncategorize an agent. Match agents by call_sign from the agent roster — look up their ID before moving.
 """
 
 # Role → capability blocks mapping
@@ -1698,9 +1880,9 @@ _ROLE_CAPABILITIES = {
     "researcher":   ["browser", "ask_user"],
     "coder":        ["ask_user", "dev_server"],
     "analyst":      ["trading", "ask_user"],
-    "orchestrator": ["orchestrator", "ask_user", "dev_server"],
+    "orchestrator": ["orchestrator", "ask_user", "dev_server", "agent_management"],
     "browser":      ["browser", "ask_user", "dev_server"],
-    "specops":      ["browser", "ask_user", "dev_server"],
+    "specops":      ["browser", "ask_user", "dev_server", "agent_management"],
 }
 
 def _get_user_name() -> str:
@@ -1754,6 +1936,7 @@ def _build_agent_capabilities(role: str, agent_token: str, call_sign: str, user_
         "spawn": _CEREBRO_CAP_SPAWN.format(call_sign=call_sign),
         "orchestrator": _CEREBRO_CAP_ORCHESTRATOR.format(call_sign=call_sign),
         "dev_server": _CEREBRO_CAP_DEV_SERVER,
+        "agent_management": _CEREBRO_CAP_AGENT_MANAGEMENT,
     }
 
     for cap in caps:
@@ -4272,6 +4455,55 @@ def _build_automations_roster() -> str:
     return "\n## Scheduled Automations\n" + "\n".join(roster_lines)
 
 
+def _build_projects_roster() -> str:
+    """Build a text block listing agent groups/projects for chat context injection."""
+    try:
+        tracker_path = Path(config.AI_MEMORY_PATH) / "projects" / "tracker.json"
+        if not tracker_path.exists():
+            return ""
+
+        with open(tracker_path, 'r', encoding='utf-8') as f:
+            tracker_data = json.load(f)
+
+        if not tracker_data:
+            return ""
+
+        # Count agents per project from active_agents + index (deduped)
+        all_agents = {}
+        for a in active_agents.values():
+            all_agents[a["id"]] = a
+        index_file = Path(config.AI_MEMORY_PATH) / "agents" / "index.json"
+        if index_file.exists():
+            try:
+                with open(index_file, 'r', encoding='utf-8') as f:
+                    index = json.load(f)
+                for entry in index.get("agents", []):
+                    if entry["id"] not in all_agents:
+                        all_agents[entry["id"]] = entry
+            except Exception:
+                pass
+
+        project_counts = {}
+        for agent in all_agents.values():
+            pid = agent.get("project_id") or ""
+            if pid:
+                project_counts[pid] = project_counts.get(pid, 0) + 1
+
+        roster_lines = []
+        for pid, proj in tracker_data.items():
+            if not isinstance(proj, dict):
+                continue
+            name = proj.get("name", pid)
+            count = project_counts.get(pid, 0)
+            roster_lines.append(f'- "{name}" (id: {pid}) — {count} agent{"s" if count != 1 else ""}')
+
+        if not roster_lines:
+            return ""
+        return "\n## Agent Groups/Projects\n" + "\n".join(roster_lines)
+    except Exception:
+        return ""
+
+
 def _build_chat_prompt(content: str, session_id: str) -> str:
     """Build a prompt with conversation context injected for Claude CLI."""
     data = _load_persistent_session(session_id)
@@ -4303,6 +4535,11 @@ Note: Device names are case-insensitive. Match by friendly name.""")
     auto_roster = _build_automations_roster()
     if auto_roster:
         parts.append(auto_roster)
+
+    # Inject projects roster so Cerebro knows about agent groups
+    projects_roster = _build_projects_roster()
+    if projects_roster:
+        parts.append(projects_roster)
 
     if summary:
         parts.append(f"\n## Conversation Summary (earlier messages)\n{summary}")
@@ -5317,6 +5554,88 @@ async def assign_agent_project(agent_id: str, request: ProjectAssignRequest, use
         }, room=os.environ.get("CEREBRO_ROOM", "default"))
 
         return {"status": "ok", "agent_id": agent_id, "project_id": project_id}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+class BulkProjectAssignRequest(BaseModel):
+    agent_ids: list[str]
+    project_id: str
+
+
+@app.post("/agents/projects/bulk-assign")
+async def bulk_assign_agents_to_project(request: BulkProjectAssignRequest, user: str = Depends(verify_token)):
+    """Assign multiple agents to a project in one call."""
+    project_id = request.project_id
+    moved = []
+    not_found = []
+    errors = []
+
+    try:
+        agents_dir = Path(config.AI_MEMORY_PATH) / "agents"
+
+        # Load index once
+        index_file = agents_dir / "index.json"
+        index = {"agents": []}
+        if index_file.exists():
+            with open(index_file, 'r', encoding='utf-8') as f:
+                index = json.load(f)
+
+        for agent_id in request.agent_ids:
+            try:
+                # Update in-memory agent
+                if agent_id in active_agents:
+                    active_agents[agent_id]["project_id"] = project_id
+
+                # Update persisted JSON file
+                found_file = False
+                for date_dir in agents_dir.iterdir():
+                    if date_dir.is_dir() and not date_dir.name.endswith('.json'):
+                        agent_file = date_dir / f"{agent_id}.json"
+                        if agent_file.exists():
+                            with open(agent_file, 'r', encoding='utf-8') as f:
+                                agent_data = json.load(f)
+                            agent_data["project_id"] = project_id
+                            with open(agent_file, 'w', encoding='utf-8') as f:
+                                json.dump(agent_data, f, indent=2, ensure_ascii=False)
+                                f.flush()
+                                os.fsync(f.fileno())
+                            found_file = True
+                            break
+
+                # Update index entry
+                found_index = False
+                for entry in index.get("agents", []):
+                    if entry["id"] == agent_id:
+                        entry["project_id"] = project_id
+                        found_index = True
+                        break
+
+                if found_file or found_index or agent_id in active_agents:
+                    moved.append(agent_id)
+                    # Emit WebSocket event per agent (frontend handles individually)
+                    await sio.emit("agent_project_assigned", {
+                        "agent_id": agent_id,
+                        "project_id": project_id,
+                    }, room=os.environ.get("CEREBRO_ROOM", "default"))
+                else:
+                    not_found.append(agent_id)
+            except Exception as e:
+                errors.append({"agent_id": agent_id, "error": str(e)})
+
+        # Write index once after all updates
+        with open(index_file, 'w', encoding='utf-8') as f:
+            json.dump(index, f, indent=2, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+
+        return {
+            "status": "ok",
+            "project_id": project_id,
+            "moved": moved,
+            "not_found": not_found,
+            "errors": errors,
+        }
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
@@ -7678,6 +7997,62 @@ async def run_automation_internal(schedule_id: str, request: Request):
     asyncio.create_task(execute_scheduled_task(schedule, trigger="chat"))
     print(f"[Chat] Automation '{schedule.get('name')}' ({schedule_id}) manually triggered from chat")
     return {"success": True, "message": f"Automation '{schedule.get('name')}' triggered. An agent is being spawned now."}
+
+
+# ── Chat-based Agent Group/Project Management (localhost-only, no auth) ───
+
+@app.get("/internal/projects")
+async def list_projects_internal(request: Request):
+    """List all agent groups/projects. Localhost-only, no auth."""
+    client_host = request.client.host
+    if client_host not in ("127.0.0.1", "localhost", "::1"):
+        raise HTTPException(403, "Internal endpoint only accessible from localhost")
+    return await list_agent_projects(user="chat")
+
+
+@app.post("/internal/projects/create")
+async def create_project_internal(request: Request, data: CreateProjectRequest):
+    """Create an agent group/project. Localhost-only, no auth."""
+    client_host = request.client.host
+    if client_host not in ("127.0.0.1", "localhost", "::1"):
+        raise HTTPException(403, "Internal endpoint only accessible from localhost")
+    return await create_project(request=data, user="chat")
+
+
+@app.post("/internal/projects/{project_id}/rename")
+async def rename_project_internal(project_id: str, request: Request, data: RenameProjectRequest):
+    """Rename an agent group/project. Localhost-only, no auth."""
+    client_host = request.client.host
+    if client_host not in ("127.0.0.1", "localhost", "::1"):
+        raise HTTPException(403, "Internal endpoint only accessible from localhost")
+    return await rename_project(project_id=project_id, request=data, user="chat")
+
+
+@app.delete("/internal/projects/{project_id}")
+async def delete_project_internal(project_id: str, request: Request):
+    """Delete an agent group/project. Localhost-only, no auth."""
+    client_host = request.client.host
+    if client_host not in ("127.0.0.1", "localhost", "::1"):
+        raise HTTPException(403, "Internal endpoint only accessible from localhost")
+    return await delete_project(project_id=project_id, user="chat")
+
+
+@app.post("/internal/projects/bulk-assign")
+async def bulk_assign_internal(request: Request, data: BulkProjectAssignRequest):
+    """Bulk assign agents to a group/project. Localhost-only, no auth."""
+    client_host = request.client.host
+    if client_host not in ("127.0.0.1", "localhost", "::1"):
+        raise HTTPException(403, "Internal endpoint only accessible from localhost")
+    return await bulk_assign_agents_to_project(request=data, user="chat")
+
+
+@app.post("/internal/agents/{agent_id}/project")
+async def assign_agent_project_internal(agent_id: str, request: Request, data: ProjectAssignRequest):
+    """Assign a single agent to a group/project. Localhost-only, no auth."""
+    client_host = request.client.host
+    if client_host not in ("127.0.0.1", "localhost", "::1"):
+        raise HTTPException(403, "Internal endpoint only accessible from localhost")
+    return await assign_agent_project(agent_id=agent_id, request=data, user="chat")
 
 
 @app.get("/internal/agent/{agent_id}/children")
