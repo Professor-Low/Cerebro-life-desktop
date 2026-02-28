@@ -52176,22 +52176,42 @@ Please proceed with implementing this recommendation. You have full permissions.
             updateResumeButtonState();
         }
 
+        function _sendSpecopsResumeDecision(payload, successMsg, fallbackMsg) {
+            var token = localStorage.getItem('cerebro_token');
+            fetch(API_URL + '/api/specops/resume-decision', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify(payload)
+            }).then(function(resp) {
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                return resp.json();
+            }).then(function(data) {
+                console.log('[SpecOps Resume] Decision sent via HTTP:', data);
+            }).catch(function(err) {
+                console.warn('[SpecOps Resume] HTTP fallback failed, trying socket:', err);
+                socket.emit('specops_resume_decision', payload);
+            });
+            dismissSpecopsResumePrompt();
+            showToast(successMsg || fallbackMsg, 'success');
+        }
+
         function specopsResumeSelected() {
             var alwaysResume = document.getElementById('specops-resume-always').checked;
             var selectedIds = Array.from(_specopsResumeSelected);
-            socket.emit('specops_resume_decision', { agent_ids: selectedIds, always_resume: alwaysResume });
-            dismissSpecopsResumePrompt();
-            if (selectedIds.length > 0) {
-                showToast('Resuming ' + selectedIds.length + ' mission' + (selectedIds.length !== 1 ? 's' : ''), 'success');
-            } else {
-                showToast('All missions on standby', 'info');
-            }
+            var msg = selectedIds.length > 0
+                ? 'Resuming ' + selectedIds.length + ' mission' + (selectedIds.length !== 1 ? 's' : '')
+                : 'All missions on standby';
+            _sendSpecopsResumeDecision(
+                { agent_ids: selectedIds, always_resume: alwaysResume },
+                msg, msg
+            );
         }
 
         function specopsResumeStandby() {
-            socket.emit('specops_resume_decision', { agent_ids: [], always_resume: false });
-            dismissSpecopsResumePrompt();
-            showToast('All missions on standby', 'info');
+            _sendSpecopsResumeDecision(
+                { agent_ids: [], always_resume: false },
+                'All missions on standby', 'All missions on standby'
+            );
         }
 
         // Custom prompt dialog — replaces browser prompt()

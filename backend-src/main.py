@@ -4462,10 +4462,27 @@ async def specops_resume_decision(sid, data):
     global _specops_resume_response, _specops_resume_event
     agent_ids = data.get("agent_ids", [])
     always_resume = data.get("always_resume", False)
-    print(f"[SpecOps Resume] Decision received: resume {len(agent_ids)} agent(s), always_resume={always_resume}")
+    print(f"[SpecOps Resume] Decision received via socket: resume {len(agent_ids)} agent(s), always_resume={always_resume}")
     _specops_resume_response = {"agent_ids": agent_ids, "always_resume": always_resume}
     if _specops_resume_event:
         _specops_resume_event.set()
+
+
+class SpecopsResumeDecisionRequest(BaseModel):
+    agent_ids: list[str] = []
+    always_resume: bool = False
+
+
+@app.post("/api/specops/resume-decision")
+async def specops_resume_decision_http(request: SpecopsResumeDecisionRequest, user: str = Depends(verify_token)):
+    """HTTP fallback for specops resume decision — used when WebSocket is disconnected."""
+    global _specops_resume_response, _specops_resume_event
+    if not _specops_resume_event:
+        return {"success": False, "error": "No pending resume decision"}
+    print(f"[SpecOps Resume] Decision received via HTTP: resume {len(request.agent_ids)} agent(s), always_resume={request.always_resume}")
+    _specops_resume_response = {"agent_ids": request.agent_ids, "always_resume": request.always_resume}
+    _specops_resume_event.set()
+    return {"success": True, "resumed": len(request.agent_ids)}
 
 
 # ============================================================================
