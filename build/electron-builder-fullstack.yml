@@ -55,7 +55,6 @@ linux:
     Comment: Your AI, Everywhere
     Categories: Utility;ArtificialIntelligence;Science;
     StartupWMClass: cerebro-desktop
-    Exec: cerebro %U
     Terminal: false
 
 deb:
