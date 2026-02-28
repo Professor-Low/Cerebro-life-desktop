@@ -610,26 +610,29 @@ class DockerManager extends EventEmitter {
   /**
    * Start the Docker Compose stack.
    */
-  async startStack() {
+  async startStack(options = {}) {
     this.emit('status', 'starting');
 
     // Pre-flight: check if port 61000 is available before trying compose up
-    const portCheck = await this.checkPort(61000);
-    if (!portCheck.available) {
-      if (portCheck.reason === 'cerebro-running') {
-        // Backend is already running (e.g. leftover from previous session) — just reconnect
-        console.log('[Docker] Backend already running on port 61000, reconnecting');
-        this._running = true;
-        this.emit('status', 'running');
-        this.startCredentialWatch();
-        return true;
+    // Skip this check during updates — we need to force-recreate with the new image
+    if (!options.forceRecreate) {
+      const portCheck = await this.checkPort(61000);
+      if (!portCheck.available) {
+        if (portCheck.reason === 'cerebro-running') {
+          // Backend is already running (e.g. leftover from previous session) — just reconnect
+          console.log('[Docker] Backend already running on port 61000, reconnecting');
+          this._running = true;
+          this.emit('status', 'running');
+          this.startCredentialWatch();
+          return true;
+        }
+        // Port is blocked by Hyper-V or another app — throw a clear error
+        this.emit('status', 'error');
+        const err = new Error(portCheck.details);
+        err.portConflict = true;
+        err.portConflictReason = portCheck.reason;
+        throw err;
       }
-      // Port is blocked by Hyper-V or another app — throw a clear error
-      this.emit('status', 'error');
-      const err = new Error(portCheck.details);
-      err.portConflict = true;
-      err.portConflictReason = portCheck.reason;
-      throw err;
     }
 
     // Always refresh Claude credentials from host before starting
@@ -639,11 +642,14 @@ class DockerManager extends EventEmitter {
       this.emit('credentials-expired', { message: credResult.error, needsLogin: true });
     }
 
+    const composeArgs = [
+      'compose', '-f', COMPOSE_FILE, '--env-file', ENV_FILE,
+      'up', '-d', '--remove-orphans',
+    ];
+    if (options.forceRecreate) composeArgs.push('--force-recreate');
+
     try {
-      await this._run(this._dockerCmd(), [
-        'compose', '-f', COMPOSE_FILE, '--env-file', ENV_FILE,
-        'up', '-d', '--remove-orphans',
-      ], { timeout: 120000 });
+      await this._run(this._dockerCmd(), composeArgs, { timeout: 120000 });
 
       await this._waitForBackend(240); // 120s timeout
 
@@ -669,7 +675,7 @@ class DockerManager extends EventEmitter {
   /**
    * Stop the Docker Compose stack.
    */
-  async stopStack() {
+  async stopStack(options = {}) {
     this.emit('status', 'stopping');
     this.stopCredentialWatch();
 
@@ -677,7 +683,7 @@ class DockerManager extends EventEmitter {
       await this._run(this._dockerCmd(), [
         'compose', '-f', COMPOSE_FILE, '--env-file', ENV_FILE,
         'down',
-      ], { timeout: 30000 });
+      ], { timeout: options.timeout || 30000 });
 
       this._running = false;
       this.emit('status', 'stopped');
@@ -793,9 +799,9 @@ class DockerManager extends EventEmitter {
   async applyUpdate(onProgress) {
     await this.pullImages(onProgress);
     if (onProgress) onProgress({ stage: 'stopping' });
-    await this.stopStack();
+    await this.stopStack({ timeout: 120000 }); // Allow 2 min for active agents to wind down
     if (onProgress) onProgress({ stage: 'starting' });
-    await this.startStack();
+    await this.startStack({ forceRecreate: true });
 
     // Save update state to prevent false-positive update checks
     try {
