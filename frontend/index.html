@@ -32014,11 +32014,10 @@
             // Force scroll to show thinking orb
             scrollMessagesToBottom(true);
 
-            if (socket && socket.connected) {
-                socket.emit('chat_message', { content: actualContent, session_id: sessionId, model: getSelectedModel(), browser_enabled: chatBrowserEnabled, image_path: chatImg?.path || null, offload_device_id: chatOffloadDeviceId || null });
+            // Always use SSE streaming as primary chat transport (reliable over unstable WebSocket)
+            // Socket is still used for real-time events (agent updates, device sync, etc.)
+            {
                 ImageUpload.clearPreview('chat-image-preview');
-            } else {
-                // SSE streaming fallback when WebSocket is disconnected
                 try {
                     const response = await fetch(API_URL + '/chat/stream', {
                         method: 'POST',
