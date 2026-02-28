@@ -966,10 +966,11 @@ app.whenReady().then(async () => {
   {
     const syncCfg = loadMemoryConfig();
     if (syncCfg.localMirrorPath) {
+      const syncMinutes = syncCfg.syncIntervalMinutes || 5;
       storageSyncTimer = setInterval(() => {
         runStorageSync('both').catch(e => console.warn('[Sync] Periodic sync error:', e.message));
-      }, 5 * 60 * 1000); // every 5 minutes
-      console.log('[Sync] Periodic bidirectional sync started (every 5 min)');
+      }, syncMinutes * 60 * 1000);
+      console.log(`[Sync] Periodic bidirectional sync started (every ${syncMinutes} min)`);
     }
   }
 
@@ -2146,6 +2147,30 @@ ipcMain.handle('sync-storage-mirror', async () => {
     return result;
   } catch (err) {
     return { success: false, pulled: 0, pushed: 0, errors: [err.message] };
+  }
+});
+
+ipcMain.handle('set-sync-interval', async (_event, minutes) => {
+  try {
+    const intervalMs = Math.max(1, Math.min(60, minutes)) * 60 * 1000;
+    const config = loadMemoryConfig();
+    config.syncIntervalMinutes = minutes;
+    saveMemoryConfig(config);
+
+    // Restart the sync timer with the new interval
+    if (storageSyncTimer) {
+      clearInterval(storageSyncTimer);
+      storageSyncTimer = null;
+    }
+    if (config.localMirrorPath) {
+      storageSyncTimer = setInterval(() => {
+        runStorageSync('both').catch(e => console.warn('[Sync] Periodic sync error:', e.message));
+      }, intervalMs);
+      console.log(`[Sync] Interval updated to ${minutes} min`);
+    }
+    return { success: true, intervalMinutes: minutes };
+  } catch (err) {
+    return { success: false, error: err.message };
   }
 });
 

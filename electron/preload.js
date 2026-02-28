@@ -68,6 +68,7 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
   getStorageHealth: () => ipcRenderer.invoke('get-storage-health'),
   setupLocalMirror: (config) => ipcRenderer.invoke('setup-local-mirror', config),
   syncStorageMirror: () => ipcRenderer.invoke('sync-storage-mirror'),
+  setSyncInterval: (minutes) => ipcRenderer.invoke('set-sync-interval', minutes),
 
   // Restart & setup state
   needsRestart: () => ipcRenderer.invoke('needs-restart'),

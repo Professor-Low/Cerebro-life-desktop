@@ -25643,6 +25643,15 @@
                                     <div class="storage-mirror-row" id="storage-mirror-row" style="display:none;">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
                                         <span id="storage-mirror-path" style="font-size:0.8rem; color:var(--text-secondary); flex:1;"></span>
+                                        <select id="sync-interval-select" style="font-size:0.75rem; padding:2px 6px; background:var(--bg-secondary); color:var(--text-primary); border:1px solid var(--border); border-radius:4px; margin-right:6px;" onchange="setSyncInterval(this.value)">
+                                            <option value="1">1 min</option>
+                                            <option value="2">2 min</option>
+                                            <option value="5" selected>5 min</option>
+                                            <option value="10">10 min</option>
+                                            <option value="15">15 min</option>
+                                            <option value="30">30 min</option>
+                                            <option value="60">60 min</option>
+                                        </select>
                                         <button class="btn-sm" id="storage-sync-btn" onclick="syncStorageNow()">Sync Now</button>
                                     </div>
                                     <div class="storage-warning" id="storage-mirror-setup-prompt" style="display:none;">
@@ -29215,6 +29224,12 @@
                     d = await intelResp.value.json();
                 }
 
+                // Handle loading state — backend is still computing, retry after 3s
+                if (d._loading) {
+                    setTimeout(loadMemoryIntelligence, 3000);
+                    return;
+                }
+
                 // Update settings-page intel tiles
                 set('intel-total-memories', (d.total_memories || 0).toLocaleString());
                 set('intel-recent-learnings', d.recent_learnings || 0);
@@ -31231,7 +31246,15 @@
         let mySocketId = null;
 
         function connectSocket() {
-            socket = io(API_URL, { auth: { token } });
+            socket = io(API_URL, {
+                auth: { token },
+                reconnection: true,
+                reconnectionAttempts: Infinity,
+                reconnectionDelay: 1000,
+                reconnectionDelayMax: 10000,
+                timeout: 30000,
+                transports: ['websocket', 'polling'],
+            });
 
             socket.on('connect', () => {
                 console.log('Socket connected');
@@ -31242,12 +31265,41 @@
                 document.getElementById('connection-status').classList.add('success');
             });
 
-            socket.on('disconnect', () => {
-                console.log('Socket disconnected');
+            socket.on('disconnect', (reason) => {
+                console.log('Socket disconnected:', reason);
                 document.getElementById('status-dot').classList.add('offline');
                 const hsb2 = document.getElementById('header-status-badge'); if (hsb2) hsb2.title = 'Offline';
                 document.getElementById('connection-status').textContent = 'Disconnected';
                 document.getElementById('connection-status').classList.remove('success');
+                // Show reconnecting toast
+                if (typeof showToast === 'function') showToast('Connection lost — reconnecting...', 'warning');
+            });
+
+            socket.on('connect_error', (err) => {
+                console.warn('Socket connect_error:', err.message);
+            });
+
+            socket.on('reconnect_attempt', (attempt) => {
+                console.log('Socket reconnect attempt #' + attempt);
+                document.getElementById('connection-status').textContent = 'Reconnecting (#' + attempt + ')';
+            });
+
+            socket.on('reconnect', () => {
+                console.log('Socket reconnected');
+                if (typeof showToast === 'function') showToast('Connection restored', 'success');
+                // Re-sync state from backend
+                socket.emit('request_state_sync');
+                // Check for pending resume via HTTP fallback
+                fetch(API_URL + '/api/specops/resume-status', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                }).then(r => r.json()).then(data => {
+                    if (data.pending && data.agents && data.agents.length > 0) {
+                        // Re-show resume modal
+                        if (typeof showSpecopsResumePrompt === 'function') {
+                            showSpecopsResumePrompt(data.agents);
+                        }
+                    }
+                }).catch(() => {});
             });
 
             // Handle chat responses (broadcast to all devices)
@@ -31966,23 +32018,38 @@
                 socket.emit('chat_message', { content: actualContent, session_id: sessionId, model: getSelectedModel(), browser_enabled: chatBrowserEnabled, image_path: chatImg?.path || null, offload_device_id: chatOffloadDeviceId || null });
                 ImageUpload.clearPreview('chat-image-preview');
             } else {
+                // SSE streaming fallback when WebSocket is disconnected
                 try {
-                    const response = await fetch(`${API_URL}/chat`, {
+                    const response = await fetch(API_URL + '/chat/stream', {
                         method: 'POST',
                         headers: {
-                            'Authorization': `Bearer ${token}`,
+                            'Authorization': 'Bearer ' + token,
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({ content: actualContent, session_id: sessionId, model: getSelectedModel() })
                     });
 
-                    const data = await response.json();
-                    const fbWrapper = currentAssistantMessage.querySelector('.message-content-wrapper');
-                    if (fbWrapper) { fbWrapper.innerHTML = safeMarkdown(data.content); }
-                    currentAssistantMessage.setAttribute('data-text', data.content || '');
-                    if (data.session_id) {
-                        sessionId = data.session_id;
-                        document.getElementById('session-id').textContent = sessionId.substring(0, 8) + '...';
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        buffer += decoder.decode(value, { stream: true });
+
+                        // Parse SSE lines
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop(); // keep incomplete line in buffer
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    const chunk = JSON.parse(line.slice(6));
+                                    if (chunk.type === 'done') break;
+                                    handleChatResponse(chunk);
+                                } catch (_) {}
+                            }
+                        }
                     }
                 } catch (e) {
                     const errWrapper = currentAssistantMessage.querySelector('.message-content-wrapper');
@@ -33865,6 +33932,7 @@
             try {
                 if (window.cerebroDesktop) {
                     const cfg = await window.cerebroDesktop.getMemoryConfig();
+                    window._storageSyncInterval = cfg.syncIntervalMinutes || 5;
                     updateStorageDisplay(cfg.storagePath, cfg.source, cfg.envVar, cfg.localMirrorPath);
                 } else {
                     updateStorageDisplay(null);
@@ -33927,6 +33995,11 @@
                     if (mirrorRow) { mirrorRow.style.display = 'flex'; }
                     if (mirrorPathEl) mirrorPathEl.textContent = 'Mirrored locally at ' + localMirrorPath;
                     if (mirrorSetupPrompt) mirrorSetupPrompt.style.display = 'none';
+                    // Set sync interval dropdown to configured value
+                    const intervalSelect = document.getElementById('sync-interval-select');
+                    if (intervalSelect && window._storageSyncInterval) {
+                        intervalSelect.value = String(window._storageSyncInterval);
+                    }
                 } else {
                     // No mirror — check if it's a network path (heuristic: starts with \\ or drive like Z:)
                     if (badge) { badge.textContent = 'Custom'; badge.className = 'risk-indicator extended'; }
@@ -34041,6 +34114,18 @@
                 showToast('Sync failed: ' + e.message, 'error');
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = 'Sync Now'; }
+            }
+        }
+
+        async function setSyncInterval(minutes) {
+            if (!window.cerebroDesktop || !window.cerebroDesktop.setSyncInterval) return;
+            try {
+                const result = await window.cerebroDesktop.setSyncInterval(parseInt(minutes));
+                if (result.success) {
+                    showToast('Sync interval set to ' + minutes + ' min');
+                }
+            } catch (e) {
+                showToast('Failed to set interval: ' + e.message, 'error');
             }
         }
 

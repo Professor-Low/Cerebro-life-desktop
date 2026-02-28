@@ -33,7 +33,7 @@ if str(MCP_PATH) not in sys.path:
 AI_MEMORY_PATH = Path(os.environ.get("AI_MEMORY_PATH", os.path.expanduser("~/.cerebro/data")))
 
 # Thread pool for blocking I/O
-_executor = ThreadPoolExecutor(max_workers=4)
+_executor = ThreadPoolExecutor(max_workers=8)
 
 
 class MCPBridge:

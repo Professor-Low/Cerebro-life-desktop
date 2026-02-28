@@ -9,6 +9,7 @@ import os
 import asyncio
 import secrets
 import bcrypt
+from concurrent.futures import ThreadPoolExecutor
 
 # Load .env file if present (for API keys, etc.)
 try:
@@ -35,7 +36,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import socketio
@@ -498,9 +499,16 @@ async def serve_frontend():
 sio = socketio.AsyncServer(
     async_mode='asgi',
     cors_allowed_origins=config.ALLOWED_ORIGINS,
-    logger=True
+    logger=True,
+    ping_interval=25,
+    ping_timeout=20,
+    max_http_buffer_size=10_000_000,
 )
 socket_app = socketio.ASGIApp(sio, app)
+
+# Dedicated I/O thread pool for agent output polling and dashboard computation
+# (Python's default executor has only 5 workers, which saturates under load)
+_io_executor = ThreadPoolExecutor(max_workers=12)
 
 # Track all connected clients by user for cross-device sync
 connected_clients = {}  # user_id -> set of sids
@@ -1018,12 +1026,8 @@ async def _resume_specops_missions():
     print(f"[Startup] {len(resume_candidates)} specops mission(s) pending resume — waiting for user decision")
     await sio.emit("specops_pending_resume", {"agents": agent_summaries}, room=os.environ.get("CEREBRO_ROOM", "default"))
 
-    # Wait for user decision with 5-minute headless fallback
-    try:
-        await asyncio.wait_for(_specops_resume_event.wait(), timeout=300)
-    except asyncio.TimeoutError:
-        print("[Startup] No resume decision received in 5 minutes — auto-resuming all (headless fallback)")
-        _specops_resume_response = {"agent_ids": [a[0] for a in resume_candidates], "always_resume": False}
+    # Wait indefinitely for user decision (no timeout — agents stay in pending_resume)
+    await _specops_resume_event.wait()
 
     # Process the decision
     selected_ids = set(_specops_resume_response.get("agent_ids", []))
@@ -3453,7 +3457,7 @@ async def run_agent(
             # Poll queue from event loop thread (short timeout for responsive timeout checks)
             try:
                 line = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: line_queue.get(timeout=5)
+                    _io_executor, lambda: line_queue.get(timeout=5)
                 )
             except queue.Empty:
                 continue  # No output yet, loop back to check timeout
@@ -3961,7 +3965,7 @@ async def startup():
     async def _warm_dashboard_cache():
         global _memory_intel_cache, _memory_intel_cache_time
         try:
-            result = await asyncio.get_event_loop().run_in_executor(None, _compute_memory_intelligence)
+            result = await asyncio.get_event_loop().run_in_executor(_io_executor, _compute_memory_intelligence)
             _memory_intel_cache = result
             _memory_intel_cache_time = time.time()
             print(f"[Startup] Dashboard cache warmed: {result.get('total_memories', 0)} memories, {result.get('total_learnings', 0)} learnings, {result.get('fact_count', 0)} facts")
@@ -3972,7 +3976,7 @@ async def startup():
 
     # Build FTS5 search index in background (after other startup tasks)
     async def _build_initial_index():
-        await asyncio.sleep(30)  # Let other startup tasks finish
+        await asyncio.sleep(120)  # Let other startup tasks finish
         try:
             result = await mcp_bridge.rebuild_search_index()
             print(f"[Startup] Search index built: {result}")
@@ -4074,6 +4078,27 @@ async def connect(sid, environ, auth=None):
     # Re-emit pending specops resume list if backend is waiting for a decision
     if _specops_pending_resume:
         await sio.emit("specops_pending_resume", {"agents": _specops_pending_resume}, to=sid)
+
+@sio.event
+async def request_state_sync(sid, data=None):
+    """Re-emit all pending state to a reconnected client."""
+    print(f"[Socket] State sync requested by {sid}")
+    # Re-emit pending resume if still waiting
+    if _specops_pending_resume:
+        await sio.emit("specops_pending_resume", {"agents": _specops_pending_resume}, to=sid)
+    # Re-emit active agent states
+    room = os.environ.get("CEREBRO_ROOM", "default")
+    for agent_id, agent in active_agents.items():
+        await sio.emit("specops_agent_status", {
+            "agent_id": agent_id,
+            "status": agent.get("status", "unknown"),
+            "task": agent.get("task", ""),
+        }, to=sid)
+    # Re-emit autonomy status
+    if cognitive_loop_manager:
+        await sio.emit("autonomy_status", {
+            "enabled": getattr(cognitive_loop_manager, "enabled", False),
+        }, to=sid)
 
 @sio.event
 async def disconnect(sid):
@@ -4496,6 +4521,15 @@ async def specops_resume_decision_http(request: SpecopsResumeDecisionRequest, us
     _specops_resume_response = {"agent_ids": request.agent_ids, "always_resume": request.always_resume}
     _specops_resume_event.set()
     return {"success": True, "resumed": len(request.agent_ids)}
+
+
+@app.get("/api/specops/resume-status")
+async def specops_resume_status(user: str = Depends(verify_token)):
+    """Check if there's a pending resume decision — used by frontend on reconnect."""
+    return {
+        "pending": bool(_specops_pending_resume),
+        "agents": _specops_pending_resume or [],
+    }
 
 
 # ============================================================================
@@ -5264,6 +5298,32 @@ async def chat(message: ChatMessage, user: str = Depends(verify_token)):
         "content": text_content,
         "session_id": session_id
     }
+
+
+@app.post("/chat/stream")
+async def chat_stream(message: ChatMessage, user: str = Depends(verify_token)):
+    """SSE streaming chat endpoint — HTTP fallback when WebSocket is disconnected."""
+    original_session_id = message.session_id or "default"
+
+    if message.model and message.model not in VALID_MODEL_IDS:
+        raise HTTPException(status_code=400, detail=f"Invalid model: {message.model}")
+
+    add_to_session(original_session_id, "user", message.content)
+
+    async def event_generator():
+        full_response = ""
+        async for chunk in process_chat_stream(message.content, original_session_id, model=message.model):
+            yield f"data: {json.dumps(chunk)}\n\n"
+            if chunk.get("type") == "text":
+                full_response += chunk.get("content", "")
+        # Final done event
+        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        # Save to session history + AI Memory
+        if full_response.strip():
+            add_to_session(original_session_id, "assistant", full_response)
+        asyncio.create_task(save_chat_to_memory(original_session_id, message.content, full_response))
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 # ============================================================================
 # Chat History Persistence
@@ -11033,15 +11093,29 @@ def _compute_memory_intelligence() -> dict:
             except Exception:
                 pass
 
-    # Count facts from facts.jsonl
+    # Count facts from facts.jsonl (single pass — counts lines AND learning entries)
     facts_file = base / "facts" / "facts.jsonl"
     fact_count = 0
+    _facts_learning_count = 0
     if facts_file.exists():
         try:
             with open(facts_file, 'r', encoding='utf-8') as f:
-                fact_count = sum(1 for line in f if line.strip())
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        fact_count += 1
+                        # Also count learning entries if no learning files exist
+                        if total_learnings == 0:
+                            try:
+                                entry = json.loads(line)
+                                if entry.get("type") == "learning":
+                                    _facts_learning_count += 1
+                            except Exception:
+                                pass
         except Exception:
             pass
+    if total_learnings == 0:
+        total_learnings = _facts_learning_count
     total_memories = max(total_memories, 1) if fact_count > 0 else total_memories
 
     # Count promoted patterns from quick_facts.json (if it exists)
@@ -11077,22 +11151,6 @@ def _compute_memory_intelligence() -> dict:
         except Exception:
             pass
 
-    # If no learning files, count "learning" type entries in facts.jsonl
-    if total_learnings == 0 and fact_count > 0 and facts_file.exists():
-        try:
-            with open(facts_file, 'r', encoding='utf-8') as f:
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        try:
-                            entry = json.loads(line)
-                            if entry.get("type") == "learning":
-                                total_learnings += 1
-                        except Exception:
-                            pass
-        except Exception:
-            pass
-
     return {
         "total_memories": total_memories,
         "total_learnings": total_learnings,
@@ -11110,13 +11168,44 @@ def _compute_memory_intelligence() -> dict:
 
 @app.get("/api/memory-intelligence")
 async def get_memory_intelligence(user: str = Depends(verify_token)):
-    """Aggregated memory stats for homepage dashboard — cached 60s, non-blocking."""
+    """Aggregated memory stats for homepage dashboard — stale-while-revalidate cache."""
     global _memory_intel_cache, _memory_intel_cache_time
+    now = time.time()
+    cache_age = now - _memory_intel_cache_time if _memory_intel_cache_time else float('inf')
+
+    # Fresh cache — return immediately
+    if _memory_intel_cache and cache_age < 60:
+        return _memory_intel_cache
+
+    # Stale cache — return stale data immediately, refresh in background
+    if _memory_intel_cache and cache_age < 300:
+        async def _refresh_cache():
+            global _memory_intel_cache, _memory_intel_cache_time
+            try:
+                result = await asyncio.get_event_loop().run_in_executor(_io_executor, _compute_memory_intelligence)
+                _memory_intel_cache = result
+                _memory_intel_cache_time = time.time()
+            except Exception:
+                pass
+        asyncio.create_task(_refresh_cache())
+        return _memory_intel_cache
+
+    # No cache yet (first load) — return loading placeholder
+    if not _memory_intel_cache:
+        async def _initial_cache():
+            global _memory_intel_cache, _memory_intel_cache_time
+            try:
+                result = await asyncio.get_event_loop().run_in_executor(_io_executor, _compute_memory_intelligence)
+                _memory_intel_cache = result
+                _memory_intel_cache_time = time.time()
+            except Exception:
+                pass
+        asyncio.create_task(_initial_cache())
+        return {"_loading": True}
+
+    # Very stale (>5 min) — block and refresh
     try:
-        now = time.time()
-        if _memory_intel_cache and (now - _memory_intel_cache_time) < 60:
-            return _memory_intel_cache
-        result = await asyncio.get_event_loop().run_in_executor(None, _compute_memory_intelligence)
+        result = await asyncio.get_event_loop().run_in_executor(_io_executor, _compute_memory_intelligence)
         _memory_intel_cache = result
         _memory_intel_cache_time = now
         return result
