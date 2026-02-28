@@ -3957,6 +3957,19 @@ async def startup():
     # Run autonomy init in background so startup completes immediately
     asyncio.create_task(_init_autonomy())
 
+    # Pre-warm the dashboard cache so the first page load is instant
+    async def _warm_dashboard_cache():
+        global _memory_intel_cache, _memory_intel_cache_time
+        try:
+            result = await asyncio.get_event_loop().run_in_executor(None, _compute_memory_intelligence)
+            _memory_intel_cache = result
+            _memory_intel_cache_time = time.time()
+            print(f"[Startup] Dashboard cache warmed: {result.get('total_memories', 0)} memories, {result.get('total_learnings', 0)} learnings, {result.get('fact_count', 0)} facts")
+        except Exception as e:
+            print(f"[Startup] Dashboard cache warm failed: {e}")
+
+    asyncio.create_task(_warm_dashboard_cache())
+
     # Build FTS5 search index in background (after other startup tasks)
     async def _build_initial_index():
         await asyncio.sleep(30)  # Let other startup tasks finish
@@ -10993,106 +11006,122 @@ async def get_learning_stats(user: str = Depends(verify_token)):
 # Homepage Dashboard Endpoints
 # ============================================================================
 
+_memory_intel_cache: dict = {}
+_memory_intel_cache_time: float = 0
+
+
+def _compute_memory_intelligence() -> dict:
+    """Compute memory stats in a thread — never call from the event loop directly."""
+    base = Path(config.AI_MEMORY_PATH)
+
+    # Count conversations
+    conv_path = base / "conversations"
+    total_memories = len(list(conv_path.glob("*.json"))) if conv_path.exists() else 0
+
+    # Count learnings (individual JSON files in learnings/)
+    learn_path = base / "learnings"
+    total_learnings = len(list(learn_path.glob("*.json"))) if learn_path.exists() else 0
+
+    # Count recent learnings (last 7 days) by checking file mtime
+    recent_learnings = 0
+    if learn_path.exists():
+        cutoff = datetime.now().timestamp() - (7 * 86400)
+        for f in learn_path.glob("*.json"):
+            try:
+                if f.stat().st_mtime >= cutoff:
+                    recent_learnings += 1
+            except Exception:
+                pass
+
+    # Count facts from facts.jsonl
+    facts_file = base / "facts" / "facts.jsonl"
+    fact_count = 0
+    if facts_file.exists():
+        try:
+            with open(facts_file, 'r', encoding='utf-8') as f:
+                fact_count = sum(1 for line in f if line.strip())
+        except Exception:
+            pass
+    total_memories = max(total_memories, 1) if fact_count > 0 else total_memories
+
+    # Count promoted patterns from quick_facts.json (if it exists)
+    promoted_patterns = 0
+    contradictions_pending = 0
+    knowledge_health = 0
+    faiss_size_mb = 0
+    faiss_status = "unknown"
+    quick_facts_path = base / "quick_facts.json"
+    if quick_facts_path.exists():
+        try:
+            with open(quick_facts_path, 'r', encoding='utf-8') as f:
+                qf = json.load(f)
+            pp = qf.get("promoted_patterns", {})
+            promoted_patterns = len(pp.get("patterns", [])) if isinstance(pp, dict) else 0
+            health = qf.get("system_health", {})
+            contradictions_pending = health.get("contradictions_pending", 0)
+            knowledge_health = health.get("overall_score", 0)
+            faiss = health.get("faiss", {})
+            faiss_size_mb = faiss.get("size_mb", 0)
+            faiss_status = faiss.get("status", "unknown")
+        except Exception:
+            pass
+
+    # Count active goals
+    goals_file = base / "goals" / "active.json"
+    active_goals = 0
+    if goals_file.exists():
+        try:
+            with open(goals_file, 'r', encoding='utf-8') as f:
+                gdata = json.load(f)
+            active_goals = len([g for g in gdata.get("goals", []) if g.get("status") == "active"])
+        except Exception:
+            pass
+
+    # If no learning files, count "learning" type entries in facts.jsonl
+    if total_learnings == 0 and fact_count > 0 and facts_file.exists():
+        try:
+            with open(facts_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            entry = json.loads(line)
+                            if entry.get("type") == "learning":
+                                total_learnings += 1
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+    return {
+        "total_memories": total_memories,
+        "total_learnings": total_learnings,
+        "recent_learnings": recent_learnings,
+        "promoted_patterns": promoted_patterns,
+        "contradictions_pending": contradictions_pending,
+        "knowledge_health": knowledge_health,
+        "faiss_size_mb": faiss_size_mb,
+        "faiss_status": faiss_status,
+        "nas_status": "ok" if conv_path.exists() else "unknown",
+        "active_goals": active_goals,
+        "fact_count": fact_count,
+    }
+
+
 @app.get("/api/memory-intelligence")
 async def get_memory_intelligence(user: str = Depends(verify_token)):
-    """Aggregated memory stats for homepage dashboard — computed from real data."""
+    """Aggregated memory stats for homepage dashboard — cached 60s, non-blocking."""
+    global _memory_intel_cache, _memory_intel_cache_time
     try:
-        base = Path(config.AI_MEMORY_PATH)
-
-        # Count conversations
-        conv_path = base / "conversations"
-        total_memories = len(list(conv_path.glob("*.json"))) if conv_path.exists() else 0
-
-        # Count learnings (individual JSON files in learnings/)
-        learn_path = base / "learnings"
-        total_learnings = len(list(learn_path.glob("*.json"))) if learn_path.exists() else 0
-
-        # Count recent learnings (last 7 days) by checking file mtime
-        recent_learnings = 0
-        if learn_path.exists():
-            cutoff = datetime.now().timestamp() - (7 * 86400)
-            for f in learn_path.glob("*.json"):
-                try:
-                    if f.stat().st_mtime >= cutoff:
-                        recent_learnings += 1
-                except Exception:
-                    pass
-
-        # Count facts from facts.jsonl
-        facts_file = base / "facts" / "facts.jsonl"
-        fact_count = 0
-        if facts_file.exists():
-            try:
-                with open(facts_file, 'r', encoding='utf-8') as f:
-                    fact_count = sum(1 for line in f if line.strip())
-            except Exception:
-                pass
-        total_memories = max(total_memories, 1) if fact_count > 0 else total_memories
-
-        # Count promoted patterns from quick_facts.json (if it exists)
-        promoted_patterns = 0
-        contradictions_pending = 0
-        knowledge_health = 0
-        faiss_size_mb = 0
-        faiss_status = "unknown"
-        quick_facts_path = base / "quick_facts.json"
-        if quick_facts_path.exists():
-            try:
-                with open(quick_facts_path, 'r', encoding='utf-8') as f:
-                    qf = json.load(f)
-                pp = qf.get("promoted_patterns", {})
-                promoted_patterns = len(pp.get("patterns", [])) if isinstance(pp, dict) else 0
-                health = qf.get("system_health", {})
-                contradictions_pending = health.get("contradictions_pending", 0)
-                knowledge_health = health.get("overall_score", 0)
-                faiss = health.get("faiss", {})
-                faiss_size_mb = faiss.get("size_mb", 0)
-                faiss_status = faiss.get("status", "unknown")
-            except Exception:
-                pass
-
-        # Count active goals
-        goals_file = base / "goals" / "active.json"
-        active_goals = 0
-        if goals_file.exists():
-            try:
-                with open(goals_file, 'r', encoding='utf-8') as f:
-                    gdata = json.load(f)
-                active_goals = len([g for g in gdata.get("goals", []) if g.get("status") == "active"])
-            except Exception:
-                pass
-
-        # If no learning files, count "learning" type entries in facts.jsonl
-        if total_learnings == 0 and fact_count > 0 and facts_file.exists():
-            try:
-                with open(facts_file, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        line = line.strip()
-                        if line:
-                            try:
-                                entry = json.loads(line)
-                                if entry.get("type") == "learning":
-                                    total_learnings += 1
-                            except Exception:
-                                pass
-            except Exception:
-                pass
-
-        return {
-            "total_memories": total_memories,
-            "total_learnings": total_learnings,
-            "recent_learnings": recent_learnings,
-            "promoted_patterns": promoted_patterns,
-            "contradictions_pending": contradictions_pending,
-            "knowledge_health": knowledge_health,
-            "faiss_size_mb": faiss_size_mb,
-            "faiss_status": faiss_status,
-            "nas_status": "ok" if conv_path.exists() else "unknown",
-            "active_goals": active_goals,
-            "fact_count": fact_count,
-        }
+        now = time.time()
+        if _memory_intel_cache and (now - _memory_intel_cache_time) < 60:
+            return _memory_intel_cache
+        result = await asyncio.get_event_loop().run_in_executor(None, _compute_memory_intelligence)
+        _memory_intel_cache = result
+        _memory_intel_cache_time = now
+        return result
     except Exception as e:
-        return {"error": str(e)}
+        return _memory_intel_cache if _memory_intel_cache else {"error": str(e)}
 
 
 @app.get("/api/smart-actions")
