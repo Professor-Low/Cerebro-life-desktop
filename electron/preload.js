@@ -66,6 +66,8 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
   scanMergePreview: (sourcePath) => ipcRenderer.invoke('scan-merge-preview', sourcePath),
   mergeStorage: (sourcePath, folders) => ipcRenderer.invoke('merge-storage', sourcePath, folders),
   getStorageHealth: () => ipcRenderer.invoke('get-storage-health'),
+  setupLocalMirror: (config) => ipcRenderer.invoke('setup-local-mirror', config),
+  syncStorageMirror: () => ipcRenderer.invoke('sync-storage-mirror'),
 
   // Restart & setup state
   needsRestart: () => ipcRenderer.invoke('needs-restart'),

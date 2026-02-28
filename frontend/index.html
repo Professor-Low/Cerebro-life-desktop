@@ -11531,6 +11531,25 @@
             color: var(--red);
         }
         .storage-warning.error.visible { display: flex; gap: 8px; align-items: flex-start; }
+        .storage-mirror-row {
+            display: flex; align-items: center; gap: 8px; padding: 8px 14px;
+            background: rgba(34,197,94,0.06); border: 1px solid rgba(34,197,94,0.2);
+            border-radius: 10px; margin-top: 8px;
+        }
+        .storage-mirror-row svg { flex-shrink: 0; color: var(--green, #22c55e); }
+        .storage-mirror-row .btn-sm {
+            padding: 4px 12px; font-size: 0.72rem; border-radius: 6px;
+            background: rgba(34,197,94,0.15); color: var(--green, #22c55e); border: none;
+            cursor: pointer; font-weight: 600; transition: background 0.2s; white-space: nowrap;
+        }
+        .storage-mirror-row .btn-sm:hover { background: rgba(34,197,94,0.3); }
+        .storage-mirror-row .btn-sm:disabled { opacity: 0.5; cursor: not-allowed; }
+        #storage-mirror-setup-prompt { margin-top: 8px; }
+        #storage-mirror-setup-prompt .btn-sm {
+            padding: 4px 12px; font-size: 0.72rem; border-radius: 6px; margin-left: auto;
+            background: rgba(234,179,8,0.15); color: var(--yellow); border: none;
+            cursor: pointer; font-weight: 600; white-space: nowrap;
+        }
 
         /* ===== Offload Config Styles ===== */
         .offload-config-card {
@@ -25408,6 +25427,16 @@
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                                         <span id="storage-health-warning-text">Docker storage mount issue detected. Your data may not be persisting to the NAS.</span>
                                     </div>
+                                    <div class="storage-mirror-row" id="storage-mirror-row" style="display:none;">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+                                        <span id="storage-mirror-path" style="font-size:0.8rem; color:var(--text-secondary); flex:1;"></span>
+                                        <button class="btn-sm" id="storage-sync-btn" onclick="syncStorageNow()">Sync Now</button>
+                                    </div>
+                                    <div class="storage-warning" id="storage-mirror-setup-prompt" style="display:none;">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                        <span>Network drive detected but no local mirror. Docker can't mount network drives directly.</span>
+                                        <button class="btn-sm" onclick="setupLocalMirror()">Set Up Local Mirror</button>
+                                    </div>
                                 </div>
 
                                 <!-- Offload config -->
@@ -33613,7 +33642,7 @@
             try {
                 if (window.cerebroDesktop) {
                     const cfg = await window.cerebroDesktop.getMemoryConfig();
-                    updateStorageDisplay(cfg.storagePath, cfg.source, cfg.envVar);
+                    updateStorageDisplay(cfg.storagePath, cfg.source, cfg.envVar, cfg.localMirrorPath);
                 } else {
                     updateStorageDisplay(null);
                 }
@@ -33656,19 +33685,40 @@
             });
         }
 
-        function updateStorageDisplay(storagePath, source, envVar) {
+        function updateStorageDisplay(storagePath, source, envVar, localMirrorPath) {
             const pathEl = document.getElementById('storage-path-display');
             const badge = document.getElementById('storage-risk-badge');
             const warning = document.getElementById('storage-warning');
             const sourceLabel = document.getElementById('storage-source-label');
+            const mirrorRow = document.getElementById('storage-mirror-row');
+            const mirrorPathEl = document.getElementById('storage-mirror-path');
+            const mirrorSetupPrompt = document.getElementById('storage-mirror-setup-prompt');
+
             if (storagePath) {
                 if (pathEl) pathEl.textContent = storagePath;
-                if (badge) { badge.textContent = 'Custom'; badge.className = 'risk-indicator extended'; }
                 if (warning) warning.classList.add('visible');
+
+                if (localMirrorPath) {
+                    // Has local mirror — show synced status
+                    if (badge) { badge.textContent = 'Synced'; badge.className = 'risk-indicator safe'; }
+                    if (mirrorRow) { mirrorRow.style.display = 'flex'; }
+                    if (mirrorPathEl) mirrorPathEl.textContent = 'Mirrored locally at ' + localMirrorPath;
+                    if (mirrorSetupPrompt) mirrorSetupPrompt.style.display = 'none';
+                } else {
+                    // No mirror — check if it's a network path (heuristic: starts with \\ or drive like Z:)
+                    if (badge) { badge.textContent = 'Custom'; badge.className = 'risk-indicator extended'; }
+                    if (mirrorRow) mirrorRow.style.display = 'none';
+                    // Show setup prompt for paths that look like network drives
+                    // Show setup prompt for UNC paths or any mapped drive that looks like a network share
+                    const looksLikeNetwork = storagePath.startsWith('\\\\') || storagePath.startsWith('//');
+                    if (mirrorSetupPrompt) mirrorSetupPrompt.style.display = looksLikeNetwork ? 'flex' : 'none';
+                }
             } else {
                 if (pathEl) pathEl.textContent = 'Docker Volume (default)';
                 if (badge) { badge.textContent = 'Default'; badge.className = 'risk-indicator safe'; }
                 if (warning) warning.classList.remove('visible');
+                if (mirrorRow) mirrorRow.style.display = 'none';
+                if (mirrorSetupPrompt) mirrorSetupPrompt.style.display = 'none';
             }
             // Show provenance label when auto-detected from env var
             if (sourceLabel) {
@@ -33750,6 +33800,55 @@
                 } else {
                     showToast('Restart failed: ' + (restartResult.error || 'Unknown error'), 'error');
                 }
+            }
+        }
+
+        async function syncStorageNow() {
+            if (!window.cerebroDesktop || !window.cerebroDesktop.syncStorageMirror) return;
+            const btn = document.getElementById('storage-sync-btn');
+            if (btn) { btn.disabled = true; btn.textContent = 'Syncing...'; }
+            try {
+                const result = await window.cerebroDesktop.syncStorageMirror();
+                if (result.success) {
+                    showToast('Sync complete — pulled ' + (result.pulled || 0) + ', pushed ' + (result.pushed || 0));
+                } else {
+                    showToast('Sync had errors: ' + (result.errors || []).join('; '), 'error');
+                }
+            } catch (e) {
+                showToast('Sync failed: ' + e.message, 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = 'Sync Now'; }
+            }
+        }
+
+        async function setupLocalMirror() {
+            if (!window.cerebroDesktop || !window.cerebroDesktop.setupLocalMirror) return;
+            const proceed = await cerebroConfirm(
+                'This will create a local copy of your network memory in a CerebroMemory folder in your home directory and keep it synced. Docker will mount the local copy instead of the network drive.',
+                { title: 'Set Up Local Mirror', confirmText: 'Set Up', cancelText: 'Cancel' }
+            );
+            if (!proceed) return;
+            showToast('Setting up local mirror... this may take a moment');
+            try {
+                const result = await window.cerebroDesktop.setupLocalMirror({});
+                if (result.success) {
+                    showToast('Local mirror set up — ' + (result.filesCopied || 0) + ' files synced');
+                    _storageConfigLoaded = false;
+                    initStorageConfig();
+                    const shouldRestart = await cerebroConfirm(
+                        'Local mirror is ready. Restart container to use it?',
+                        { title: 'Restart Required', confirmText: 'Restart Now', cancelText: 'Later' }
+                    );
+                    if (shouldRestart) {
+                        showToast('Restarting container...');
+                        await window.cerebroDesktop.restartDockerStack();
+                        showToast('Container restarted with local mirror');
+                    }
+                } else {
+                    showToast('Mirror setup failed: ' + (result.error || 'Unknown error'), 'error');
+                }
+            } catch (e) {
+                showToast('Mirror setup failed: ' + e.message, 'error');
             }
         }
 

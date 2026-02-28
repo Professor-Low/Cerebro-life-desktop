@@ -551,6 +551,50 @@ async function startDockerStack() {
   // (ensures bind mount is set up on first run if CEREBRO_DATA_DIR is set)
   loadMemoryConfig();
 
+  // Phase 5: Auto-setup local mirror for network drives on first detection
+  {
+    const cfg = loadMemoryConfig();
+    if (cfg.storagePath && isNetworkPath(cfg.storagePath) && !cfg.localMirrorPath) {
+      const os = require('os');
+      const localMirrorPath = path.join(os.homedir(), 'CerebroMemory');
+      try {
+        fs.mkdirSync(localMirrorPath, { recursive: true });
+        cfg.localMirrorPath = localMirrorPath;
+        saveMemoryConfig(cfg);
+        console.log(`[Storage] Auto-created local mirror for network drive: ${localMirrorPath}`);
+        await dockerManager.writeComposeFile();
+      } catch (e) {
+        console.warn('[Storage] Auto-setup of local mirror failed:', e.message);
+      }
+    }
+
+    // Sync NAS → local mirror before Docker starts
+    if (cfg.localMirrorPath) {
+      // Check if local mirror has data already (subsequent run) or is empty (first run)
+      let mirrorHasData = false;
+      try {
+        const entries = fs.readdirSync(cfg.localMirrorPath);
+        mirrorHasData = entries.length > 3; // more than a couple files = has real data
+      } catch (_) {}
+
+      if (mirrorHasData) {
+        // Subsequent run — sync in background, Docker starts immediately with existing data
+        runStorageSync('pull')
+          .then(r => console.log(`[Storage] Background sync: pulled ${r.pulled || 0} files`))
+          .catch(e => console.warn('[Storage] Background sync failed (non-fatal):', e.message));
+      } else {
+        // First run — must wait for data before Docker starts
+        try {
+          updateSplashStatus('Copying memory from NAS (first time)...');
+          const syncResult = await runStorageSync('pull');
+          console.log(`[Storage] Initial sync complete: pulled ${syncResult.pulled || 0} files`);
+        } catch (e) {
+          console.warn('[Storage] Initial sync failed (continuing empty):', e.message);
+        }
+      }
+    }
+  }
+
   // Defender exclusion now runs at app startup (before license gate), so no
   // need to duplicate it here. The marker file prevents repeated UAC prompts.
 
@@ -918,6 +962,17 @@ app.whenReady().then(async () => {
   startLicenseRefreshTimer();
   refreshMcpConfigSilently();
 
+  // Start periodic storage sync if local mirror is configured
+  {
+    const syncCfg = loadMemoryConfig();
+    if (syncCfg.localMirrorPath) {
+      storageSyncTimer = setInterval(() => {
+        runStorageSync('both').catch(e => console.warn('[Sync] Periodic sync error:', e.message));
+      }, 5 * 60 * 1000); // every 5 minutes
+      console.log('[Sync] Periodic bidirectional sync started (every 5 min)');
+    }
+  }
+
   // Send storage health warning to frontend after a short delay (ensure JS is initialized)
   if (dockerResult.storageHealth && dockerResult.storageHealth.warnings.length > 0) {
     setTimeout(() => {
@@ -943,6 +998,22 @@ app.on('before-quit', async (e) => {
   if (!isQuitting) {
     isQuitting = true;
     e.preventDefault();
+
+    // Push final local changes to NAS before shutting down
+    if (storageSyncTimer) {
+      clearInterval(storageSyncTimer);
+      storageSyncTimer = null;
+    }
+    try {
+      const cfg = loadMemoryConfig();
+      if (cfg.localMirrorPath) {
+        console.log('[Sync] Pushing final changes to NAS before quit...');
+        await runStorageSync('push');
+      }
+    } catch (e2) {
+      console.warn('[Sync] Shutdown sync failed:', e2.message);
+    }
+
     if (!isAutoUpdating) {
       updateTrayStatus(tray, 'stopping');
       await shutdown();
@@ -1857,7 +1928,73 @@ function loadMemoryConfig() {
 }
 
 function saveMemoryConfig(config) {
-  fs.writeFileSync(MEMORY_CONFIG_FILE, JSON.stringify(config, null, 2));
+  // Strip transient fields that loadMemoryConfig adds for the frontend
+  const { source, envVar, ...persistent } = config;
+  fs.writeFileSync(MEMORY_CONFIG_FILE, JSON.stringify(persistent, null, 2));
+}
+
+// ---- Storage Mirror Sync (Robocopy) ----
+
+let storageSyncTimer = null;
+
+/**
+ * Run Robocopy between NAS (storagePath) and local mirror (localMirrorPath).
+ * @param {'pull'|'push'|'both'} direction
+ * @returns {Promise<{success: boolean, pulled?: number, pushed?: number, errors: string[]}>}
+ */
+function runStorageSync(direction = 'both') {
+  if (process.platform !== 'win32') {
+    return Promise.resolve({ success: false, pulled: 0, pushed: 0, errors: ['Mirror sync only supported on Windows'] });
+  }
+  const config = loadMemoryConfig();
+  if (!config.storagePath || !config.localMirrorPath) {
+    return Promise.resolve({ success: false, pulled: 0, pushed: 0, errors: ['Missing storagePath or localMirrorPath'] });
+  }
+
+  const nasPath = config.storagePath;
+  const localPath = config.localMirrorPath;
+  const robocopyArgs = [
+    '/E', '/XO', '/R:1', '/W:1',
+    '/NFL', '/NDL', '/NJH', '/NJS',
+    '/XD', '.git', '__pycache__', 'node_modules',
+  ];
+
+  function runRobocopy(src, dst) {
+    return new Promise((resolve) => {
+      execFile('robocopy', [src, dst, ...robocopyArgs], { timeout: 120000, windowsHide: true }, (err, stdout) => {
+        // Robocopy exit codes: 0-7 = success/partial, 8+ = error
+        // Node sets err for any non-zero exit, but Robocopy 1-7 are OK
+        const code = err && typeof err.code === 'number' ? err.code : (err ? 8 : 0);
+        if (code >= 8) {
+          resolve({ success: false, files: 0, error: `Robocopy exit ${code}: ${(stdout || '').trim().slice(-200)}` });
+        } else {
+          // Parse files count from summary if available
+          const match = (stdout || '').match(/Files\s*:\s*\d+\s+(\d+)/);
+          const files = match ? parseInt(match[1], 10) : 0;
+          resolve({ success: true, files });
+        }
+      });
+    });
+  }
+
+  return (async () => {
+    const errors = [];
+    let pulled = 0;
+    let pushed = 0;
+
+    if (direction === 'pull' || direction === 'both') {
+      const r = await runRobocopy(nasPath, localPath);
+      if (r.success) { pulled = r.files; } else { errors.push(r.error); }
+    }
+    if (direction === 'push' || direction === 'both') {
+      const r = await runRobocopy(localPath, nasPath);
+      if (r.success) { pushed = r.files; } else { errors.push(r.error); }
+    }
+
+    const success = errors.length === 0;
+    console.log(`[Sync] ${direction} complete — pulled: ${pulled}, pushed: ${pushed}${errors.length ? ', errors: ' + errors.join('; ') : ''}`);
+    return { success, pulled, pushed, errors };
+  })();
 }
 
 function getDynamicMcpConfig() {
@@ -1910,8 +2047,13 @@ function getDynamicMcpConfig() {
 
 ipcMain.handle('get-memory-config', () => {
   const cfg = loadMemoryConfig();
-  // Return source and envVar so frontend can show provenance
-  return { storagePath: cfg.storagePath, source: cfg.source || 'default', envVar: cfg.envVar || null };
+  // Return source, envVar, and localMirrorPath so frontend can show provenance + sync status
+  return {
+    storagePath: cfg.storagePath,
+    source: cfg.source || 'default',
+    envVar: cfg.envVar || null,
+    localMirrorPath: cfg.localMirrorPath || null,
+  };
 });
 
 ipcMain.handle('browse-storage-folder', async () => {
@@ -1933,6 +2075,19 @@ ipcMain.handle('set-storage-path', async (_event, newPath) => {
     const validatedPath = validatePath(newPath, { allowNull: true });
     const config = loadMemoryConfig();
     config.storagePath = validatedPath; // null means Docker volume default
+
+    // Network drives can't be bind-mounted by Docker — set up a local mirror
+    if (validatedPath && isNetworkPath(validatedPath)) {
+      const os = require('os');
+      const localMirrorPath = path.join(os.homedir(), 'CerebroMemory');
+      fs.mkdirSync(localMirrorPath, { recursive: true });
+      config.localMirrorPath = localMirrorPath;
+      console.log(`[Storage] Network drive detected — local mirror at ${localMirrorPath}`);
+    } else {
+      // Local path or null — no mirror needed
+      delete config.localMirrorPath;
+    }
+
     saveMemoryConfig(config);
     // Rewrite compose file with new mount
     await dockerManager.writeComposeFile();
@@ -1951,6 +2106,46 @@ ipcMain.handle('get-storage-health', async () => {
     return await dockerManager.verifyStorageMount();
   } catch (err) {
     return { healthy: true, totalSize: 0, availableSize: 0, fsType: '', warnings: [`Health check failed: ${err.message}`] };
+  }
+});
+
+ipcMain.handle('setup-local-mirror', async (_event, opts = {}) => {
+  try {
+    const config = loadMemoryConfig();
+    const storagePath = opts.storagePath || config.storagePath;
+    if (!storagePath) return { success: false, error: 'No storage path configured' };
+
+    const os = require('os');
+    const localMirrorPath = opts.localMirrorPath || path.join(os.homedir(), 'CerebroMemory');
+    fs.mkdirSync(localMirrorPath, { recursive: true });
+
+    // Save config first so runStorageSync can read both paths
+    config.storagePath = storagePath;
+    config.localMirrorPath = localMirrorPath;
+    saveMemoryConfig(config);
+
+    // Initial sync: pull NAS → local
+    console.log(`[Mirror] Setting up local mirror: ${storagePath} → ${localMirrorPath}`);
+    const syncResult = await runStorageSync('pull');
+
+    // Rewrite compose + MCP
+    await dockerManager.writeComposeFile();
+    const mcpConfig = getDynamicMcpConfig();
+    await writeMcpConfig(mcpConfig.mcpServers);
+
+    console.log(`[Mirror] Setup complete — pulled ${syncResult.pulled || 0} files`);
+    return { success: true, filesCopied: syncResult.pulled || 0, errors: syncResult.errors };
+  } catch (err) {
+    return { success: false, error: err.message, errors: [err.message] };
+  }
+});
+
+ipcMain.handle('sync-storage-mirror', async () => {
+  try {
+    const result = await runStorageSync('both');
+    return result;
+  } catch (err) {
+    return { success: false, pulled: 0, pushed: 0, errors: [err.message] };
   }
 });
 

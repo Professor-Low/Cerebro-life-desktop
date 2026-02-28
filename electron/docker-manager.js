@@ -1720,10 +1720,25 @@ class DockerManager extends EventEmitter {
       console.warn('[Docker] Failed to read memory config:', e.message);
     }
 
-    if (!config.storagePath) return composeContent;
+    // Prefer localMirrorPath (local drive Docker CAN mount) over storagePath (may be network)
+    const mountSource = config.localMirrorPath || config.storagePath;
+    if (!mountSource) return composeContent;
+
+    // Verify localMirrorPath is a real local directory if specified
+    if (config.localMirrorPath) {
+      try {
+        if (!fs.existsSync(config.localMirrorPath)) {
+          fs.mkdirSync(config.localMirrorPath, { recursive: true });
+        }
+        console.log(`[Docker] Using local mirror for bind mount: ${config.localMirrorPath}`);
+      } catch (e) {
+        console.warn(`[Docker] Local mirror path invalid, falling back to storagePath:`, e.message);
+        if (!config.storagePath) return composeContent;
+      }
+    }
 
     // Replace the volume mount with a bind mount
-    const hostPath = config.storagePath.replace(/\\/g, '/');
+    const hostPath = mountSource.replace(/\\/g, '/');
     const volumeMount = 'cerebro-data:/data/memory';
     const bindMount = `"${hostPath}:/data/memory"`;
 
