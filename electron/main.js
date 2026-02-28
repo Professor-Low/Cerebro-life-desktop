@@ -258,7 +258,7 @@ function getHardcodedMcpConfig() {
         args: [
           'run', '--rm', '-i',
           '-v', 'cerebro_cerebro-data:/data/memory',
-          '-e', 'AI_MEMORY_PATH=/data/memory',
+          '-e', 'CEREBRO_DATA_DIR=/data/memory',
           '-e', 'CEREBRO_STANDALONE=1',
           'ghcr.io/professor-low/cerebro-memory:latest',
           'cerebro', 'serve',
@@ -292,6 +292,17 @@ async function writeMcpConfig(mcpServers) {
   if (!config.mcpServers) config.mcpServers = {};
 
   for (const [name, serverConfig] of Object.entries(mcpServers)) {
+    // Preserve existing cerebro config if it has a custom volume mount
+    if (name === 'cerebro' && config.mcpServers.cerebro) {
+      const existingArgs = config.mcpServers.cerebro.args || [];
+      const newArgs = serverConfig.args || [];
+      const existingVolume = existingArgs.find(a => typeof a === 'string' && a.includes(':/data/memory'));
+      const newVolume = newArgs.find(a => typeof a === 'string' && a.includes(':/data/memory'));
+      if (existingVolume && newVolume && existingVolume !== newVolume) {
+        console.log(`[MCP] Preserved existing cerebro config with custom mount: ${existingVolume}`);
+        continue;
+      }
+    }
     config.mcpServers[name] = serverConfig;
     console.log(`[MCP] Set server ${name}`);
   }
@@ -1555,7 +1566,7 @@ function getDynamicMcpConfig() {
         args: [
           'run', '--rm', '-i',
           '-v', volumeArg,
-          '-e', 'AI_MEMORY_PATH=/data/memory',
+          '-e', 'CEREBRO_DATA_DIR=/data/memory',
           '-e', 'CEREBRO_STANDALONE=1',
           'ghcr.io/professor-low/cerebro-memory:latest',
           'cerebro', 'serve',
