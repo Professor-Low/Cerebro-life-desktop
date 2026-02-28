@@ -250,6 +250,95 @@ async function fetchMcpConfig() {
   });
 }
 
+/**
+ * Validates remote MCP config before it touches ~/.claude.json.
+ * Drops unknown servers, blocks dangerous commands/images/flags.
+ */
+function validateRemoteMcpConfig(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    console.warn('[MCP] Remote config is not a valid object, using empty');
+    return { mcpServers: {} };
+  }
+
+  const ALLOWED_SERVER_NAMES = new Set(['cerebro']);
+  const ALLOWED_COMMANDS = new Set(['docker', 'cerebro']);
+  const ALLOWED_IMAGE_PREFIX = 'ghcr.io/professor-low/';
+  const DANGEROUS_DOCKER_FLAGS = ['--privileged', '--pid=host', '--network=host', '--cap-add'];
+
+  const validated = { mcpServers: {} };
+
+  if (raw.mcpServers && typeof raw.mcpServers === 'object') {
+    for (const [name, serverConfig] of Object.entries(raw.mcpServers)) {
+      // Only allow whitelisted server names
+      if (!ALLOWED_SERVER_NAMES.has(name)) {
+        console.warn(`[MCP] Dropped unknown server "${name}" from remote config`);
+        continue;
+      }
+
+      if (!serverConfig || typeof serverConfig !== 'object' || Array.isArray(serverConfig)) {
+        console.warn(`[MCP] Dropped server "${name}": invalid config object`);
+        continue;
+      }
+
+      // Validate command
+      const cmd = serverConfig.command;
+      if (typeof cmd !== 'string' || !ALLOWED_COMMANDS.has(cmd)) {
+        console.warn(`[MCP] Dropped server "${name}": disallowed command "${cmd}"`);
+        continue;
+      }
+
+      // Validate args is an array of strings
+      const args = serverConfig.args;
+      if (args !== undefined) {
+        if (!Array.isArray(args) || !args.every(a => typeof a === 'string')) {
+          console.warn(`[MCP] Dropped server "${name}": args must be array of strings`);
+          continue;
+        }
+
+        // For docker commands, validate image and flags
+        if (cmd === 'docker') {
+          // Check for dangerous Docker flags
+          const hasBlockedFlag = args.some(arg =>
+            DANGEROUS_DOCKER_FLAGS.some(flag => arg === flag || arg.startsWith(flag + '='))
+          );
+          if (hasBlockedFlag) {
+            console.warn(`[MCP] Dropped server "${name}": contains dangerous Docker flag`);
+            continue;
+          }
+
+          // Find the image argument (first arg that looks like an image name, after 'run')
+          const runIdx = args.indexOf('run');
+          if (runIdx !== -1) {
+            // Image is typically the first non-flag arg after 'run' and option args
+            const imageArg = args.find((a, i) =>
+              i > runIdx && !a.startsWith('-') && a.includes('/') && !a.includes('=')
+            );
+            if (imageArg && !imageArg.startsWith(ALLOWED_IMAGE_PREFIX)) {
+              console.warn(`[MCP] Dropped server "${name}": image "${imageArg}" not from allowed prefix`);
+              continue;
+            }
+          }
+        }
+      }
+
+      // Build a clean validated entry (defense against prototype pollution)
+      const clean = { command: cmd };
+      if (args) clean.args = [...args];
+      if (serverConfig.env && typeof serverConfig.env === 'object' && !Array.isArray(serverConfig.env)) {
+        clean.env = Object.fromEntries(
+          Object.entries(serverConfig.env).filter(([k, v]) => typeof k === 'string' && typeof v === 'string')
+        );
+      } else {
+        clean.env = {};
+      }
+
+      validated.mcpServers[name] = clean;
+    }
+  }
+
+  return validated;
+}
+
 function getHardcodedMcpConfig() {
   return {
     mcpServers: {
@@ -314,7 +403,8 @@ async function writeMcpConfig(mcpServers) {
 
 async function refreshMcpConfigSilently() {
   try {
-    const remote = await fetchMcpConfig();
+    const rawRemote = await fetchMcpConfig();
+    const remote = validateRemoteMcpConfig(rawRemote);
     // Inject current storage path so refresh doesn't overwrite custom mounts
     const dynamicConfig = getDynamicMcpConfig();
     if (remote.mcpServers) {
@@ -1164,7 +1254,8 @@ ipcMain.handle('configure-mcp', async () => {
     let source;
 
     try {
-      mcpConfig = await fetchMcpConfig();
+      const rawConfig = await fetchMcpConfig();
+      mcpConfig = validateRemoteMcpConfig(rawConfig);
       source = 'remote';
     } catch (fetchErr) {
       console.log(`[MCP] Remote fetch failed (${fetchErr.message}), using dynamic config`);
@@ -1513,6 +1604,98 @@ ipcMain.handle('restart-docker-stack', async () => {
   }
 });
 
+// ---- Path Validation ----
+
+/**
+ * Validates a user-supplied path before any filesystem or Docker operations.
+ * Throws on invalid/dangerous paths. Returns the resolved absolute path.
+ * Options:
+ *   allowNull: true  → returns null if input is null (for "reset to default")
+ *   mustExist: true  → checks that path exists and resolves symlinks
+ */
+function validatePath(inputPath, opts = {}) {
+  const { allowNull = false, mustExist = false } = opts;
+
+  if (inputPath === null || inputPath === undefined) {
+    if (allowNull) return null;
+    throw new Error('Path is required');
+  }
+
+  if (typeof inputPath !== 'string' || inputPath.trim() === '') {
+    throw new Error('Path must be a non-empty string');
+  }
+
+  // Reject raw traversal sequences before resolving
+  if (inputPath.includes('..')) {
+    throw new Error('Path traversal ("..") is not allowed');
+  }
+
+  const resolved = path.resolve(inputPath);
+
+  // Block system-critical directories (case-insensitive on Windows)
+  const BLOCKED_PREFIXES_WIN = [
+    'C:\\Windows', 'C:\\Program Files', 'C:\\Program Files (x86)',
+    'C:\\ProgramData\\ssh', 'C:\\System Volume Information',
+  ];
+  const BLOCKED_PREFIXES_UNIX = [
+    '/etc', '/var', '/usr', '/root', '/boot', '/sbin', '/bin', '/lib',
+    '/proc', '/sys', '/dev',
+  ];
+  const BLOCKED_EXACT = ['/'];
+
+  const check = process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+
+  if (process.platform === 'win32') {
+    for (const prefix of BLOCKED_PREFIXES_WIN) {
+      if (check.startsWith(prefix.toLowerCase()) || check === prefix.toLowerCase()) {
+        throw new Error(`Access to system directory "${prefix}" is blocked`);
+      }
+    }
+  } else {
+    for (const prefix of BLOCKED_PREFIXES_UNIX) {
+      if (check === prefix || check.startsWith(prefix + '/')) {
+        throw new Error(`Access to system directory "${prefix}" is blocked`);
+      }
+    }
+  }
+
+  if (BLOCKED_EXACT.includes(check)) {
+    throw new Error('Access to root directory is blocked');
+  }
+
+  // If mustExist, verify existence and resolve symlinks to check real target
+  if (mustExist) {
+    if (!fs.existsSync(resolved)) {
+      throw new Error(`Path does not exist: ${resolved}`);
+    }
+    try {
+      const realPath = fs.realpathSync(resolved);
+      const realCheck = process.platform === 'win32' ? realPath.toLowerCase() : realPath;
+      if (process.platform === 'win32') {
+        for (const prefix of BLOCKED_PREFIXES_WIN) {
+          if (realCheck.startsWith(prefix.toLowerCase())) {
+            throw new Error(`Symlink target resolves to blocked directory "${prefix}"`);
+          }
+        }
+      } else {
+        for (const prefix of BLOCKED_PREFIXES_UNIX) {
+          if (realCheck === prefix || realCheck.startsWith(prefix + '/')) {
+            throw new Error(`Symlink target resolves to blocked directory "${prefix}"`);
+          }
+        }
+        if (BLOCKED_EXACT.includes(realCheck)) {
+          throw new Error('Symlink target resolves to root directory');
+        }
+      }
+    } catch (e) {
+      if (e.message.includes('blocked') || e.message.includes('Symlink')) throw e;
+      // realpathSync failed for other reasons (broken symlink, etc.) — allow if path itself exists
+    }
+  }
+
+  return resolved;
+}
+
 // ---- Memory Storage Config ----
 const MEMORY_CONFIG_FILE = path.join(require('os').homedir(), '.cerebro', 'memory-config.json');
 
@@ -1599,8 +1782,9 @@ ipcMain.handle('browse-storage-folder', async () => {
 
 ipcMain.handle('set-storage-path', async (_event, newPath) => {
   try {
+    const validatedPath = validatePath(newPath, { allowNull: true });
     const config = loadMemoryConfig();
-    config.storagePath = newPath; // null means Docker volume default
+    config.storagePath = validatedPath; // null means Docker volume default
     saveMemoryConfig(config);
     // Rewrite compose file with new mount
     await dockerManager.writeComposeFile();
@@ -1616,18 +1800,23 @@ ipcMain.handle('set-storage-path', async (_event, newPath) => {
 
 ipcMain.handle('get-storage-stats', async (_event, folderPath) => {
   try {
-    const targetPath = folderPath || path.join(require('os').homedir(), '.cerebro');
+    const targetPath = folderPath
+      ? validatePath(folderPath, { mustExist: true })
+      : path.join(require('os').homedir(), '.cerebro');
     let totalSize = 0;
     let fileCount = 0;
 
-    function walkDir(dir) {
+    const MAX_DEPTH = 10;
+    function walkDir(dir, depth = 0) {
+      if (depth > MAX_DEPTH) return;
       try {
         const entries = fs.readdirSync(dir, { withFileTypes: true });
         for (const entry of entries) {
           const fullPath = path.join(dir, entry.name);
           try {
+            if (entry.isSymbolicLink()) continue; // skip symlinks
             if (entry.isDirectory()) {
-              walkDir(fullPath);
+              walkDir(fullPath, depth + 1);
             } else if (entry.isFile()) {
               fileCount++;
               totalSize += fs.statSync(fullPath).size;
@@ -1653,6 +1842,7 @@ ipcMain.handle('get-storage-stats', async (_event, folderPath) => {
 
 ipcMain.handle('scan-merge-preview', async (_event, sourcePath) => {
   try {
+    validatePath(sourcePath, { mustExist: true });
     const config = loadMemoryConfig();
     const destPath = config.storagePath;
 
@@ -1661,15 +1851,18 @@ ipcMain.handle('scan-merge-preview', async (_event, sourcePath) => {
     const SKIP_FILES = new Set(['keyword_index.db', 'quick_facts.json']);
     const SKIP_EXTS = new Set(['.lock']);
 
-    function listFilesRecursive(dir, base) {
+    const MAX_DEPTH = 10;
+    function listFilesRecursive(dir, base, depth = 0) {
+      if (depth > MAX_DEPTH) return [];
       const results = [];
       try {
         const entries = fs.readdirSync(dir, { withFileTypes: true });
         for (const entry of entries) {
+          if (entry.isSymbolicLink()) continue; // skip symlinks
           const rel = base ? base + '/' + entry.name : entry.name;
           if (entry.isDirectory()) {
             if (SKIP_DIRS.has(entry.name)) continue;
-            results.push(...listFilesRecursive(path.join(dir, entry.name), rel));
+            results.push(...listFilesRecursive(path.join(dir, entry.name), rel, depth + 1));
           } else if (entry.isFile()) {
             if (SKIP_FILES.has(entry.name) || SKIP_EXTS.has(path.extname(entry.name))) continue;
             results.push(rel);
@@ -1732,6 +1925,17 @@ ipcMain.handle('scan-merge-preview', async (_event, sourcePath) => {
 
 ipcMain.handle('merge-storage', async (_event, sourcePath, selectedFolders) => {
   try {
+    validatePath(sourcePath, { mustExist: true });
+
+    // Validate selectedFolders: no path separators or traversal
+    if (Array.isArray(selectedFolders)) {
+      for (const folder of selectedFolders) {
+        if (typeof folder !== 'string' || folder.includes('/') || folder.includes('\\') || folder.includes('..')) {
+          throw new Error(`Invalid folder name: "${folder}"`);
+        }
+      }
+    }
+
     const config = loadMemoryConfig();
     const destPath = config.storagePath;
 
@@ -1739,15 +1943,18 @@ ipcMain.handle('merge-storage', async (_event, sourcePath, selectedFolders) => {
     const SKIP_FILES = new Set(['keyword_index.db', 'quick_facts.json']);
     const SKIP_EXTS = new Set(['.lock']);
 
-    function listFilesRecursive(dir, base) {
+    const MAX_DEPTH = 10;
+    function listFilesRecursive(dir, base, depth = 0) {
+      if (depth > MAX_DEPTH) return [];
       const results = [];
       try {
         const entries = fs.readdirSync(dir, { withFileTypes: true });
         for (const entry of entries) {
+          if (entry.isSymbolicLink()) continue; // skip symlinks
           const rel = base ? base + '/' + entry.name : entry.name;
           if (entry.isDirectory()) {
             if (SKIP_DIRS.has(entry.name)) continue;
-            results.push(...listFilesRecursive(path.join(dir, entry.name), rel));
+            results.push(...listFilesRecursive(path.join(dir, entry.name), rel, depth + 1));
           } else if (entry.isFile()) {
             if (SKIP_FILES.has(entry.name) || SKIP_EXTS.has(path.extname(entry.name))) continue;
             results.push(rel);
@@ -1787,6 +1994,11 @@ ipcMain.handle('merge-storage', async (_event, sourcePath, selectedFolders) => {
       const destFiles = new Set(listing.trim().split('\n').filter(Boolean).map(f => f.replace(/\\/g, '/')));
 
       for (const relFile of sourceFiles) {
+        // Validate relFile has no traversal before docker cp
+        if (relFile.includes('..')) {
+          errors.push({ file: relFile, error: 'Path traversal blocked' });
+          continue;
+        }
         if (destFiles.has(relFile)) {
           skipped++;
           continue;
@@ -1835,17 +2047,18 @@ ipcMain.handle('merge-storage', async (_event, sourcePath, selectedFolders) => {
 
 ipcMain.handle('migrate-storage', async (_event, destPath) => {
   try {
+    const validatedDest = validatePath(destPath);
     const config = loadMemoryConfig();
     const sourcePath = config.storagePath;
 
     // Ensure destination exists
-    fs.mkdirSync(destPath, { recursive: true });
+    fs.mkdirSync(validatedDest, { recursive: true });
 
     if (!sourcePath) {
       // Extract from Docker volume
       const { execFile: ef } = require('child_process');
       await new Promise((resolve, reject) => {
-        ef('docker', ['cp', 'cerebro-backend-1:/data/memory/.', destPath], { timeout: 120000 }, (err) => {
+        ef('docker', ['cp', 'cerebro-backend-1:/data/memory/.', validatedDest], { timeout: 120000 }, (err) => {
           if (err) reject(new Error('Docker copy failed: ' + err.message));
           else resolve();
         });
@@ -1855,14 +2068,14 @@ ipcMain.handle('migrate-storage', async (_event, destPath) => {
       const { execFile: ef } = require('child_process');
       if (process.platform === 'win32') {
         await new Promise((resolve, reject) => {
-          ef('xcopy', [sourcePath, destPath, '/E', '/I', '/H', '/Y'], { timeout: 120000 }, (err) => {
+          ef('xcopy', [sourcePath, validatedDest, '/E', '/I', '/H', '/Y'], { timeout: 120000 }, (err) => {
             if (err) reject(new Error('Copy failed: ' + err.message));
             else resolve();
           });
         });
       } else {
         await new Promise((resolve, reject) => {
-          ef('cp', ['-r', sourcePath + '/.', destPath], { timeout: 120000 }, (err) => {
+          ef('cp', ['-r', sourcePath + '/.', validatedDest], { timeout: 120000 }, (err) => {
             if (err) reject(new Error('Copy failed: ' + err.message));
             else resolve();
           });
