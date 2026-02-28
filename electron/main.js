@@ -933,7 +933,52 @@ ipcMain.handle('stop-stack', async () => {
 
 // Updates
 ipcMain.handle('check-for-updates', async () => {
-  return dockerManager.checkForUpdates();
+  // Check Docker image updates
+  const dockerResult = await dockerManager.checkForUpdates().catch(() => ({ updateAvailable: false }));
+  if (dockerResult.updateAvailable) return dockerResult;
+
+  // Check Electron app updates via autoUpdater
+  try {
+    const checkResult = await autoUpdater.checkForUpdates();
+    if (electronUpdateReady) return { updateAvailable: true, type: 'electron' };
+    // If download is in progress, wait briefly for it
+    if (checkResult && checkResult.downloadPromise) {
+      await Promise.race([checkResult.downloadPromise, new Promise(r => setTimeout(r, 5000))]);
+      if (electronUpdateReady) return { updateAvailable: true, type: 'electron' };
+    }
+  } catch {}
+
+  // Fallback: compare version against latest GitHub release
+  try {
+    const https = require('https');
+    const latestVersion = await new Promise((resolve, reject) => {
+      const req = https.get('https://api.github.com/repos/Professor-Low/Cerebro-life-desktop/releases/latest', {
+        headers: { 'User-Agent': 'Cerebro-Desktop/' + app.getVersion() },
+        timeout: 10000,
+      }, (res) => {
+        if (res.statusCode === 302 || res.statusCode === 301) return reject(new Error('redirect'));
+        let body = '';
+        res.on('data', (chunk) => { body += chunk; });
+        res.on('end', () => {
+          try { resolve(JSON.parse(body).tag_name?.replace(/^v/, '') || null); }
+          catch { resolve(null); }
+        });
+      });
+      req.on('error', reject);
+      req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+    });
+
+    if (latestVersion) {
+      const current = app.getVersion().split('.').map(Number);
+      const latest = latestVersion.split('.').map(Number);
+      for (let i = 0; i < 3; i++) {
+        if ((latest[i] || 0) > (current[i] || 0)) return { updateAvailable: true, type: 'github', version: latestVersion };
+        if ((latest[i] || 0) < (current[i] || 0)) break;
+      }
+    }
+  } catch {}
+
+  return { updateAvailable: false };
 });
 
 ipcMain.handle('apply-update', async () => {
