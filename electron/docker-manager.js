@@ -1920,6 +1920,49 @@ class DockerManager extends EventEmitter {
     return false;
   }
 
+  /**
+   * Check if the /data/memory mount inside the Docker container is healthy.
+   * Detects the broken VHD that Docker creates when it can't bind-mount a network drive.
+   * Returns { healthy, totalSize, availableSize, fsType, warnings[] }
+   */
+  async verifyStorageMount() {
+    const result = { healthy: true, totalSize: 0, availableSize: 0, fsType: '', warnings: [] };
+    try {
+      const output = await this._run('docker', [
+        'exec', 'cerebro-backend-1', 'df', '-B1', '/data/memory',
+      ], { timeout: 10000 });
+
+      // Parse df output: Filesystem 1B-blocks Used Available Use% Mounted
+      const lines = output.trim().split(/\r?\n/);
+      if (lines.length < 2) {
+        result.warnings.push('Could not parse df output from container');
+        return result;
+      }
+
+      const parts = lines[1].split(/\s+/);
+      if (parts.length >= 6) {
+        result.fsType = parts[0];
+        result.totalSize = parseInt(parts[1], 10) || 0;
+        result.availableSize = parseInt(parts[3], 10) || 0;
+      }
+
+      // Heuristic: if total < 500 MB and filesystem is /dev/sd*, it's likely a broken VHD
+      const FIVE_HUNDRED_MB = 500 * 1024 * 1024;
+      if (result.totalSize > 0 && result.totalSize < FIVE_HUNDRED_MB && /^\/dev\/sd/.test(result.fsType)) {
+        result.healthy = false;
+        const sizeMB = Math.round(result.totalSize / (1024 * 1024));
+        result.warnings.push(
+          `Storage mount appears to be a Docker-created VHD (${sizeMB} MB) instead of your NAS. ` +
+          `Docker Desktop for Windows cannot bind-mount network drives (Z:\\, UNC paths) into Linux containers.`
+        );
+      }
+    } catch (err) {
+      // Container might not be running yet — non-fatal
+      result.warnings.push(`Storage health check failed: ${err.message}`);
+    }
+    return result;
+  }
+
   _getDefaultComposeContent() {
     return `services:
   redis:

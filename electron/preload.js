@@ -65,6 +65,7 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
   migrateStorage: (destPath) => ipcRenderer.invoke('migrate-storage', destPath),
   scanMergePreview: (sourcePath) => ipcRenderer.invoke('scan-merge-preview', sourcePath),
   mergeStorage: (sourcePath, folders) => ipcRenderer.invoke('merge-storage', sourcePath, folders),
+  getStorageHealth: () => ipcRenderer.invoke('get-storage-health'),
 
   // Restart & setup state
   needsRestart: () => ipcRenderer.invoke('needs-restart'),
@@ -123,6 +124,12 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
   onPortConflict: (callback) => {
     ipcRenderer.removeAllListeners('port-conflict');
     ipcRenderer.on('port-conflict', (_event, data) => callback(data));
+  },
+
+  // Storage health warning (Docker VHD detection)
+  onStorageHealthWarning: (callback) => {
+    ipcRenderer.removeAllListeners('storage-health-warning');
+    ipcRenderer.on('storage-health-warning', (_event, data) => callback(data));
   },
 
   // Credential events

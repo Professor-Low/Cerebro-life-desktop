@@ -265,6 +265,12 @@ function validateRemoteMcpConfig(raw) {
   const ALLOWED_IMAGE_PREFIX = 'ghcr.io/professor-low/';
   const DANGEROUS_DOCKER_FLAGS = ['--privileged', '--pid=host', '--network=host', '--cap-add'];
 
+  // Safe directories where native cerebro.exe full paths are allowed
+  const homedir = require('os').homedir();
+  const SAFE_PREFIXES = [homedir];
+  if (process.env.APPDATA) SAFE_PREFIXES.push(process.env.APPDATA);
+  if (process.env.LOCALAPPDATA) SAFE_PREFIXES.push(process.env.LOCALAPPDATA);
+
   const validated = { mcpServers: {} };
 
   if (raw.mcpServers && typeof raw.mcpServers === 'object') {
@@ -280,11 +286,29 @@ function validateRemoteMcpConfig(raw) {
         continue;
       }
 
-      // Validate command
+      // Validate command — allow short names (docker, cerebro) or full paths to cerebro.exe in safe locations
       const cmd = serverConfig.command;
-      if (typeof cmd !== 'string' || !ALLOWED_COMMANDS.has(cmd)) {
+      if (typeof cmd !== 'string') {
+        console.warn(`[MCP] Dropped server "${name}": command must be a string`);
+        continue;
+      }
+      const isFullPathCerebro = cmd.toLowerCase().endsWith('cerebro.exe') || cmd.toLowerCase().endsWith('cerebro');
+      const isAllowedShort = ALLOWED_COMMANDS.has(cmd);
+      if (!isAllowedShort && !isFullPathCerebro) {
         console.warn(`[MCP] Dropped server "${name}": disallowed command "${cmd}"`);
         continue;
+      }
+      // Full-path cerebro must be in a safe directory
+      if (isFullPathCerebro && !isAllowedShort) {
+        const resolved = path.resolve(cmd);
+        const inSafeDir = SAFE_PREFIXES.some(prefix =>
+          resolved.toLowerCase().startsWith(prefix.toLowerCase() + path.sep.toLowerCase()) ||
+          resolved.toLowerCase().startsWith(prefix.toLowerCase() + '/')
+        );
+        if (!inSafeDir) {
+          console.warn(`[MCP] Dropped server "${name}": cerebro path "${cmd}" not in safe directory`);
+          continue;
+        }
       }
 
       // Validate args is an array of strings
@@ -293,6 +317,14 @@ function validateRemoteMcpConfig(raw) {
         if (!Array.isArray(args) || !args.every(a => typeof a === 'string')) {
           console.warn(`[MCP] Dropped server "${name}": args must be array of strings`);
           continue;
+        }
+
+        // For native cerebro commands, restrict args to ["serve"] only
+        if (isFullPathCerebro || cmd === 'cerebro') {
+          if (args.length !== 1 || args[0] !== 'serve') {
+            console.warn(`[MCP] Dropped server "${name}": native cerebro only allows args ["serve"]`);
+            continue;
+          }
         }
 
         // For docker commands, validate image and flags
@@ -560,7 +592,19 @@ async function startDockerStack() {
   try {
     updateSplashStatus('Starting containers...');
     await dockerManager.startStack();
-    return { ok: true };
+
+    // 6. Verify storage mount health (non-blocking diagnostic)
+    let storageHealth = null;
+    try {
+      storageHealth = await dockerManager.verifyStorageMount();
+      if (storageHealth.warnings.length > 0) {
+        console.warn('[Main] Storage health warnings:', storageHealth.warnings);
+      }
+    } catch (err) {
+      console.warn('[Main] Storage health check failed (non-fatal):', err.message);
+    }
+
+    return { ok: true, storageHealth };
   } catch (err) {
     console.error('[Main] Docker stack failed to start:', err.message);
     const result = { ok: false, error: err.message };
@@ -873,6 +917,15 @@ app.whenReady().then(async () => {
   updateTrayStatus(tray, 'running');
   startLicenseRefreshTimer();
   refreshMcpConfigSilently();
+
+  // Send storage health warning to frontend after a short delay (ensure JS is initialized)
+  if (dockerResult.storageHealth && dockerResult.storageHealth.warnings.length > 0) {
+    setTimeout(() => {
+      if (mainWindow) {
+        mainWindow.webContents.send('storage-health-warning', dockerResult.storageHealth);
+      }
+    }, 3000);
+  }
 });
 
 app.on('window-all-closed', () => {
@@ -1696,6 +1749,77 @@ function validatePath(inputPath, opts = {}) {
   return resolved;
 }
 
+// ---- Network Path Detection ----
+
+/**
+ * Detect if a file path is on a network drive (Windows only).
+ * Checks UNC paths and mapped network drives via `net use`.
+ */
+function isNetworkPath(filePath) {
+  if (process.platform !== 'win32') return false;
+  if (!filePath || typeof filePath !== 'string') return false;
+
+  // UNC paths: \\server\share or //server/share
+  if (filePath.startsWith('\\\\') || filePath.startsWith('//')) return true;
+
+  // Mapped network drive: check if the drive letter is a network mapping
+  const driveMatch = filePath.match(/^([A-Za-z]):/);
+  if (!driveMatch) return false;
+
+  try {
+    const { execFileSync } = require('child_process');
+    const output = execFileSync('net', ['use', `${driveMatch[1]}:`], {
+      encoding: 'utf-8',
+      timeout: 5000,
+      windowsHide: true,
+    });
+    // If `net use <letter>:` succeeds, the drive is a network mapping
+    return output.includes('\\\\');
+  } catch {
+    // `net use <letter>:` fails for local drives — not a network path
+    return false;
+  }
+}
+
+/**
+ * Find the native cerebro.exe installed via pip (Windows only).
+ * Returns the full absolute path or null.
+ */
+function findNativeCerebro() {
+  if (process.platform !== 'win32') return null;
+
+  const appData = process.env.APPDATA || '';
+  const localAppData = process.env.LOCALAPPDATA || '';
+
+  // Check pip --user install locations (most common)
+  for (const pyVer of ['313', '312', '311']) {
+    const candidate = path.join(appData, 'Python', `Python${pyVer}`, 'Scripts', 'cerebro.exe');
+    if (fs.existsSync(candidate)) return candidate;
+  }
+
+  // Check global pip install locations
+  for (const pyVer of ['313', '312', '311']) {
+    const candidate = path.join(localAppData, 'Programs', 'Python', `Python${pyVer}`, 'Scripts', 'cerebro.exe');
+    if (fs.existsSync(candidate)) return candidate;
+  }
+
+  // Fallback: PATH lookup via `where`
+  try {
+    const { execFileSync } = require('child_process');
+    const output = execFileSync('where', ['cerebro.exe'], {
+      encoding: 'utf-8',
+      timeout: 5000,
+      windowsHide: true,
+    });
+    const firstLine = output.trim().split(/\r?\n/)[0];
+    if (firstLine && fs.existsSync(firstLine)) return firstLine;
+  } catch {
+    // Not on PATH
+  }
+
+  return null;
+}
+
 // ---- Memory Storage Config ----
 const MEMORY_CONFIG_FILE = path.join(require('os').homedir(), '.cerebro', 'memory-config.json');
 
@@ -1738,6 +1862,30 @@ function saveMemoryConfig(config) {
 
 function getDynamicMcpConfig() {
   const config = loadMemoryConfig();
+
+  // On Windows, if storage is on a network drive, Docker can't bind-mount it.
+  // Use native cerebro.exe instead (it can read network drives directly).
+  if (config.storagePath && isNetworkPath(config.storagePath)) {
+    const nativePath = findNativeCerebro();
+    if (nativePath) {
+      console.log(`[MCP] Network drive detected — using native cerebro: ${nativePath}`);
+      return {
+        mcpServers: {
+          cerebro: {
+            command: nativePath,
+            args: ['serve'],
+            env: {
+              CEREBRO_DATA_DIR: config.storagePath,
+              CEREBRO_STANDALONE: '1',
+            },
+          },
+        },
+      };
+    }
+    console.warn('[MCP] Network drive detected but native cerebro.exe not found — falling back to Docker (may fail)');
+  }
+
+  // Default: Docker-based MCP server
   const volumeArg = config.storagePath
     ? `${config.storagePath.replace(/\\/g, '/')}:/data/memory`
     : 'cerebro_cerebro-data:/data/memory';
@@ -1795,6 +1943,14 @@ ipcMain.handle('set-storage-path', async (_event, newPath) => {
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('get-storage-health', async () => {
+  try {
+    return await dockerManager.verifyStorageMount();
+  } catch (err) {
+    return { healthy: true, totalSize: 0, availableSize: 0, fsType: '', warnings: [`Health check failed: ${err.message}`] };
   }
 });
 

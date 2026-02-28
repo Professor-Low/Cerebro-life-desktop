@@ -11526,6 +11526,11 @@
         }
         .storage-warning.visible { display: flex; gap: 8px; align-items: flex-start; }
         .storage-warning svg { flex-shrink: 0; margin-top: 1px; }
+        .storage-warning.error {
+            background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.3);
+            color: var(--red);
+        }
+        .storage-warning.error.visible { display: flex; gap: 8px; align-items: flex-start; }
 
         /* ===== Offload Config Styles ===== */
         .offload-config-card {
@@ -25399,6 +25404,10 @@
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                                         <span>Changing storage requires a container restart. Make sure the destination is always accessible.</span>
                                     </div>
+                                    <div class="storage-warning error" id="storage-health-warning">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                        <span id="storage-health-warning-text">Docker storage mount issue detected. Your data may not be persisting to the NAS.</span>
+                                    </div>
                                 </div>
 
                                 <!-- Offload config -->
@@ -33609,7 +33618,42 @@
                     updateStorageDisplay(null);
                 }
                 await loadStorageStats();
+
+                // Check Docker storage mount health
+                if (window.cerebroDesktop && window.cerebroDesktop.getStorageHealth) {
+                    try {
+                        const health = await window.cerebroDesktop.getStorageHealth();
+                        showStorageHealthStatus(health);
+                    } catch (e) { console.warn('Storage health check failed:', e); }
+                }
             } catch (e) { console.warn('Failed to load storage config:', e); }
+        }
+
+        function showStorageHealthStatus(health) {
+            const warningEl = document.getElementById('storage-health-warning');
+            const warningText = document.getElementById('storage-health-warning-text');
+            const badge = document.getElementById('storage-risk-badge');
+            if (!health || health.healthy) {
+                if (warningEl) warningEl.classList.remove('visible');
+                return;
+            }
+            if (warningEl) {
+                warningEl.classList.add('visible');
+                if (warningText && health.warnings && health.warnings.length > 0) {
+                    warningText.textContent = health.warnings[0];
+                }
+            }
+            if (badge) {
+                badge.textContent = 'Error';
+                badge.className = 'risk-indicator full';
+            }
+        }
+
+        // Listen for push storage health warnings from main process
+        if (window.cerebroDesktop && window.cerebroDesktop.onStorageHealthWarning) {
+            window.cerebroDesktop.onStorageHealthWarning((health) => {
+                showStorageHealthStatus(health);
+            });
         }
 
         function updateStorageDisplay(storagePath, source, envVar) {
