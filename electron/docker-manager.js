@@ -1789,7 +1789,7 @@ class DockerManager extends EventEmitter {
 
     // If Devices mount is active, inject entrypoint wrapper to install ssh + fix perms
     if (hasDevicesMount) {
-      const entrypointLine = `    entrypoint:\n      - /bin/sh\n      - -c\n      - |\n        mkdir -p /home/cerebro/.ssh && cp /tmp/.ssh-keys/* /home/cerebro/.ssh/ 2>/dev/null\n        chmod 700 /home/cerebro/.ssh && chmod 600 /home/cerebro/.ssh/id_* 2>/dev/null && chmod 644 /home/cerebro/.ssh/*.pub 2>/dev/null\n        chown -R cerebro:cerebro /home/cerebro/.ssh 2>/dev/null\n        (if ! command -v ssh >/dev/null 2>&1; then apt-get update -qq && apt-get install -y -qq openssh-client >/dev/null 2>&1; fi) &\n        exec /entrypoint.sh uvicorn main:socket_app --host 0.0.0.0 --port 59000`;
+      const entrypointLine = `    entrypoint:\n      - /bin/sh\n      - -c\n      - |\n        mkdir -p /home/cerebro/.ssh && cp /tmp/.ssh-keys/* /home/cerebro/.ssh/ 2>/dev/null\n        chmod 700 /home/cerebro/.ssh && chmod 600 /home/cerebro/.ssh/id_* 2>/dev/null && chmod 644 /home/cerebro/.ssh/*.pub 2>/dev/null\n        chown -R cerebro:cerebro /home/cerebro/.ssh 2>/dev/null\n        (if ! command -v ssh >/dev/null 2>&1; then apt-get update -qq && apt-get install -y -qq openssh-client >/dev/null 2>&1; fi) &\n        exec /entrypoint.sh uvicorn main:socket_app --host 0.0.0.0 --port 59000 --ws-ping-interval 25 --ws-ping-timeout 20 --timeout-keep-alive 120`;
       // Insert entrypoint after the 'restart: unless-stopped' line for the backend service
       const restartAnchor = '    restart: unless-stopped';
       const restartIdx = result.indexOf(restartAnchor, result.indexOf('backend:'));
