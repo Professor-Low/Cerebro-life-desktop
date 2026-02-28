@@ -6918,6 +6918,219 @@
             background: #ef4444;
         }
 
+        /* ==================== SPECOPS RESUME PROMPT (v3.1.0) ==================== */
+        .specops-resume-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 10000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        .specops-resume-overlay.active {
+            display: flex;
+        }
+        .specops-resume-box {
+            background: linear-gradient(145deg, rgba(30, 20, 40, 0.98), rgba(18, 12, 30, 0.98));
+            border: 1px solid rgba(236, 72, 153, 0.35);
+            border-radius: 16px;
+            box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.6), 0 0 50px rgba(236, 72, 153, 0.12);
+            width: 480px;
+            max-width: 92vw;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            animation: specops-resume-in 0.25s ease-out;
+        }
+        @keyframes specops-resume-in {
+            from { opacity: 0; transform: scale(0.95) translateY(10px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .specops-resume-header {
+            padding: 20px 24px 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .specops-resume-header .shield-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.2), rgba(168, 85, 247, 0.2));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            color: #ec4899;
+        }
+        .specops-resume-header .header-text h3 {
+            margin: 0;
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .specops-resume-header .header-text .subtitle {
+            margin: 2px 0 0;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+        }
+        .specops-resume-toggle-all {
+            margin: 0 24px 8px;
+            display: flex;
+            justify-content: flex-end;
+        }
+        .specops-resume-toggle-all button {
+            background: none;
+            border: none;
+            color: rgba(236, 72, 153, 0.8);
+            font-size: 0.75rem;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: all 0.15s;
+        }
+        .specops-resume-toggle-all button:hover {
+            background: rgba(236, 72, 153, 0.1);
+            color: #ec4899;
+        }
+        .specops-resume-list {
+            padding: 0 16px;
+            max-height: 340px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .specops-resume-list::-webkit-scrollbar { width: 5px; }
+        .specops-resume-list::-webkit-scrollbar-thumb { background: rgba(236, 72, 153, 0.2); border-radius: 10px; }
+        .specops-resume-agent {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .specops-resume-agent:hover {
+            background: rgba(236, 72, 153, 0.06);
+            border-color: rgba(236, 72, 153, 0.15);
+        }
+        .specops-resume-agent.selected {
+            background: rgba(236, 72, 153, 0.08);
+            border-color: rgba(236, 72, 153, 0.3);
+        }
+        .specops-resume-agent .agent-check {
+            width: 18px;
+            height: 18px;
+            border-radius: 5px;
+            border: 1.5px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            margin-top: 1px;
+            transition: all 0.15s;
+        }
+        .specops-resume-agent.selected .agent-check {
+            background: linear-gradient(135deg, #ec4899, #a855f7);
+            border-color: transparent;
+        }
+        .specops-resume-agent .agent-check svg {
+            width: 12px;
+            height: 12px;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+        .specops-resume-agent.selected .agent-check svg {
+            opacity: 1;
+        }
+        .specops-resume-agent .agent-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .specops-resume-agent .agent-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .specops-resume-agent .agent-mission {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .specops-resume-agent .agent-meta {
+            display: flex;
+            gap: 10px;
+            margin-top: 4px;
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.35);
+        }
+        .specops-resume-footer {
+            padding: 16px 24px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .specops-resume-remember {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+        .specops-resume-remember input[type="checkbox"] {
+            accent-color: #ec4899;
+            width: 14px;
+            height: 14px;
+        }
+        .specops-resume-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        .specops-resume-btn {
+            padding: 9px 20px;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border: none;
+        }
+        .specops-resume-btn.standby {
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text-secondary);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .specops-resume-btn.standby:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+        }
+        .specops-resume-btn.resume {
+            background: linear-gradient(135deg, #ec4899, #a855f7);
+            color: white;
+        }
+        .specops-resume-btn.resume:hover {
+            filter: brightness(1.15);
+            transform: translateY(-1px);
+        }
+        .specops-resume-btn.resume:disabled {
+            opacity: 0.5;
+            cursor: default;
+            filter: none;
+            transform: none;
+        }
+
         /* ==================== THOUGHT DETAIL MODAL ==================== */
         .thought-detail-modal {
             max-width: 550px;
@@ -31187,6 +31400,16 @@
                 }
             });
 
+            // Listen for specops resume prompt on startup (v3.1.0)
+            socket.on('specops_pending_resume', (data) => {
+                console.log('SpecOps pending resume:', data);
+                showSpecopsResumePrompt(data.agents || []);
+            });
+            socket.on('specops_resume_resolved', () => {
+                console.log('SpecOps resume resolved');
+                dismissSpecopsResumePrompt();
+            });
+
             // Listen for directive_set events (hot-swap from Command Center)
             socket.on('directive_set', (data) => {
                 var agent = agents[data.agent_id];
@@ -51696,6 +51919,37 @@ Please proceed with implementing this recommendation. You have full permissions.
         </div>
     </div>
 
+    <!-- SpecOps Resume Prompt Modal (v3.1.0) -->
+    <div class="specops-resume-overlay" id="specops-resume-overlay">
+        <div class="specops-resume-box">
+            <div class="specops-resume-header">
+                <div class="shield-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                </div>
+                <div class="header-text">
+                    <h3>SpecOps Missions Ready</h3>
+                    <div class="subtitle" id="specops-resume-subtitle">0 missions ready to resume</div>
+                </div>
+            </div>
+            <div class="specops-resume-toggle-all">
+                <button id="specops-resume-toggle-btn" onclick="toggleAllSpecopsResume()">Deselect All</button>
+            </div>
+            <div class="specops-resume-list" id="specops-resume-list"></div>
+            <div class="specops-resume-footer">
+                <label class="specops-resume-remember">
+                    <input type="checkbox" id="specops-resume-always">
+                    Always resume automatically on restart
+                </label>
+                <div class="specops-resume-actions">
+                    <button class="specops-resume-btn standby" onclick="specopsResumeStandby()">Keep on Standby</button>
+                    <button class="specops-resume-btn resume" id="specops-resume-go-btn" onclick="specopsResumeSelected()">Resume 0 Missions</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Custom confirm dialog - replaces browser confirm()
         function cerebroConfirm(message, options = {}) {
@@ -51805,6 +52059,140 @@ Please proceed with implementing this recommendation. You have full permissions.
                 okBtn.focus();
             });
         };
+
+        // ===================== SpecOps Resume Prompt (v3.1.0) =====================
+        var _specopsResumeAgents = [];
+        var _specopsResumeSelected = new Set();
+
+        function _createAgentCard(agent) {
+            var card = document.createElement('div');
+            card.className = 'specops-resume-agent selected';
+            card.dataset.agentId = agent.id;
+
+            // Checkbox
+            var check = document.createElement('div');
+            check.className = 'agent-check';
+            var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('viewBox', '0 0 24 24');
+            svg.setAttribute('fill', 'none');
+            svg.setAttribute('stroke', 'white');
+            svg.setAttribute('stroke-width', '3');
+            svg.setAttribute('stroke-linecap', 'round');
+            svg.setAttribute('stroke-linejoin', 'round');
+            var polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+            polyline.setAttribute('points', '20 6 9 17 4 12');
+            svg.appendChild(polyline);
+            check.appendChild(svg);
+
+            // Info section
+            var info = document.createElement('div');
+            info.className = 'agent-info';
+            var nameEl = document.createElement('div');
+            nameEl.className = 'agent-name';
+            nameEl.textContent = agent.call_sign;
+            var missionEl = document.createElement('div');
+            missionEl.className = 'agent-mission';
+            missionEl.textContent = agent.mission_name || agent.task || 'No mission name';
+            var metaEl = document.createElement('div');
+            metaEl.className = 'agent-meta';
+            var cycleSpan = document.createElement('span');
+            cycleSpan.textContent = (agent.cycle_count || 0) + ' cycles';
+            metaEl.appendChild(cycleSpan);
+            if (agent.work_style) {
+                var styleSpan = document.createElement('span');
+                styleSpan.textContent = agent.work_style;
+                metaEl.appendChild(styleSpan);
+            }
+            info.appendChild(nameEl);
+            info.appendChild(missionEl);
+            info.appendChild(metaEl);
+
+            card.appendChild(check);
+            card.appendChild(info);
+
+            card.addEventListener('click', function() {
+                var id = agent.id;
+                if (_specopsResumeSelected.has(id)) {
+                    _specopsResumeSelected.delete(id);
+                    card.classList.remove('selected');
+                } else {
+                    _specopsResumeSelected.add(id);
+                    card.classList.add('selected');
+                }
+                updateResumeButtonState();
+            });
+
+            return card;
+        }
+
+        function showSpecopsResumePrompt(agents) {
+            _specopsResumeAgents = agents;
+            _specopsResumeSelected = new Set(agents.map(function(a) { return a.id; }));
+
+            var overlay = document.getElementById('specops-resume-overlay');
+            var list = document.getElementById('specops-resume-list');
+            var subtitle = document.getElementById('specops-resume-subtitle');
+            var alwaysCheckbox = document.getElementById('specops-resume-always');
+
+            subtitle.textContent = agents.length + ' mission' + (agents.length !== 1 ? 's' : '') + ' ready to resume';
+            alwaysCheckbox.checked = false;
+
+            // Clear existing cards
+            while (list.firstChild) list.removeChild(list.firstChild);
+
+            agents.forEach(function(agent) {
+                list.appendChild(_createAgentCard(agent));
+            });
+
+            updateResumeButtonState();
+            overlay.classList.add('active');
+        }
+
+        function dismissSpecopsResumePrompt() {
+            var overlay = document.getElementById('specops-resume-overlay');
+            overlay.classList.remove('active');
+            _specopsResumeAgents = [];
+            _specopsResumeSelected = new Set();
+        }
+
+        function updateResumeButtonState() {
+            var btn = document.getElementById('specops-resume-go-btn');
+            var toggleBtn = document.getElementById('specops-resume-toggle-btn');
+            var count = _specopsResumeSelected.size;
+            btn.textContent = 'Resume ' + count + ' Mission' + (count !== 1 ? 's' : '');
+            toggleBtn.textContent = count === _specopsResumeAgents.length ? 'Deselect All' : 'Select All';
+        }
+
+        function toggleAllSpecopsResume() {
+            var allSelected = _specopsResumeSelected.size === _specopsResumeAgents.length;
+            var cards = document.querySelectorAll('.specops-resume-agent');
+            if (allSelected) {
+                _specopsResumeSelected.clear();
+                cards.forEach(function(c) { c.classList.remove('selected'); });
+            } else {
+                _specopsResumeAgents.forEach(function(a) { _specopsResumeSelected.add(a.id); });
+                cards.forEach(function(c) { c.classList.add('selected'); });
+            }
+            updateResumeButtonState();
+        }
+
+        function specopsResumeSelected() {
+            var alwaysResume = document.getElementById('specops-resume-always').checked;
+            var selectedIds = Array.from(_specopsResumeSelected);
+            socket.emit('specops_resume_decision', { agent_ids: selectedIds, always_resume: alwaysResume });
+            dismissSpecopsResumePrompt();
+            if (selectedIds.length > 0) {
+                showToast('Resuming ' + selectedIds.length + ' mission' + (selectedIds.length !== 1 ? 's' : ''), 'success');
+            } else {
+                showToast('All missions on standby', 'info');
+            }
+        }
+
+        function specopsResumeStandby() {
+            socket.emit('specops_resume_decision', { agent_ids: [], always_resume: false });
+            dismissSpecopsResumePrompt();
+            showToast('All missions on standby', 'info');
+        }
 
         // Custom prompt dialog — replaces browser prompt()
         // Returns Promise<string|null> (null if cancelled)

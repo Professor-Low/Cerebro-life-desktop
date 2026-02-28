@@ -777,6 +777,11 @@ async def create_notification(notif_type: str, title: str, message: str, link: s
 active_agents = {}  # agent_id -> agent_info
 _specops_locks: dict[str, asyncio.Lock] = {}
 
+# SpecOps resume-on-startup state (v3.1.0)
+_specops_resume_event: Optional[asyncio.Event] = None
+_specops_resume_response: dict = {}
+_specops_pending_resume: list = []
+
 # Dev server reverse proxy registry
 _active_dev_servers: dict[int, dict] = {}  # port -> {port, name, agent_id, framework, registered_at}
 DEV_SERVER_PORT_MIN = 1024
@@ -972,7 +977,11 @@ async def _resume_specops_agent(agent_id: str):
 
 
 async def _resume_specops_missions():
-    """Find and resume all specops agents that were cycling when the server restarted."""
+    """Find and resume all specops agents that were cycling when the server restarted.
+    v3.1.0: Shows a prompt to the user asking which agents to resume instead of auto-resuming all.
+    """
+    global _specops_resume_event, _specops_resume_response, _specops_pending_resume
+
     resume_candidates = [
         (aid, agent) for aid, agent in active_agents.items()
         if agent.get("_needs_resume")
@@ -980,9 +989,92 @@ async def _resume_specops_missions():
     if not resume_candidates:
         return
 
-    print(f"[Startup] Resuming {len(resume_candidates)} specops mission(s)")
+    # Check "always resume" preference — if set, resume all immediately (old behavior)
+    prefs = _load_specops_resume_prefs()
+    if prefs.get("always_resume", False):
+        print(f"[Startup] Auto-resuming {len(resume_candidates)} specops mission(s) (always_resume enabled)")
+        for agent_id, agent in resume_candidates:
+            asyncio.create_task(_resume_specops_agent(agent_id))
+        return
+
+    # Set each candidate to pending_resume status and notify frontend
+    agent_summaries = []
     for agent_id, agent in resume_candidates:
-        asyncio.create_task(_resume_specops_agent(agent_id))
+        agent["status"] = "pending_resume"
+        await sio.emit("agent_update", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
+        agent_summaries.append({
+            "id": agent_id,
+            "call_sign": agent.get("call_sign", agent_id),
+            "mission_name": agent.get("mission_name", ""),
+            "task": (agent.get("task", "") or "")[:120],
+            "cycle_count": agent.get("cycle_count", 0),
+            "work_style": agent.get("work_style", ""),
+        })
+
+    _specops_pending_resume = agent_summaries
+    _specops_resume_event = asyncio.Event()
+    _specops_resume_response = {}
+
+    print(f"[Startup] {len(resume_candidates)} specops mission(s) pending resume — waiting for user decision")
+    await sio.emit("specops_pending_resume", {"agents": agent_summaries}, room=os.environ.get("CEREBRO_ROOM", "default"))
+
+    # Wait for user decision with 5-minute headless fallback
+    try:
+        await asyncio.wait_for(_specops_resume_event.wait(), timeout=300)
+    except asyncio.TimeoutError:
+        print("[Startup] No resume decision received in 5 minutes — auto-resuming all (headless fallback)")
+        _specops_resume_response = {"agent_ids": [a[0] for a in resume_candidates], "always_resume": False}
+
+    # Process the decision
+    selected_ids = set(_specops_resume_response.get("agent_ids", []))
+    save_always = _specops_resume_response.get("always_resume", False)
+
+    # Save preference if toggled
+    if save_always:
+        _save_specops_resume_prefs({"always_resume": True})
+        print("[Startup] Saved always_resume preference")
+
+    resumed_count = 0
+    standby_count = 0
+    for agent_id, agent in resume_candidates:
+        if agent_id in selected_ids:
+            # Resume selected agents
+            agent["status"] = "cycling"
+            await sio.emit("agent_update", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
+            asyncio.create_task(_resume_specops_agent(agent_id))
+            resumed_count += 1
+        else:
+            # Mark unselected as completed
+            agent["status"] = "completed"
+            agent["completed_at"] = datetime.now(timezone.utc).isoformat()
+            agent["error"] = "Not resumed by user on restart"
+            agent.pop("_needs_resume", None)
+            await sio.emit("agent_update", sanitize_agent_for_emit(agent), room=os.environ.get("CEREBRO_ROOM", "default"))
+            # Persist the status change
+            agents_dir = Path(config.AI_MEMORY_PATH) / "agents"
+            index_file = agents_dir / "index.json"
+            if index_file.exists():
+                try:
+                    with open(index_file, 'r', encoding='utf-8') as f:
+                        index = json.load(f)
+                    agent_entry = next((a for a in index.get("agents", []) if a["id"] == agent_id), None)
+                    if agent_entry and agent_entry.get("file"):
+                        agent_file = agents_dir / agent_entry["file"]
+                        if agent_file.exists():
+                            with open(agent_file, 'w', encoding='utf-8') as f:
+                                json.dump(agent, f, indent=2, ensure_ascii=False)
+                                f.flush()
+                                os.fsync(f.fileno())
+                except Exception as e:
+                    print(f"[Startup] Failed to persist standby status for {agent_id}: {e}")
+            standby_count += 1
+
+    print(f"[Startup] Resume decision: {resumed_count} resumed, {standby_count} on standby")
+
+    # Dismiss modal on all clients
+    _specops_pending_resume = []
+    _specops_resume_event = None
+    await sio.emit("specops_resume_resolved", {}, room=os.environ.get("CEREBRO_ROOM", "default"))
 
 
 # Concurrent agent queue system
@@ -3966,6 +4058,10 @@ async def connect(sid, environ, auth=None):
         except Exception as e:
             print(f"[Socket] Activity backfill failed: {e}")
 
+    # Re-emit pending specops resume list if backend is waiting for a decision
+    if _specops_pending_resume:
+        await sio.emit("specops_pending_resume", {"agents": _specops_pending_resume}, to=sid)
+
 @sio.event
 async def disconnect(sid):
     print(f"Client disconnected: {sid}")
@@ -4358,6 +4454,18 @@ async def simulation_clarification_response(sid, data):
         await sio.emit("autonomy_error", {"error": "Cognitive loop not available"}, to=sid)
         return
     await cognitive_loop_manager.receive_sim_clarification(data)
+
+
+@sio.event
+async def specops_resume_decision(sid, data):
+    """Handle user's decision on which specops agents to resume after restart."""
+    global _specops_resume_response, _specops_resume_event
+    agent_ids = data.get("agent_ids", [])
+    always_resume = data.get("always_resume", False)
+    print(f"[SpecOps Resume] Decision received: resume {len(agent_ids)} agent(s), always_resume={always_resume}")
+    _specops_resume_response = {"agent_ids": agent_ids, "always_resume": always_resume}
+    if _specops_resume_event:
+        _specops_resume_event.set()
 
 
 # ============================================================================
@@ -11927,6 +12035,24 @@ def _save_cerebro_prefs(prefs: dict):
     """Save Cerebro preferences to disk."""
     CEREBRO_PREFS_FILE.parent.mkdir(parents=True, exist_ok=True)
     CEREBRO_PREFS_FILE.write_text(json.dumps(prefs, indent=2))
+
+
+# SpecOps resume preferences (v3.1.0)
+SPECOPS_RESUME_PREFS_FILE = Path(config.AI_MEMORY_PATH) / "cerebro" / "specops_resume_prefs.json"
+
+def _load_specops_resume_prefs() -> dict:
+    """Load specops resume preferences from disk."""
+    if SPECOPS_RESUME_PREFS_FILE.exists():
+        try:
+            return json.loads(SPECOPS_RESUME_PREFS_FILE.read_text())
+        except Exception:
+            pass
+    return {"always_resume": False}
+
+def _save_specops_resume_prefs(prefs: dict):
+    """Save specops resume preferences to disk."""
+    SPECOPS_RESUME_PREFS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    SPECOPS_RESUME_PREFS_FILE.write_text(json.dumps(prefs, indent=2))
 
 
 @app.get("/api/cerebro/personality")
