@@ -414,6 +414,10 @@ async function ensureDefenderExclusion() {
 async function startDockerStack() {
   updateSplashStatus('Starting Docker containers...');
 
+  // Auto-detect memory config from env vars before writing compose
+  // (ensures bind mount is set up on first run if CEREBRO_DATA_DIR is set)
+  loadMemoryConfig();
+
   // Defender exclusion now runs at app startup (before license gate), so no
   // need to duplicate it here. The marker file prevents repeated UAC prompts.
 
@@ -1504,12 +1508,34 @@ const MEMORY_CONFIG_FILE = path.join(require('os').homedir(), '.cerebro', 'memor
 function loadMemoryConfig() {
   try {
     if (fs.existsSync(MEMORY_CONFIG_FILE)) {
-      return JSON.parse(fs.readFileSync(MEMORY_CONFIG_FILE, 'utf-8'));
+      const cfg = JSON.parse(fs.readFileSync(MEMORY_CONFIG_FILE, 'utf-8'));
+      cfg.source = 'file';
+      return cfg;
     }
   } catch (e) {
     console.error('[Main] Failed to load memory config:', e.message);
   }
-  return { storagePath: null };
+
+  // Auto-detect from CEREBRO_DATA_DIR env var
+  const envPath = process.env.CEREBRO_DATA_DIR;
+  if (envPath) {
+    try {
+      if (fs.existsSync(envPath)) {
+        const config = { storagePath: envPath, source: 'env', envVar: 'CEREBRO_DATA_DIR' };
+        // Auto-create config file so Docker compose picks up the mount
+        fs.mkdirSync(path.dirname(MEMORY_CONFIG_FILE), { recursive: true });
+        fs.writeFileSync(MEMORY_CONFIG_FILE, JSON.stringify({ storagePath: envPath }, null, 2));
+        console.log(`[Main] Auto-created memory config from CEREBRO_DATA_DIR: ${envPath}`);
+        return config;
+      } else {
+        console.warn(`[Main] CEREBRO_DATA_DIR set to "${envPath}" but path does not exist — skipping`);
+      }
+    } catch (e) {
+      console.error('[Main] Failed to auto-create memory config from env:', e.message);
+    }
+  }
+
+  return { storagePath: null, source: 'default' };
 }
 
 function saveMemoryConfig(config) {
@@ -1541,7 +1567,9 @@ function getDynamicMcpConfig() {
 }
 
 ipcMain.handle('get-memory-config', () => {
-  return loadMemoryConfig();
+  const cfg = loadMemoryConfig();
+  // Return source and envVar so frontend can show provenance
+  return { storagePath: cfg.storagePath, source: cfg.source || 'default', envVar: cfg.envVar || null };
 });
 
 ipcMain.handle('browse-storage-folder', async () => {

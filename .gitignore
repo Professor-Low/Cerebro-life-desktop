@@ -23,3 +23,13 @@ cerebro-remote.json
 # OS
 .DS_Store
 Thumbs.db
+
+# IDE / Claude Code
+.claude/
+
+# Conversation dumps / backups
+*.jsonl
+*.bak
+
+# Root-level dev artifacts
+/index.html

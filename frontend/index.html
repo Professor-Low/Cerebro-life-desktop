@@ -11496,6 +11496,16 @@
             cursor: pointer; font-weight: 600; transition: background 0.2s; white-space: nowrap;
         }
         .storage-path-row .btn-sm:hover { background: rgba(139,92,246,0.25); }
+        .storage-source-label {
+            font-size: 0.72rem; color: var(--text-muted); padding: 0 2px 8px;
+            display: none; align-items: center; gap: 5px;
+        }
+        .storage-source-label.visible { display: flex; }
+        .storage-source-label code {
+            font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 0.7rem;
+            background: rgba(139,92,246,0.1); color: var(--purple); padding: 1px 6px;
+            border-radius: 4px;
+        }
         .storage-stats-row {
             display: flex; gap: 20px; margin-bottom: 12px;
         }
@@ -11856,107 +11866,377 @@
             display: none;
         }
 
-        /* ==================== ONBOARDING ==================== */
-        .onboarding-card {
-            background: rgba(15, 15, 30, 0.95);
-            border: 1px solid rgba(139, 92, 246, 0.3);
-            border-radius: 16px;
-            padding: 40px 36px;
-            width: 420px;
-            max-width: 90vw;
-            text-align: center;
+        /* ==================== CINEMATIC ONBOARDING ==================== */
+        .cin-onboard {
+            position: fixed;
+            inset: 0;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow: hidden;
         }
-        .onboarding-progress {
+        .cin-backdrop {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse at 50% 30%, rgba(88, 28, 135, 0.15) 0%, rgba(15, 3, 30, 0.8) 50%, #000 100%);
+            z-index: 0;
+        }
+        /* Ambient floating particles */
+        .cin-backdrop::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image:
+                radial-gradient(1.5px 1.5px at 10% 20%, rgba(167,139,250,0.4) 50%, transparent 100%),
+                radial-gradient(1px 1px at 25% 60%, rgba(139,92,246,0.3) 50%, transparent 100%),
+                radial-gradient(2px 2px at 40% 15%, rgba(196,181,253,0.35) 50%, transparent 100%),
+                radial-gradient(1px 1px at 55% 75%, rgba(167,139,250,0.25) 50%, transparent 100%),
+                radial-gradient(1.5px 1.5px at 70% 35%, rgba(139,92,246,0.4) 50%, transparent 100%),
+                radial-gradient(1px 1px at 85% 55%, rgba(196,181,253,0.3) 50%, transparent 100%),
+                radial-gradient(2px 2px at 15% 85%, rgba(139,92,246,0.2) 50%, transparent 100%),
+                radial-gradient(1px 1px at 90% 10%, rgba(167,139,250,0.35) 50%, transparent 100%),
+                radial-gradient(1.5px 1.5px at 60% 90%, rgba(139,92,246,0.3) 50%, transparent 100%),
+                radial-gradient(1px 1px at 35% 45%, rgba(196,181,253,0.2) 50%, transparent 100%);
+            animation: cinParticleDrift 20s ease-in-out infinite alternate;
+        }
+        .cin-backdrop::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image:
+                radial-gradient(1px 1px at 5% 50%, rgba(192,132,252,0.3) 50%, transparent 100%),
+                radial-gradient(1.5px 1.5px at 20% 30%, rgba(139,92,246,0.25) 50%, transparent 100%),
+                radial-gradient(1px 1px at 45% 80%, rgba(167,139,250,0.35) 50%, transparent 100%),
+                radial-gradient(2px 2px at 65% 10%, rgba(196,181,253,0.2) 50%, transparent 100%),
+                radial-gradient(1px 1px at 80% 70%, rgba(139,92,246,0.3) 50%, transparent 100%),
+                radial-gradient(1.5px 1.5px at 95% 40%, rgba(167,139,250,0.25) 50%, transparent 100%),
+                radial-gradient(1px 1px at 50% 50%, rgba(192,132,252,0.15) 50%, transparent 100%);
+            animation: cinParticleDrift2 25s ease-in-out infinite alternate;
+        }
+        .cin-dissolve {
+            position: absolute;
+            inset: 0;
+            z-index: 100;
+            pointer-events: none;
+            opacity: 0;
+        }
+        .cin-dissolve.active {
+            animation: cinDissolve 2s ease-in forwards;
+        }
+        .cin-orb-wrap {
+            position: relative;
+            z-index: 1;
+            width: min(160px, 30vw);
+            height: min(160px, 30vw);
+            margin-top: 20vh;
+            transition: margin-top 1s cubic-bezier(0.4, 0, 0.2, 1), width 1s ease, height 1s ease;
+            flex-shrink: 0;
+            opacity: 0;
+        }
+        .cin-orb-wrap.cin-orb-visible {
+            opacity: 1;
+        }
+        .cin-orb-wrap.cin-orb-docked {
+            margin-top: clamp(30px, 5vh, 60px);
+            width: min(90px, 18vw);
+            height: min(90px, 18vw);
+        }
+        .cin-orb-img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            filter: drop-shadow(0 0 25px rgba(147, 51, 234, 0.7)) drop-shadow(0 0 50px rgba(139, 92, 246, 0.4)) drop-shadow(0 0 80px rgba(88, 28, 135, 0.3));
+            animation: cinOrbBreathe 4s ease-in-out infinite;
+        }
+        .cin-orb-wrap.cin-orb-surge .cin-orb-img {
+            animation: cinOrbSurge 1.5s ease-out forwards;
+        }
+        .cin-ring {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            border-radius: 50%;
+            border: 1px solid rgba(139, 92, 246, 0.15);
+            transform: translate(-50%, -50%);
+        }
+        .cin-ring-1 {
+            width: 150%;
+            height: 150%;
+            animation: cinRingRotate 12s linear infinite;
+            border-color: rgba(192, 132, 252, 0.25);
+            border-style: dashed;
+        }
+        .cin-ring-2 {
+            width: 185%;
+            height: 185%;
+            animation: cinRingRotate 18s linear infinite reverse;
+            border-color: rgba(167, 139, 250, 0.18);
+        }
+        .cin-ring-3 {
+            width: 220%;
+            height: 220%;
+            animation: cinRingRotate 25s linear infinite;
+            border-color: rgba(139, 92, 246, 0.1);
+            border-style: dotted;
+        }
+        #cin-conversation {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: min(640px, 90vw);
+            padding: 24px 20px 180px;
+            overflow-y: auto;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            opacity: 0;
+            transition: opacity 0.8s ease;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(139,92,246,0.2) transparent;
+        }
+        #cin-conversation.cin-conv-visible {
+            opacity: 1;
+        }
+        .cin-line-cerebro {
+            color: #c4b5fd;
+            font-family: 'Inter', -apple-system, sans-serif;
+            font-size: clamp(0.95rem, 2.5vw, 1.1rem);
+            line-height: 1.65;
+            animation: cinLineFadeIn 0.3s ease-out;
+            text-shadow: 0 0 20px rgba(139, 92, 246, 0.15);
+        }
+        /* --- Input bar (slides up from bottom) --- */
+        .cin-input-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 10001;
+            padding: 30px 20px 36px;
+            display: flex;
+            justify-content: center;
+            background: linear-gradient(transparent, rgba(10,0,20,0.85) 30%, rgba(10,0,20,0.98) 100%);
+            transform: translateY(100%);
+            opacity: 0;
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+            pointer-events: none;
+        }
+        .cin-input-bar.active {
+            transform: translateY(0);
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .cin-input-content {
+            width: 100%;
+            max-width: min(640px, 90vw);
+        }
+        .cin-bar-input-wrap {
             display: flex;
             align-items: center;
-            justify-content: center;
-            gap: 0;
-            margin-bottom: 32px;
+            background: rgba(30, 15, 60, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            border-radius: 14px;
+            padding: 16px 22px;
+            gap: 10px;
+            animation: cinLineFadeIn 0.3s ease-out;
+            box-shadow: 0 0 30px rgba(139, 92, 246, 0.1), inset 0 1px 0 rgba(255,255,255,0.05);
         }
-        .onboarding-step {
-            width: 32px; height: 32px;
-            border-radius: 50%;
-            border: 2px solid rgba(139, 92, 246, 0.3);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 0.8rem; font-weight: 600;
-            color: rgba(255,255,255,0.3);
-            transition: all 0.3s;
+        .cin-bar-input-wrap .cin-prompt {
+            color: #a78bfa;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 1.05rem;
+            user-select: none;
+            flex-shrink: 0;
+            text-shadow: 0 0 8px rgba(167, 139, 250, 0.5);
         }
-        .onboarding-step.active {
-            border-color: var(--primary);
-            color: #fff;
-            background: rgba(139, 92, 246, 0.2);
-        }
-        .onboarding-step.done {
-            border-color: var(--green);
-            color: var(--green);
-            background: rgba(34, 197, 94, 0.15);
-        }
-        .onboarding-step-line {
-            width: 40px; height: 2px;
-            background: rgba(139, 92, 246, 0.2);
-        }
-        .onboarding-panel { min-height: 200px; }
-        .onboarding-nav {
-            display: flex;
-            gap: 12px;
-            margin-top: 24px;
-            justify-content: center;
-        }
-        .onboard-btn-secondary {
-            padding: 12px 28px;
-            border-radius: 8px;
-            border: 1px solid rgba(139, 92, 246, 0.3);
+        .cin-bar-input {
             background: transparent;
-            color: var(--text-secondary);
+            border: none;
+            outline: none;
+            color: #e9d5ff;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 1rem;
+            width: 100%;
+            caret-color: #a78bfa;
+        }
+        .cin-bar-input::placeholder {
+            color: rgba(167, 139, 250, 0.25);
+        }
+        .cin-bar-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            animation: cinLineFadeIn 0.3s ease-out;
+        }
+        .cin-bar-options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            animation: cinLineFadeIn 0.3s ease-out;
+        }
+        .cin-chip {
+            padding: 11px 22px;
+            border-radius: 28px;
+            border: 1px solid rgba(139, 92, 246, 0.35);
+            background: linear-gradient(135deg, rgba(88, 28, 135, 0.25) 0%, rgba(139, 92, 246, 0.12) 100%);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            color: #c4b5fd;
             cursor: pointer;
-            font-size: 0.95rem;
+            font-size: clamp(0.82rem, 2vw, 0.92rem);
+            transition: all 0.25s ease;
+            user-select: none;
+            opacity: 0;
+            animation: cinChipIn 0.4s ease-out forwards;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06);
         }
-        .onboard-chips {
-            display: flex; flex-wrap: wrap; gap: 10px;
-            justify-content: center; margin-top: 16px;
+        .cin-chip:hover {
+            border-color: rgba(167, 139, 250, 0.7);
+            background: linear-gradient(135deg, rgba(88, 28, 135, 0.4) 0%, rgba(139, 92, 246, 0.25) 100%);
+            color: #e9d5ff;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 20px rgba(139, 92, 246, 0.25), inset 0 1px 0 rgba(255,255,255,0.08);
         }
-        .onboard-chip {
-            padding: 10px 18px;
-            border-radius: 20px;
-            border: 1px solid rgba(139, 92, 246, 0.3);
-            background: rgba(139, 92, 246, 0.08);
-            color: var(--text-secondary);
+        .cin-chip.selected {
+            border-color: #a78bfa;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.5) 0%, rgba(88, 28, 135, 0.4) 100%);
+            color: #fff;
+            box-shadow: 0 0 20px rgba(139, 92, 246, 0.4), 0 4px 15px rgba(88, 28, 135, 0.3), inset 0 1px 0 rgba(255,255,255,0.1);
+            text-shadow: 0 0 10px rgba(196, 181, 253, 0.5);
+        }
+        .cin-continue-btn {
+            padding: 12px 32px;
+            border-radius: 28px;
+            border: 1px solid rgba(139, 92, 246, 0.5);
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.35) 0%, rgba(88, 28, 135, 0.3) 100%);
+            color: #e9d5ff;
             cursor: pointer;
             font-size: 0.9rem;
-            transition: all 0.2s;
-            display: flex; align-items: center; gap: 6px;
+            font-weight: 500;
+            margin-top: 14px;
+            transition: all 0.3s ease;
+            opacity: 0;
+            animation: cinChipIn 0.4s ease-out forwards;
+            align-self: center;
+            letter-spacing: 0.5px;
+            box-shadow: 0 2px 15px rgba(139, 92, 246, 0.2);
         }
-        .onboard-chip input { display: none; }
-        .onboard-chip:has(input:checked) {
-            border-color: var(--primary);
-            background: rgba(139, 92, 246, 0.25);
+        .cin-continue-btn:hover {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.55) 0%, rgba(88, 28, 135, 0.45) 100%);
             color: #fff;
+            box-shadow: 0 4px 25px rgba(139, 92, 246, 0.35);
+            transform: translateY(-1px);
         }
-        .onboard-styles {
-            display: flex; flex-direction: column; gap: 10px;
-            margin-top: 16px; text-align: left;
-        }
-        .onboard-style-option {
-            padding: 14px 18px;
-            border-radius: 10px;
-            border: 1px solid rgba(139, 92, 246, 0.2);
-            background: rgba(139, 92, 246, 0.05);
+        .cin-option {
+            padding: 15px 22px;
+            border-radius: 12px;
+            border: 1px solid rgba(139, 92, 246, 0.25);
+            background: linear-gradient(135deg, rgba(30, 15, 60, 0.6) 0%, rgba(88, 28, 135, 0.15) 100%);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            color: #c4b5fd;
             cursor: pointer;
-            transition: all 0.2s;
-            display: flex; align-items: center; gap: 10px;
+            font-size: clamp(0.88rem, 2.2vw, 0.98rem);
+            transition: all 0.3s ease;
+            user-select: none;
+            opacity: 0;
+            animation: cinChipIn 0.4s ease-out forwards;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04);
         }
-        .onboard-style-option input { display: none; }
-        .onboard-style-option:has(input:checked) {
-            border-color: var(--primary);
-            background: rgba(139, 92, 246, 0.2);
+        .cin-option:hover {
+            border-color: rgba(167, 139, 250, 0.6);
+            background: linear-gradient(135deg, rgba(88, 28, 135, 0.35) 0%, rgba(139, 92, 246, 0.2) 100%);
+            color: #e9d5ff;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 20px rgba(139, 92, 246, 0.2), inset 0 1px 0 rgba(255,255,255,0.06);
         }
-        .onboard-style-option span { font-weight: 600; color: #fff; }
-        .onboard-style-option small { color: var(--text-secondary); margin-left: auto; }
-        .onboarding-error {
-            color: var(--red);
+        .cin-option.selected {
+            border-color: #a78bfa;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.45) 0%, rgba(88, 28, 135, 0.35) 100%);
+            color: #fff;
+            box-shadow: 0 0 25px rgba(139, 92, 246, 0.35), inset 0 1px 0 rgba(255,255,255,0.1);
+            text-shadow: 0 0 8px rgba(196, 181, 253, 0.4);
+        }
+        .cin-option.dimmed {
+            opacity: 0.2;
+            pointer-events: none;
+            filter: grayscale(0.5);
+        }
+        .cin-error {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, rgba(220, 38, 38, 0.9) 0%, rgba(185, 28, 28, 0.9) 100%);
+            color: #fff;
+            padding: 12px 28px;
+            border-radius: 28px;
             font-size: 0.85rem;
-            margin-top: 12px;
+            z-index: 10002;
+            opacity: 0;
+            transition: opacity 0.3s;
+            box-shadow: 0 4px 20px rgba(220, 38, 38, 0.3);
+            backdrop-filter: blur(10px);
+        }
+        .cin-error.visible {
+            opacity: 1;
+        }
+        /* Responsive adjustments */
+        @media (max-width: 600px) {
+            .cin-input-bar { padding: 20px 12px 28px; }
+            .cin-bar-input-wrap { padding: 12px 16px; }
+            .cin-chip { padding: 9px 16px; }
+            .cin-option { padding: 13px 18px; }
+            #cin-conversation { padding: 20px 16px 180px; gap: 8px; }
+        }
+        @media (max-height: 500px) {
+            .cin-orb-wrap { margin-top: 10vh !important; }
+            .cin-orb-wrap.cin-orb-docked { margin-top: 15px !important; width: 50px !important; height: 50px !important; }
+            #cin-conversation { padding-top: 10px; }
+        }
+        @keyframes cinOrbBreathe {
+            0%, 100% { filter: drop-shadow(0 0 25px rgba(147, 51, 234, 0.7)) drop-shadow(0 0 50px rgba(139, 92, 246, 0.4)) drop-shadow(0 0 80px rgba(88, 28, 135, 0.3)); }
+            50% { filter: drop-shadow(0 0 35px rgba(147, 51, 234, 0.9)) drop-shadow(0 0 70px rgba(139, 92, 246, 0.5)) drop-shadow(0 0 100px rgba(88, 28, 135, 0.4)); }
+        }
+        @keyframes cinOrbSurge {
+            0% { filter: drop-shadow(0 0 25px rgba(147, 51, 234, 0.7)) drop-shadow(0 0 50px rgba(139, 92, 246, 0.4)); }
+            50% { filter: drop-shadow(0 0 80px rgba(147, 51, 234, 1)) drop-shadow(0 0 140px rgba(192, 132, 252, 0.8)) drop-shadow(0 0 220px rgba(139, 92, 246, 0.5)); }
+            100% { filter: drop-shadow(0 0 50px rgba(147, 51, 234, 0.8)) drop-shadow(0 0 90px rgba(139, 92, 246, 0.5)); }
+        }
+        @keyframes cinLineFadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes cinChipIn {
+            from { opacity: 0; transform: translateY(6px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes cinCursorBlink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        @keyframes cinDissolve {
+            0% { opacity: 0; background: transparent; }
+            40% { opacity: 1; background: rgba(88, 28, 135, 0.9); }
+            70% { opacity: 1; background: rgba(192, 132, 252, 0.6); }
+            100% { opacity: 1; background: #0a0a0f; }
+        }
+        @keyframes cinRingRotate {
+            from { transform: translate(-50%, -50%) rotate(0deg); }
+            to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        @keyframes cinParticleDrift {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(15px, -20px); }
+        }
+        @keyframes cinParticleDrift2 {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(-10px, 15px); }
         }
 
         /* ==================== UTILITIES ==================== */
@@ -23647,66 +23927,22 @@
             </div>
         </div>
 
-        <!-- Onboarding Wizard -->
+        <!-- Cinematic Onboarding -->
         <div class="login-view hidden" id="onboarding-view">
-            <div class="onboarding-card">
-                <div class="onboarding-progress">
-                    <div class="onboarding-step active" data-step="1">1</div>
-                    <div class="onboarding-step-line"></div>
-                    <div class="onboarding-step" data-step="2">2</div>
-                    <div class="onboarding-step-line"></div>
-                    <div class="onboarding-step" data-step="3">3</div>
-                    <div class="onboarding-step-line"></div>
-                    <div class="onboarding-step" data-step="4">4</div>
+            <div class="cin-onboard">
+                <div class="cin-backdrop"></div>
+                <div class="cin-dissolve" id="cin-dissolve"></div>
+                <div class="cin-orb-wrap" id="cin-orb">
+                    <img src="/static/cerebro-orb.png" alt="Cerebro" class="cin-orb-img" draggable="false">
+                    <div class="cin-ring cin-ring-1"></div>
+                    <div class="cin-ring cin-ring-2"></div>
+                    <div class="cin-ring cin-ring-3"></div>
                 </div>
-
-                <!-- Step 1: Name -->
-                <div class="onboarding-panel" id="onboard-step-1">
-                    <div class="login-logo">C</div>
-                    <div class="login-title">Welcome to Cerebro</div>
-                    <div class="login-subtitle">Let's get you set up. What should I call you?</div>
-                    <input type="text" class="login-input" id="onboard-name" placeholder="Your name" autocomplete="name">
+                <div id="cin-conversation"></div>
+                <div class="cin-input-bar" id="cin-input-bar">
+                    <div class="cin-input-content" id="cin-input-content"></div>
                 </div>
-
-                <!-- Step 2: Use Cases -->
-                <div class="onboarding-panel hidden" id="onboard-step-2">
-                    <div class="login-title">What will you use Cerebro for?</div>
-                    <div class="login-subtitle">Select all that apply</div>
-                    <div class="onboard-chips" id="onboard-usecases">
-                        <label class="onboard-chip"><input type="checkbox" value="coding"> Coding</label>
-                        <label class="onboard-chip"><input type="checkbox" value="research"> Research</label>
-                        <label class="onboard-chip"><input type="checkbox" value="writing"> Writing</label>
-                        <label class="onboard-chip"><input type="checkbox" value="automation"> Automation</label>
-                        <label class="onboard-chip"><input type="checkbox" value="learning"> Learning</label>
-                        <label class="onboard-chip"><input type="checkbox" value="business"> Business</label>
-                    </div>
-                </div>
-
-                <!-- Step 3: Communication Style -->
-                <div class="onboarding-panel hidden" id="onboard-step-3">
-                    <div class="login-title">Communication style</div>
-                    <div class="login-subtitle">How should Cerebro talk to you?</div>
-                    <div class="onboard-styles" id="onboard-style">
-                        <label class="onboard-style-option"><input type="radio" name="style" value="concise" checked> <span>Concise</span><small>Short, direct answers</small></label>
-                        <label class="onboard-style-option"><input type="radio" name="style" value="balanced"> <span>Balanced</span><small>Clear with context</small></label>
-                        <label class="onboard-style-option"><input type="radio" name="style" value="detailed"> <span>Detailed</span><small>Thorough explanations</small></label>
-                    </div>
-                </div>
-
-                <!-- Step 4: Password -->
-                <div class="onboarding-panel hidden" id="onboard-step-4">
-                    <div class="login-title">Set a password</div>
-                    <div class="login-subtitle">This protects your Cerebro instance</div>
-                    <input type="password" class="login-input" id="onboard-password" placeholder="Choose a password" autocomplete="new-password">
-                    <input type="password" class="login-input" id="onboard-password-confirm" placeholder="Confirm password" autocomplete="new-password" style="margin-top:10px">
-                </div>
-
-                <div class="onboarding-error hidden" id="onboard-error"></div>
-
-                <div class="onboarding-nav">
-                    <button class="onboard-btn-secondary hidden" id="onboard-back" onclick="onboardBack()">Back</button>
-                    <button class="login-btn" id="onboard-next" onclick="onboardNext()">Next</button>
-                </div>
+                <div class="cin-error" id="cin-error"></div>
             </div>
         </div>
 
@@ -25145,8 +25381,10 @@
                                     </div>
                                     <div class="storage-path-row">
                                         <div class="storage-path-display" id="storage-path-display">Docker Volume (default)</div>
+                                        <button class="btn-sm" onclick="openMergeDialog()">Merge</button>
                                         <button class="btn-sm" onclick="changeStoragePath()">Change</button>
                                     </div>
+                                    <div class="storage-source-label" id="storage-source-label"></div>
                                     <div class="storage-stats-row">
                                         <div class="storage-stat">
                                             <span class="stat-label">Total Size</span>
@@ -33366,7 +33604,7 @@
             try {
                 if (window.cerebroDesktop) {
                     const cfg = await window.cerebroDesktop.getMemoryConfig();
-                    updateStorageDisplay(cfg.storagePath);
+                    updateStorageDisplay(cfg.storagePath, cfg.source, cfg.envVar);
                 } else {
                     updateStorageDisplay(null);
                 }
@@ -33374,10 +33612,11 @@
             } catch (e) { console.warn('Failed to load storage config:', e); }
         }
 
-        function updateStorageDisplay(storagePath) {
+        function updateStorageDisplay(storagePath, source, envVar) {
             const pathEl = document.getElementById('storage-path-display');
             const badge = document.getElementById('storage-risk-badge');
             const warning = document.getElementById('storage-warning');
+            const sourceLabel = document.getElementById('storage-source-label');
             if (storagePath) {
                 if (pathEl) pathEl.textContent = storagePath;
                 if (badge) { badge.textContent = 'Custom'; badge.className = 'risk-indicator extended'; }
@@ -33386,6 +33625,19 @@
                 if (pathEl) pathEl.textContent = 'Docker Volume (default)';
                 if (badge) { badge.textContent = 'Default'; badge.className = 'risk-indicator safe'; }
                 if (warning) warning.classList.remove('visible');
+            }
+            // Show provenance label when auto-detected from env var
+            if (sourceLabel) {
+                if (source === 'env' && envVar) {
+                    sourceLabel.textContent = '';
+                    sourceLabel.appendChild(document.createTextNode('Detected from '));
+                    const code = document.createElement('code');
+                    code.textContent = envVar;
+                    sourceLabel.appendChild(code);
+                    sourceLabel.classList.add('visible');
+                } else {
+                    sourceLabel.classList.remove('visible');
+                }
             }
         }
 
@@ -33455,6 +33707,86 @@
                     showToast('Restart failed: ' + (restartResult.error || 'Unknown error'), 'error');
                 }
             }
+        }
+
+        async function openMergeDialog() {
+            if (!window.cerebroDesktop) {
+                showToast('Merge requires the desktop app', 'error');
+                return;
+            }
+            // 1. Pick source folder
+            const result = await window.cerebroDesktop.browseStorageFolder();
+            if (result.canceled) return;
+            const sourcePath = result.path;
+
+            // 2. Scan for preview
+            showToast('Scanning source folder...');
+            let preview;
+            try {
+                preview = await window.cerebroDesktop.scanMergePreview(sourcePath);
+            } catch (e) {
+                showToast('Scan failed: ' + (e.message || 'Unknown error'), 'error');
+                return;
+            }
+            if (!preview || !preview.folders || preview.folders.length === 0) {
+                showToast('No memory data found in that folder', 'error');
+                return;
+            }
+
+            // 3. Build preview summary
+            let totalNew = 0, totalSkipped = 0;
+            const lines = preview.folders.map(f => {
+                totalNew += f.newFiles || 0;
+                totalSkipped += f.skippedFiles || 0;
+                return f.folder + ': ' + (f.newFiles || 0) + ' new, ' + (f.skippedFiles || 0) + ' skipped';
+            });
+            const summaryText = 'Source: ' + sourcePath + '\n\n' +
+                lines.join('\n') + '\n\n' +
+                'Total: ' + totalNew + ' new files, ' + totalSkipped + ' duplicates skipped' +
+                (preview.totalSize ? ' (' + preview.totalSize + ')' : '');
+
+            const proceed = await cerebroConfirm(summaryText, {
+                title: 'Merge Preview',
+                confirmText: 'Merge ' + totalNew + ' Files',
+                cancelText: 'Cancel'
+            });
+            if (!proceed) return;
+
+            // 4. Execute merge
+            showToast('Merging data...');
+            const allFolders = preview.folders.map(f => f.folder);
+            let mergeResult;
+            try {
+                mergeResult = await window.cerebroDesktop.mergeStorage(sourcePath, allFolders);
+            } catch (e) {
+                showToast('Merge failed: ' + (e.message || 'Unknown error'), 'error');
+                return;
+            }
+            if (!mergeResult.success) {
+                showToast('Merge failed: ' + (mergeResult.error || 'Unknown error'), 'error');
+                return;
+            }
+            showToast('Merged ' + (mergeResult.copiedFiles || 0) + ' files successfully');
+
+            // 5. Offer to rebuild search index
+            const rebuildIdx = await cerebroConfirm(
+                'Rebuild the search index so merged data is searchable?',
+                { title: 'Rebuild Index', confirmText: 'Rebuild', cancelText: 'Skip' }
+            );
+            if (rebuildIdx) {
+                try {
+                    const token = localStorage.getItem('cerebro_token');
+                    const headers = { 'Content-Type': 'application/json' };
+                    if (token) headers['Authorization'] = 'Bearer ' + token;
+                    await fetch(API_URL + '/api/memory/rebuild-index', { method: 'POST', headers });
+                    showToast('Search index rebuilt');
+                } catch (e) {
+                    showToast('Index rebuild failed: ' + (e.message || 'Unknown error'), 'error');
+                }
+            }
+
+            // 6. Refresh stats
+            await loadStorageStats();
         }
 
         async function initOffloadConfig() {
@@ -50795,86 +51127,325 @@ Please proceed with implementing this recommendation. You have full permissions.
             });
         }
 
-        // ==================== ONBOARDING ====================
-        let onboardStep = 1;
-        const ONBOARD_TOTAL = 4;
+        // ==================== CINEMATIC ONBOARDING ====================
+        const CinOnboard = {
+            data: { name: '', password: '', use_cases: [], style: 'balanced', personality_tone: 'professional', experience_level: 'intermediate', work_hours: 'all_hours' },
+            SPEED: 18,
+            PAUSE_SHORT: 250,
+            PAUSE_MED: 500,
+            PAUSE_LONG: 900,
 
-        function showOnboarding() {
-            document.getElementById('login-view').classList.add('hidden');
-            document.getElementById('onboarding-view').classList.remove('hidden');
-            onboardStep = 1;
-            updateOnboardUI();
-        }
+            async run() {
+                const orb = document.getElementById('cin-orb');
+                const conv = document.getElementById('cin-conversation');
 
-        function updateOnboardUI() {
-            // Update step indicators
-            document.querySelectorAll('.onboarding-step').forEach(el => {
-                const s = parseInt(el.dataset.step);
-                el.classList.toggle('active', s === onboardStep);
-                el.classList.toggle('done', s < onboardStep);
-            });
-            // Show/hide panels
-            for (let i = 1; i <= ONBOARD_TOTAL; i++) {
-                const panel = document.getElementById(`onboard-step-${i}`);
-                if (panel) panel.classList.toggle('hidden', i !== onboardStep);
-            }
-            // Back button visibility
-            document.getElementById('onboard-back').classList.toggle('hidden', onboardStep === 1);
-            // Next button text
-            document.getElementById('onboard-next').textContent = onboardStep === ONBOARD_TOTAL ? 'Finish' : 'Next';
-            // Hide error
-            document.getElementById('onboard-error').classList.add('hidden');
-        }
+                // Phase 0: Cinematic intro
+                await this.sleep(1500);
+                if (typeof gsap !== 'undefined') {
+                    gsap.fromTo(orb, { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 1.2, ease: 'back.out(1.4)' });
+                } else {
+                    orb.classList.add('cin-orb-visible');
+                }
+                await this.sleep(2000);
+                orb.classList.add('cin-orb-docked');
+                await this.sleep(600);
+                conv.classList.add('cin-conv-visible');
+                await this.sleep(400);
 
-        function onboardBack() {
-            if (onboardStep > 1) { onboardStep--; updateOnboardUI(); }
-        }
+                // Phase 1: Greeting + Name
+                await this.typeText('Systems online.');
+                await this.sleep(this.PAUSE_MED);
+                await this.typeText("I'm Cerebro \u2014 your personal AI. Built to think, act, and evolve alongside you.");
+                await this.sleep(this.PAUSE_MED);
+                await this.typeText('But first... what do I call you?');
+                await this.sleep(this.PAUSE_SHORT);
+                this.data.name = await this.waitForTextInput('text', 'cin-name');
+                await this.sleep(this.PAUSE_SHORT);
+                await this.typeText(`${this.data.name}. I like that.`);
+                await this.sleep(this.PAUSE_MED);
+                await this.typeText(`Alright ${this.data.name}, let\u2019s get you set up.`);
+                await this.sleep(this.PAUSE_LONG);
 
-        async function onboardNext() {
-            const errEl = document.getElementById('onboard-error');
-            errEl.classList.add('hidden');
+                // Phase 2: Use Cases (multi-select chips)
+                await this.typeText('So \u2014 what are we going to be working on together?');
+                await this.sleep(this.PAUSE_SHORT);
+                await this.typeText('Select everything that applies.');
+                await this.sleep(this.PAUSE_SHORT);
+                this.data.use_cases = await this.showChips(['Coding', 'Research', 'Writing', 'Automation', 'Learning', 'Business']);
+                await this.sleep(this.PAUSE_MED);
 
-            if (onboardStep === 1) {
-                const name = document.getElementById('onboard-name').value.trim();
-                if (!name) { errEl.textContent = 'Please enter your name'; errEl.classList.remove('hidden'); return; }
-            }
+                // Phase 3: Communication Style (single-select)
+                await this.typeText(`How do you want me to talk to you, ${this.data.name}?`);
+                await this.sleep(this.PAUSE_SHORT);
+                this.data.style = await this.showOptions([
+                    { label: 'Short & direct', value: 'concise' },
+                    { label: 'Clear with context', value: 'balanced' },
+                    { label: 'Thorough explanations', value: 'detailed' }
+                ]);
+                await this.sleep(this.PAUSE_MED);
 
-            if (onboardStep === 4) {
-                const pw = document.getElementById('onboard-password').value;
-                const pw2 = document.getElementById('onboard-password-confirm').value;
-                if (pw.length < 4) { errEl.textContent = 'Password must be at least 4 characters'; errEl.classList.remove('hidden'); return; }
-                if (pw !== pw2) { errEl.textContent = 'Passwords do not match'; errEl.classList.remove('hidden'); return; }
+                // Phase 4: Personality Tone
+                await this.typeText('And what kind of energy should I bring?');
+                await this.sleep(this.PAUSE_SHORT);
+                this.data.personality_tone = await this.showOptions([
+                    { label: 'Professional', value: 'professional' },
+                    { label: 'Casual & friendly', value: 'casual' },
+                    { label: 'Military operator', value: 'military' },
+                    { label: 'Witty & sharp', value: 'witty' }
+                ]);
+                await this.sleep(this.PAUSE_MED);
 
-                // Submit setup
-                const name = document.getElementById('onboard-name').value.trim();
-                const useCases = Array.from(document.querySelectorAll('#onboard-usecases input:checked')).map(c => c.value);
-                const style = document.querySelector('#onboard-style input:checked')?.value || 'balanced';
+                // Phase 5: Experience Level
+                await this.typeText(`Between you and me \u2014 how deep do you go with tech?`);
+                await this.sleep(this.PAUSE_SHORT);
+                this.data.experience_level = await this.showOptions([
+                    { label: "I'm not very technical", value: 'beginner' },
+                    { label: 'Somewhere in between', value: 'intermediate' },
+                    { label: 'I live in the terminal', value: 'technical' }
+                ]);
+                await this.sleep(this.PAUSE_MED);
 
+                // Phase 6: Work Hours
+                await this.typeText("When are you usually in your zone? I'll know when to handle things in the background.");
+                await this.sleep(this.PAUSE_SHORT);
+                this.data.work_hours = await this.showOptions([
+                    { label: 'Early bird', value: 'early_bird' },
+                    { label: 'Night owl', value: 'night_owl' },
+                    { label: '9 to 5', value: 'nine_to_five' },
+                    { label: 'All hours', value: 'all_hours' }
+                ]);
+                await this.sleep(this.PAUSE_MED);
+
+                // Phase 7: Password
+                await this.typeText(`One last thing, ${this.data.name}. Let\u2019s secure this.`);
+                await this.sleep(this.PAUSE_SHORT);
+                await this.typeText('Choose a password for your neural link.');
+                await this.sleep(this.PAUSE_SHORT);
+                let passwordSet = false;
+                while (!passwordSet) {
+                    const pw = await this.waitForTextInput('password', 'cin-pw');
+                    if (pw.length < 4) {
+                        this.showError('Password must be at least 4 characters.');
+                        continue;
+                    }
+                    await this.sleep(this.PAUSE_SHORT);
+                    await this.typeText('Confirm it.');
+                    await this.sleep(this.PAUSE_SHORT);
+                    const pw2 = await this.waitForTextInput('password', 'cin-pw2');
+                    if (pw !== pw2) {
+                        this.showError("Passwords don't match. Try again.");
+                        await this.sleep(this.PAUSE_MED);
+                        await this.typeText('Let\u2019s try that again. Choose your password.');
+                        await this.sleep(this.PAUSE_SHORT);
+                        continue;
+                    }
+                    this.data.password = pw;
+                    passwordSet = true;
+                }
+                await this.sleep(this.PAUSE_MED);
+
+                // Phase 8: Completion + Dissolve
+                await this.typeText('Neural link established.');
+                await this.sleep(this.PAUSE_SHORT);
+                await this.typeText(`Welcome aboard, ${this.data.name}. Let\u2019s build something extraordinary.`);
+                document.getElementById('cin-orb').classList.add('cin-orb-surge');
+                await this.sleep(2000);
+                await this.submitSetup();
+            },
+
+            typeText(text, speed) {
+                speed = speed || this.SPEED;
+                return new Promise(resolve => {
+                    const conv = document.getElementById('cin-conversation');
+                    const line = document.createElement('div');
+                    line.className = 'cin-line-cerebro';
+                    conv.appendChild(line);
+                    this.scrollToBottom();
+                    let i = 0;
+                    const tick = () => {
+                        if (i < text.length) {
+                            line.textContent += text[i];
+                            i++;
+                            this.scrollToBottom();
+                            setTimeout(tick, speed);
+                        } else {
+                            resolve();
+                        }
+                    };
+                    tick();
+                });
+            },
+
+            showInputBar() {
+                document.getElementById('cin-input-bar').classList.add('active');
+            },
+
+            hideInputBar() {
+                document.getElementById('cin-input-bar').classList.remove('active');
+                const content = document.getElementById('cin-input-content');
+                content.replaceChildren();
+            },
+
+            waitForTextInput(type, id) {
+                return new Promise(resolve => {
+                    const content = document.getElementById('cin-input-content');
+                    content.replaceChildren();
+                    const wrap = document.createElement('div');
+                    wrap.className = 'cin-bar-input-wrap';
+                    const prompt = document.createElement('span');
+                    prompt.className = 'cin-prompt';
+                    prompt.textContent = '>';
+                    const input = document.createElement('input');
+                    input.type = type === 'password' ? 'password' : 'text';
+                    input.className = 'cin-bar-input';
+                    input.id = id;
+                    input.autocomplete = 'off';
+                    input.placeholder = type === 'password' ? 'Type your password...' : 'Type here...';
+                    wrap.appendChild(prompt);
+                    wrap.appendChild(input);
+                    content.appendChild(wrap);
+                    this.showInputBar();
+                    setTimeout(() => input.focus(), 100);
+                    const submit = () => {
+                        const val = input.value.trim();
+                        if (!val) return;
+                        this.hideError();
+                        this.hideInputBar();
+                        resolve(val);
+                    };
+                    input.addEventListener('keydown', e => {
+                        if (e.key === 'Enter') submit();
+                    });
+                });
+            },
+
+            showChips(options) {
+                return new Promise(resolve => {
+                    const content = document.getElementById('cin-input-content');
+                    content.replaceChildren();
+                    const wrap = document.createElement('div');
+                    wrap.className = 'cin-bar-chips';
+                    const selected = new Set();
+                    options.forEach((opt, i) => {
+                        const chip = document.createElement('div');
+                        chip.className = 'cin-chip';
+                        chip.textContent = opt;
+                        chip.style.animationDelay = (i * 0.08) + 's';
+                        chip.addEventListener('click', () => {
+                            if (selected.has(opt)) {
+                                selected.delete(opt);
+                                chip.classList.remove('selected');
+                            } else {
+                                selected.add(opt);
+                                chip.classList.add('selected');
+                            }
+                        });
+                        wrap.appendChild(chip);
+                    });
+                    content.appendChild(wrap);
+                    const btn = document.createElement('div');
+                    btn.className = 'cin-continue-btn';
+                    btn.textContent = 'Continue';
+                    btn.style.animationDelay = (options.length * 0.08 + 0.2) + 's';
+                    btn.addEventListener('click', () => {
+                        if (selected.size === 0) {
+                            this.showError('Select at least one option.');
+                            return;
+                        }
+                        this.hideError();
+                        this.hideInputBar();
+                        resolve(Array.from(selected).map(s => s.toLowerCase()));
+                    });
+                    content.appendChild(btn);
+                    this.showInputBar();
+                });
+            },
+
+            showOptions(options) {
+                return new Promise(resolve => {
+                    const content = document.getElementById('cin-input-content');
+                    content.replaceChildren();
+                    const wrap = document.createElement('div');
+                    wrap.className = 'cin-bar-options';
+                    options.forEach((opt, i) => {
+                        const el = document.createElement('div');
+                        el.className = 'cin-option';
+                        el.textContent = opt.label;
+                        el.style.animationDelay = (i * 0.1) + 's';
+                        el.addEventListener('click', () => {
+                            el.classList.add('selected');
+                            wrap.querySelectorAll('.cin-option').forEach(o => {
+                                if (o !== el) o.classList.add('dimmed');
+                            });
+                            setTimeout(() => {
+                                this.hideInputBar();
+                                resolve(opt.value);
+                            }, 500);
+                        });
+                        wrap.appendChild(el);
+                    });
+                    content.appendChild(wrap);
+                    this.showInputBar();
+                });
+            },
+
+            async submitSetup() {
                 try {
-                    document.getElementById('onboard-next').textContent = 'Setting up...';
-                    document.getElementById('onboard-next').disabled = true;
                     const res = await fetch(`${API_URL}/auth/setup`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name, password: pw, use_cases: useCases, style })
+                        body: JSON.stringify(this.data)
                     });
                     if (!res.ok) throw new Error((await res.json()).detail || 'Setup failed');
                     const data = await res.json();
                     token = data.token;
                     if (data.user) CEREBRO_USERNAME = data.user;
                     localStorage.setItem('cerebro_token', token);
-                    document.getElementById('onboarding-view').classList.add('hidden');
-                    showApp();
+                    await this.dissolveToApp();
                 } catch (e) {
-                    errEl.textContent = e.message; errEl.classList.remove('hidden');
-                    document.getElementById('onboard-next').textContent = 'Finish';
-                    document.getElementById('onboard-next').disabled = false;
+                    this.showError('Setup failed: ' + e.message);
                 }
-                return;
-            }
+            },
 
-            onboardStep++;
-            updateOnboardUI();
+            async dissolveToApp() {
+                const dissolve = document.getElementById('cin-dissolve');
+                dissolve.classList.add('active');
+                await this.sleep(2000);
+                document.getElementById('onboarding-view').classList.add('hidden');
+                showApp();
+                const mainApp = document.getElementById('main-app');
+                mainApp.style.opacity = '0';
+                mainApp.style.transition = 'opacity 0.5s ease';
+                await this.sleep(50);
+                mainApp.style.opacity = '1';
+            },
+
+            showError(msg) {
+                const err = document.getElementById('cin-error');
+                err.textContent = msg;
+                err.classList.add('visible');
+                setTimeout(() => this.hideError(), 3000);
+            },
+
+            hideError() {
+                const err = document.getElementById('cin-error');
+                if (err) err.classList.remove('visible');
+            },
+
+            scrollToBottom() {
+                const conv = document.getElementById('cin-conversation');
+                if (conv) conv.scrollTop = conv.scrollHeight;
+            },
+
+            sleep(ms) {
+                return new Promise(r => setTimeout(r, ms));
+            }
+        };
+
+        function showOnboarding() {
+            document.getElementById('login-view').classList.add('hidden');
+            document.getElementById('onboarding-view').classList.remove('hidden');
+            CinOnboard.run();
         }
 
         // ==================== STARTUP ====================

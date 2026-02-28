@@ -3766,6 +3766,9 @@ class SetupRequest(BaseModel):
     password: str
     use_cases: list = []
     style: str = "balanced"
+    personality_tone: str = "professional"
+    experience_level: str = "intermediate"
+    work_hours: str = "all_hours"
 
 class BriefingResponse(BaseModel):
     greeting: str
@@ -4955,6 +4958,9 @@ async def auth_setup(request: SetupRequest):
         "password": hashed,
         "use_cases": request.use_cases,
         "style": request.style,
+        "personality_tone": request.personality_tone,
+        "experience_level": request.experience_level,
+        "work_hours": request.work_hours,
         "setup_complete": True,
         "created_at": datetime.now().isoformat()
     })
