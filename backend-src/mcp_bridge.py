@@ -111,6 +111,12 @@ class MCPBridge:
             self._embeddings_engine = result.get('embeddings_engine')
             self._initialized = True
             print("[MCP Bridge] Initialized successfully")
+
+            # Build FAISS index in background if embeddings engine is ready
+            if self._embeddings_engine:
+                asyncio.get_event_loop().run_in_executor(
+                    _executor, self._build_faiss_index_from_memory
+                )
         else:
             print("[MCP Bridge] Failed to initialize - modules not available")
 
@@ -1052,6 +1058,191 @@ class MCPBridge:
             from decay_pipeline import get_decay_stats as _get_stats
             return _get_stats()
         return await loop.run_in_executor(_executor, _stats)
+
+    # =========================================================================
+    # EMBEDDINGS INDEX BUILDER
+    # =========================================================================
+
+    def _build_faiss_index_from_memory(self):
+        """Build FAISS index from existing memory data (learnings, facts, conversations).
+
+        Runs in background thread on startup. Reads all text content,
+        embeds it via the engine (DGX or local model), and builds the FAISS index.
+        """
+        import time as _time
+        start = _time.monotonic()
+        engine = self._embeddings_engine
+        if not engine:
+            return
+
+        # Check if index already exists and has vectors
+        try:
+            engine.build_faiss_index(rebuild=False)
+            if engine.index is not None and engine.index.ntotal > 0:
+                print(f"[Startup] FAISS index already loaded: {engine.index.ntotal} vectors")
+                return
+        except Exception:
+            pass
+
+        # Check if embedding model is available (local or DGX)
+        can_embed = False
+        try:
+            from dgx_embedding_client import is_dgx_embedding_available_sync
+            if is_dgx_embedding_available_sync():
+                can_embed = True
+        except (ImportError, Exception):
+            pass
+        if not can_embed and engine.model is not None:
+            can_embed = True
+        if not can_embed:
+            print("[Startup] No embedding model available — FAISS index build skipped")
+            return
+
+        print("[Startup] Building FAISS index from memory data...")
+        bp = self.base_path
+        chunks = []
+        chunk_id_counter = 0
+
+        def make_chunk(content, chunk_type, conv_id, metadata=None):
+            nonlocal chunk_id_counter
+            chunk_id_counter += 1
+            return {
+                "content": content[:2000],  # Limit text length
+                "chunk_type": chunk_type,
+                "chunk_id": f"auto_{chunk_id_counter:06d}",
+                "conversation_id": conv_id,
+                "metadata": metadata or {},
+            }
+
+        # 1. Learnings
+        learnings_path = bp / "learnings"
+        if learnings_path.exists():
+            for f in sorted(learnings_path.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True)[:100]:
+                try:
+                    with open(f, 'r', encoding='utf-8') as fh:
+                        data = json.load(fh)
+                    text_parts = []
+                    if data.get("problem"):
+                        text_parts.append(f"Problem: {data['problem']}")
+                    if data.get("solution"):
+                        text_parts.append(f"Solution: {data['solution']}")
+                    if data.get("what_not_to_do"):
+                        text_parts.append(f"Antipattern: {data['what_not_to_do']}")
+                    for learn in data.get("learnings", [])[:3]:
+                        if isinstance(learn, dict):
+                            text_parts.append(learn.get("content", learn.get("problem", "")))
+                    if text_parts:
+                        chunks.append(make_chunk(
+                            " | ".join(text_parts), "learning", f.stem,
+                            {"type": data.get("type", "learning"), "tags": data.get("tags", [])}
+                        ))
+                except Exception:
+                    pass
+
+        # 2. Facts from JSONL
+        for facts_path in [bp / "embeddings" / "chunks" / "facts.jsonl", bp / "facts" / "facts.jsonl"]:
+            if facts_path.exists():
+                try:
+                    with open(facts_path, 'r', encoding='utf-8') as fh:
+                        for line in fh:
+                            line = line.strip()
+                            if not line:
+                                continue
+                            try:
+                                entry = json.loads(line)
+                                text = entry.get("content", entry.get("fact", entry.get("learning", "")))
+                                if text and len(text) > 20:
+                                    chunks.append(make_chunk(
+                                        text, entry.get("chunk_type", "fact"),
+                                        entry.get("conversation_id", "facts"),
+                                        entry.get("metadata", {})
+                                    ))
+                            except json.JSONDecodeError:
+                                pass
+                except Exception:
+                    pass
+                break  # Only use first facts file found
+
+        # 3. Quick facts
+        qf_path = bp / "quick_facts.json"
+        if qf_path.exists():
+            try:
+                with open(qf_path, 'r', encoding='utf-8') as fh:
+                    qf = json.load(fh)
+                for key, val in qf.items():
+                    if isinstance(val, str) and len(val) > 20:
+                        chunks.append(make_chunk(f"{key}: {val}", "quick_fact", "quick_facts"))
+                    elif isinstance(val, list):
+                        for item in val[:10]:
+                            text = str(item) if not isinstance(item, dict) else json.dumps(item)
+                            if len(text) > 20:
+                                chunks.append(make_chunk(f"{key}: {text}", "quick_fact", "quick_facts"))
+            except Exception:
+                pass
+
+        if not chunks:
+            print("[Startup] No memory content found to index")
+            return
+
+        print(f"[Startup] Embedding {len(chunks)} chunks...")
+
+        try:
+            import numpy as np
+            import faiss
+
+            # Embed all chunks
+            texts = [c["content"] for c in chunks]
+            embeddings = engine.embed_batch(texts, batch_size=32)
+
+            if embeddings is None or len(embeddings) == 0:
+                print("[Startup] Embedding failed — no vectors produced")
+                return
+
+            # Check for zero vectors (means embedding failed)
+            nonzero_mask = np.any(embeddings != 0, axis=1)
+            if not np.any(nonzero_mask):
+                print("[Startup] All embeddings are zero — model not producing output")
+                return
+
+            # Build FAISS index
+            embeddings = embeddings.astype(np.float32)
+            if not embeddings.flags['C_CONTIGUOUS']:
+                embeddings = np.ascontiguousarray(embeddings)
+            faiss.normalize_L2(embeddings)
+
+            dim = embeddings.shape[1]
+            index = faiss.IndexFlatIP(dim)
+            index.add(embeddings)
+
+            # Build id_mapping
+            id_mapping = []
+            for c in chunks:
+                id_mapping.append({
+                    "conversation_id": c["conversation_id"],
+                    "chunk_id": c["chunk_id"],
+                    "chunk_type": c["chunk_type"],
+                    "metadata": c["metadata"],
+                    "content": c["content"],  # Cache content for search results
+                })
+
+            # Set on engine
+            engine.index = index
+            engine.id_mapping = id_mapping
+
+            # Save to disk for persistence
+            engine._ensure_directories()
+            index_file = engine.index_path / "faiss_index.bin"
+            mapping_file = engine.index_path / "id_mapping.json"
+            faiss.write_index(index, str(index_file))
+            with open(mapping_file, 'w', encoding='utf-8') as fh:
+                json.dump(id_mapping, fh)
+
+            elapsed = _time.monotonic() - start
+            print(f"[Startup] FAISS index built: {index.ntotal} vectors, {dim}d, {elapsed:.1f}s")
+        except Exception as e:
+            print(f"[Startup] FAISS index build failed: {e}")
+            import traceback
+            traceback.print_exc()
 
     # =========================================================================
     # SEARCH API - Hybrid semantic + keyword search

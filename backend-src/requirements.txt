@@ -44,3 +44,4 @@ python-dotenv>=1.0.0
 # Semantic Search
 numpy>=2.0.0
 faiss-cpu>=1.13.0
+sentence-transformers>=3.0.0

@@ -28,6 +28,7 @@ services:
       CEREBRO_DEVICE: "${CEREBRO_DEVICE:-standalone}"
       CEREBRO_NAS_IP: ""
       CEREBRO_MCP_SRC: "/app/mcp_modules"
+      ENABLE_EMBEDDINGS: "1"
       CEREBRO_SECRET: "${CEREBRO_SECRET}"
       CDP_HOST: host.docker.internal
       HOME: /home/cerebro

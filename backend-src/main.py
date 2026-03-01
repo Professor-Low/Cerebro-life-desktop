@@ -10033,6 +10033,18 @@ async def search_stats(user: str = Depends(verify_token)):
         return {"success": False, "error": str(e)}
 
 
+@app.post("/memory/search/rebuild")
+async def rebuild_search_index(user: str = Depends(verify_token)):
+    """Rebuild FAISS semantic index from memory data (learnings, facts, conversations)."""
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, mcp_bridge._build_faiss_index_from_memory)
+        stats = await mcp_bridge.get_search_stats()
+        return {"success": True, "message": "FAISS index rebuilt", **stats}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 # ============================================================================
 # Memory Maintenance Endpoints
 # ============================================================================

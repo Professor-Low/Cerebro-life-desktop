@@ -12,9 +12,10 @@ RUN apt-get update && \
 # Install Claude CLI globally
 RUN npm install -g @anthropic-ai/claude-code
 
-# Install Python dependencies
+# Install Python dependencies (CPU-only torch first to avoid pulling CUDA ~2.5GB)
 COPY backend-src/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir torch --extra-index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Install Playwright system deps (for CDP connection to host Chrome — no browser download needed)
 RUN playwright install-deps chromium
@@ -43,6 +44,7 @@ RUN groupadd -g 1000 cerebro && useradd -u 1000 -g 1000 -m -d /home/cerebro cere
 # Set standalone environment defaults
 ENV CEREBRO_STANDALONE=1
 ENV CEREBRO_MCP_SRC=/app/mcp_modules
+ENV ENABLE_EMBEDDINGS=1
 
 # Entrypoint runs as root to fix volume permissions, then drops to cerebro user
 EXPOSE 59000
