@@ -51,6 +51,7 @@ class MCPBridge:
         self._learning_extractor = None
         self._memory_service = None
         self._solution_tracker = None
+        self._embeddings_engine = None
         self._initialized = False
 
     async def _ensure_initialized(self):
@@ -70,6 +71,11 @@ class MCPBridge:
                 from ai_memory_ultimate import UltimateMemoryService
                 from solution_tracker import SolutionTracker
 
+                try:
+                    from ai_embeddings_engine import EmbeddingsEngine
+                except ImportError:
+                    EmbeddingsEngine = None
+
                 bp = str(self.base_path)
                 return {
                     'goal_tracker': GoalTracker(bp),
@@ -77,7 +83,8 @@ class MCPBridge:
                     'predictor': Predictor(bp),
                     'learning_extractor': LearningExtractor(bp),
                     'memory_service': UltimateMemoryService(bp),
-                    'solution_tracker': SolutionTracker(bp)
+                    'solution_tracker': SolutionTracker(bp),
+                    'embeddings_engine': EmbeddingsEngine(bp) if EmbeddingsEngine else None
                 }
             except ImportError as e:
                 print(f"[MCP Bridge] Import error: {e}")
@@ -101,6 +108,7 @@ class MCPBridge:
             self._learning_extractor = result['learning_extractor']
             self._memory_service = result.get('memory_service')
             self._solution_tracker = result.get('solution_tracker')
+            self._embeddings_engine = result.get('embeddings_engine')
             self._initialized = True
             print("[MCP Bridge] Initialized successfully")
         else:
@@ -516,6 +524,30 @@ class MCPBridge:
                 def _find():
                     results = []
                     seen_ids = set()
+
+                    # Tier 0: Semantic search from EmbeddingsEngine
+                    if self._embeddings_engine:
+                        try:
+                            engine_results = self._embeddings_engine.semantic_search(problem, top_k=limit * 2)
+                            for r in engine_results:
+                                chunk_id = r.get("chunk_id", r.get("conversation_id", ""))
+                                if chunk_id in seen_ids:
+                                    continue
+                                seen_ids.add(chunk_id)
+                                entry = {
+                                    "id": chunk_id,
+                                    "problem": r.get("content", "")[:200],
+                                    "solution": r.get("content", ""),
+                                    "type": r.get("metadata", {}).get("type", "learning") if isinstance(r.get("metadata"), dict) else "learning",
+                                    "score": r.get("similarity", r.get("score", 0)),
+                                    "source": "semantic"
+                                }
+                                # Boost learning-type results
+                                if r.get("chunk_type") == "learning":
+                                    entry["score"] = min(1.0, entry["score"] * 1.5)
+                                results.append(entry)
+                        except Exception as e:
+                            print(f"[MCP Bridge] Semantic search failed in learning find: {e}")
 
                     # Tier 1: FTS5 keyword search
                     try:
@@ -1020,6 +1052,145 @@ class MCPBridge:
             from decay_pipeline import get_decay_stats as _get_stats
             return _get_stats()
         return await loop.run_in_executor(_executor, _stats)
+
+    # =========================================================================
+    # SEARCH API - Hybrid semantic + keyword search
+    # =========================================================================
+
+    async def search_memory(self, query: str, limit: int = 10, mode: str = "hybrid") -> Dict[str, Any]:
+        """
+        Search memory using hybrid semantic + keyword approach.
+
+        Modes:
+            - hybrid: Semantic + FTS5 merged with deduplication (default)
+            - semantic: Semantic search only (requires EmbeddingsEngine)
+            - keyword: FTS5 keyword search only
+        """
+        await self._ensure_initialized()
+        loop = asyncio.get_event_loop()
+        results = []
+        seen_ids = set()
+
+        # Semantic component (from EmbeddingsEngine)
+        if mode in ("hybrid", "semantic") and self._embeddings_engine:
+            try:
+                def _semantic():
+                    return self._embeddings_engine.semantic_search(query, top_k=limit * 2)
+                sem_results = await asyncio.wait_for(
+                    loop.run_in_executor(_executor, _semantic), timeout=10
+                )
+                for r in sem_results:
+                    cid = r.get("chunk_id", r.get("conversation_id", ""))
+                    if cid and cid in seen_ids:
+                        continue
+                    if cid:
+                        seen_ids.add(cid)
+                    results.append({
+                        "type": r.get("chunk_type", "fact"),
+                        "id": cid,
+                        "title": r.get("content", "")[:100],
+                        "snippet": r.get("content", "")[:300],
+                        "score": r.get("similarity", r.get("score", 0)),
+                        "source": "semantic",
+                    })
+            except asyncio.TimeoutError:
+                print("[MCP Bridge] Semantic search timed out (>10s)")
+            except Exception as e:
+                print(f"[MCP Bridge] Semantic search failed: {e}")
+
+        # Keyword component (from FTS5 keyword_index)
+        if mode in ("hybrid", "keyword"):
+            try:
+                def _fts5():
+                    from keyword_index import get_keyword_index
+                    idx = get_keyword_index()
+                    if idx.get_indexed_count() > 0:
+                        return idx.search(query, top_k=limit * 2)
+                    return []
+                fts_results = await loop.run_in_executor(_executor, _fts5)
+                for r in fts_results:
+                    cid = r.get("chunk_id", "")
+                    if cid and cid in seen_ids:
+                        continue
+                    if cid:
+                        seen_ids.add(cid)
+                    results.append({
+                        "type": r.get("chunk_type", "fact"),
+                        "id": cid,
+                        "title": r.get("content", "")[:100],
+                        "snippet": r.get("content", "")[:300],
+                        "score": r.get("similarity", 0),
+                        "source": "fts5",
+                    })
+            except Exception as e:
+                print(f"[MCP Bridge] FTS5 search failed: {e}")
+
+        # Sort by score descending, deduplicated
+        results.sort(key=lambda x: x.get("score", 0), reverse=True)
+        trimmed = results[:limit]
+        source = "hybrid" if any(r["source"] == "semantic" for r in trimmed) and any(r["source"] == "fts5" for r in trimmed) else (
+            "semantic" if any(r["source"] == "semantic" for r in trimmed) else (
+                "fts5" if trimmed else "none"
+            )
+        )
+        return {"query": query, "results": trimmed, "count": len(trimmed), "source": source}
+
+    async def get_search_stats(self) -> Dict[str, Any]:
+        """Get search engine status for diagnostics."""
+        await self._ensure_initialized()
+        loop = asyncio.get_event_loop()
+
+        stats = {
+            "engine_available": self._embeddings_engine is not None,
+            "fts5_count": 0,
+            "faiss_index_loaded": False,
+            "faiss_vectors": 0,
+            "model_loaded": False,
+            "dgx_available": False,
+            "search_mode": "keyword_only",
+        }
+
+        # FTS5 stats
+        try:
+            def _fts5_stats():
+                from keyword_index import get_keyword_index
+                idx = get_keyword_index()
+                return idx.get_indexed_count()
+            stats["fts5_count"] = await loop.run_in_executor(_executor, _fts5_stats)
+        except Exception:
+            pass
+
+        # Embeddings engine stats
+        if self._embeddings_engine:
+            try:
+                def _engine_stats():
+                    engine = self._embeddings_engine
+                    info = {}
+                    # Check FAISS index
+                    if hasattr(engine, '_index') and engine._index is not None:
+                        info["faiss_index_loaded"] = True
+                        info["faiss_vectors"] = engine._index.ntotal if hasattr(engine._index, 'ntotal') else 0
+                    # Check model
+                    if hasattr(engine, '_model') and engine._model is not None:
+                        info["model_loaded"] = True
+                    # Check DGX client
+                    if hasattr(engine, '_dgx_client') and engine._dgx_client is not None:
+                        info["dgx_available"] = True
+                    return info
+                engine_info = await loop.run_in_executor(_executor, _engine_stats)
+                stats.update(engine_info)
+
+                if stats["model_loaded"] or stats["dgx_available"]:
+                    stats["search_mode"] = "hybrid" if stats["fts5_count"] > 0 else "semantic_only"
+                elif stats["faiss_index_loaded"]:
+                    stats["search_mode"] = "hybrid" if stats["fts5_count"] > 0 else "semantic_only"
+            except Exception:
+                pass
+
+        if not stats["engine_available"] and stats["fts5_count"] > 0:
+            stats["search_mode"] = "keyword_only"
+
+        return stats
 
 
 # Singleton instance

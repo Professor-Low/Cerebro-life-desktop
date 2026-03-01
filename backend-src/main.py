@@ -9875,30 +9875,20 @@ async def get_system_status(user: str = Depends(verify_token)):
     return status
 
 @app.get("/memory/search")
-async def search_memory(q: str, limit: int = 10, user: str = Depends(verify_token)):
-    """Search through AI Memory — uses FTS5 index when available, falls back to file scanning.
-    FTS5 uses BM25 scoring for fast, relevance-ranked results."""
+async def search_memory(q: str, limit: int = 10, mode: str = "hybrid", user: str = Depends(verify_token)):
+    """Search through AI Memory — hybrid semantic + keyword search with file scan fallback.
 
-    # Try FTS5 index first (fast path)
+    Modes: hybrid (default), semantic, keyword.
+    Semantic search uses EmbeddingsEngine (DGX GPU or local model) when available.
+    FTS5 keyword search uses BM25 scoring. Falls back to file scanning if both fail."""
+
+    # Try MCPBridge hybrid search (semantic + FTS5)
     try:
-        from keyword_index import get_keyword_index
-        idx = get_keyword_index()
-        if idx.get_indexed_count() > 0:
-            fts_results = idx.search(q, top_k=limit)
-            if fts_results:
-                # Format FTS5 results to match the existing response shape
-                formatted = []
-                for r in fts_results:
-                    formatted.append({
-                        "type": r.get("chunk_type", "fact"),
-                        "id": r.get("chunk_id", r.get("conversation_id", "")),
-                        "title": r.get("content", "")[:100],
-                        "snippet": r.get("content", "")[:300],
-                        "score": r.get("similarity", 0),
-                    })
-                return {"query": q, "results": formatted, "count": len(formatted), "source": "fts5"}
+        result = await mcp_bridge.search_memory(q, limit, mode)
+        if result.get("results"):
+            return result
     except Exception as e:
-        print(f"[Search] FTS5 search failed, falling back to file scan: {e}")
+        print(f"[Search] MCPBridge search failed, falling back to file scan: {e}")
 
     # Fallback: file-scanning implementation
     results = []
@@ -10031,6 +10021,16 @@ async def search_memory(q: str, limit: int = 10, user: str = Depends(verify_toke
         print(f"Search error: {e}")
 
     return {"query": q, "results": results, "count": len(results), "source": "file_scan"}
+
+
+@app.get("/memory/search/stats")
+async def search_stats(user: str = Depends(verify_token)):
+    """Get search engine status — shows which search backends are available."""
+    try:
+        stats = await mcp_bridge.get_search_stats()
+        return {"success": True, **stats}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 # ============================================================================
