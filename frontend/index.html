@@ -1953,6 +1953,131 @@
             color: white;
         }
 
+        /* ==================== HOME AGENT GROUPS ==================== */
+        .home-group-row {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            transition: background 0.15s ease;
+            gap: 10px;
+        }
+        .home-group-row:hover {
+            background: rgba(255,255,255,0.04);
+        }
+        .home-group-row:last-child {
+            border-bottom: none;
+        }
+        .home-group-chevron {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            transition: transform 0.2s ease;
+            flex-shrink: 0;
+            width: 12px;
+        }
+        .home-group-chevron.expanded {
+            transform: rotate(90deg);
+        }
+        .home-group-name {
+            flex: 1;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .home-group-meta {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+        .home-group-meta .running {
+            color: #4ade80;
+        }
+        .home-group-agents {
+            display: none;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding: 8px 12px 12px 34px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .home-group-agents.expanded {
+            display: flex;
+        }
+        .home-agent-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.06);
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border: 1px solid transparent;
+        }
+        .home-agent-pill:hover {
+            background: rgba(255,255,255,0.12);
+        }
+        .home-agent-pill.specops {
+            background: rgba(168,85,247,0.12);
+            border-color: rgba(168,85,247,0.3);
+            color: #c4b5fd;
+        }
+        .home-agent-pill.specops:hover {
+            background: rgba(168,85,247,0.22);
+        }
+        .home-agent-pill.status-running {
+            background: rgba(74,222,128,0.1);
+            border-color: rgba(74,222,128,0.25);
+        }
+        .home-agent-pill.specops.status-running {
+            background: rgba(168,85,247,0.15);
+            border-color: rgba(168,85,247,0.4);
+        }
+        .home-agent-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .home-agent-dot.running { background: #4ade80; box-shadow: 0 0 6px rgba(74,222,128,0.6); animation: pulse-dot 1.5s ease-in-out infinite; }
+        .home-agent-dot.cycling { background: #a78bfa; box-shadow: 0 0 6px rgba(167,139,250,0.5); animation: pulse-dot 2s ease-in-out infinite; }
+        .home-agent-dot.queued { background: #fbbf24; }
+        .home-agent-dot.completed { background: #6b7280; }
+        .home-agent-dot.failed { background: #ef4444; }
+        .home-agent-dot.stopped { background: #9ca3af; }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+        .home-agent-status-label {
+            font-size: 0.62rem;
+            opacity: 0.6;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .home-group-add-btn {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.15);
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 1rem;
+            line-height: 1;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s ease;
+        }
+        .home-group-add-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent-light);
+            background: rgba(var(--accent-rgb), 0.1);
+        }
+
         /* ==================== MEMORY INTELLIGENCE GRID ==================== */
         .mem-intel-grid {
             display: grid;
@@ -2347,6 +2472,7 @@
         .mem-tile.green { border-left: 3px solid var(--green); }
         .mem-tile.amber { border-left: 3px solid #f59e0b; }
         .mem-tile.purple { border-left: 3px solid var(--accent); }
+        .mem-tile.red { border-left: 3px solid #ef4444; }
 
         /* ==================== HOMEPAGE V2: HERO BAR TIGHTER ==================== */
         .hero-bar { padding: 12px 16px 10px; }
@@ -24346,17 +24472,20 @@
                         </div>
                     </div>
 
-                    <!-- Section 5: Project Tracker (collapsible, default collapsed) -->
+                    <!-- Section 5: Agent Groups (collapsible, default collapsed) -->
                     <div class="home-section collapsed" id="home-section-projects">
                         <div class="section-collapse-header" onclick="toggleSection('projects')">
                             <div class="section-collapse-left">
-                                <span class="section-title" style="margin-bottom:0">Projects</span>
+                                <span class="section-title" style="margin-bottom:0">Agent Groups</span>
                                 <span class="section-count-badge" id="projects-count-badge">0</span>
                             </div>
-                            <span class="section-chevron" id="projects-chevron">&#9660;</span>
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <button class="home-group-add-btn" onclick="event.stopPropagation();createGroupFromHome()" title="New Group">+</button>
+                                <span class="section-chevron" id="projects-chevron">&#9660;</span>
+                            </div>
                         </div>
                         <div class="home-section-body" id="projects-section-body">
-                            <div class="project-tracker-scroll" id="project-tracker-container">
+                            <div id="home-groups-list">
                                 <div class="loading-container"><div class="spinner"></div></div>
                             </div>
                         </div>
@@ -24393,9 +24522,10 @@
                                     <div class="mem-tile-value" id="intel-health">--</div>
                                     <div class="mem-tile-label">Knowledge Health</div>
                                 </div>
-                                <div class="mem-tile purple" onclick="openHomeDetail('stat', {name:'FAISS Index', value: document.getElementById('intel-faiss').textContent, icon:'&#x1F4BE;', context:'Size of the FAISS vector search index used for semantic memory retrieval.'})">
+                                <div class="mem-tile green" id="faiss-tile" onclick="openHomeDetail('stat', {name:'FAISS Vectors', value: document.getElementById('intel-faiss').textContent, icon:'&#x1F4BE;', context: window._faissDetailContext || 'FAISS vector search index for semantic memory retrieval.'})">
                                     <div class="mem-tile-value" id="intel-faiss">--</div>
-                                    <div class="mem-tile-label">FAISS Index</div>
+                                    <div class="mem-tile-label">FAISS Vectors</div>
+                                    <div class="mem-tile-sub" id="intel-faiss-mode"></div>
                                 </div>
                             </div>
                         </div>
@@ -27794,7 +27924,7 @@
                 loadSmartActions(),
                 loadLiveActivity(),
                 loadHomeGoals(),
-                loadProjectTracker(),
+                loadHomeGroups(),
                 loadMemoryIntelligence(),
             ]);
         }
@@ -29058,18 +29188,20 @@
                 }
 
                 goals.forEach((g, index) => {
-                    const p = g.priority || 'medium';
-                    const subgoals = g.subgoals || [];
+                    // Unwrap nested goal object from GoalPursuitEngine response
+                    const gd = g.goal || g;
+                    const p = gd.priority || 'medium';
+                    const subgoals = gd.subgoals || gd.milestones || [];
                     const done = subgoals.filter(s => s.completed || s.status === 'completed').length;
                     const pct = subgoals.length > 0 ? Math.round((done / subgoals.length) * 100) : 0;
-                    const blockers = g.blockers || [];
+                    const blockers = gd.blockers || [];
 
                     const row = document.createElement('div');
                     row.className = 'goal-compact-row stagger-in';
                     row.style.setProperty('--si', index);
                     row.onclick = () => openHomeDetail('goal', {
-                        title: g.description || 'Goal',
-                        description: g.description || '',
+                        title: gd.description || 'Goal',
+                        description: gd.description || '',
                         priority: p,
                         subgoals: subgoals,
                         blockers: blockers,
@@ -29084,7 +29216,7 @@
                     // Description (truncated)
                     const descEl = document.createElement('span');
                     descEl.className = 'goal-compact-desc';
-                    descEl.textContent = g.description || '';
+                    descEl.textContent = gd.description || '';
                     row.appendChild(descEl);
 
                     // Mini progress bar
@@ -29115,81 +29247,145 @@
             }
         }
 
-        async function loadProjectTracker() {
-            const container = document.getElementById('project-tracker-container');
+        const homeExpandedGroups = new Set();
+
+        async function loadHomeGroups() {
+            const container = document.getElementById('home-groups-list');
             try {
-                const resp = await fetch(API_URL + '/api/workstreams', {
+                const resp = await fetch(API_URL + '/agents/projects', {
                     headers: { 'Authorization': 'Bearer ' + token }
                 });
                 const data = await resp.json();
-                const ws = data.workstreams || [];
+                let groups = data.projects || [];
+
+                // Filter out uncategorized if it has 0 agents
+                groups = groups.filter(g => g.project_id !== 'uncategorized' || g.agent_count > 0);
 
                 container.textContent = '';
-                if (ws.length === 0) {
+                if (groups.length === 0) {
                     const e = document.createElement('div');
                     e.className = 'live-empty';
-                    e.textContent = 'No active projects';
+                    e.textContent = 'No agent groups';
                     container.appendChild(e);
+                    const projBadge = document.getElementById('projects-count-badge');
+                    if (projBadge) projBadge.textContent = '0';
                     return;
                 }
 
-                // Update projects count badge
                 const projBadge = document.getElementById('projects-count-badge');
-                if (projBadge) projBadge.textContent = ws.length;
+                if (projBadge) projBadge.textContent = groups.length;
 
-                ws.forEach((w, index) => {
-                    const st = (w.status || 'unknown').replace(/ /g, '_');
-                    const card = document.createElement('div');
-                    card.className = 'project-card stagger-in';
-                    card.style.setProperty('--si', index);
-                    card.onclick = () => openHomeDetail('project', {
-                        title: w.project || 'Project',
-                        project: w.project || '',
-                        status: st,
-                        summary: w.summary || '',
-                        next_action: w.next_action || '',
-                        key_files: w.key_files || [],
-                        icon: '\u{1F4C1}'
-                    });
+                groups.forEach(g => {
+                    const pid = g.project_id;
+                    const isExpanded = homeExpandedGroups.has(pid);
 
-                    const hdr = document.createElement('div');
-                    hdr.className = 'project-card-header';
-                    const name = document.createElement('span');
-                    name.className = 'project-card-name';
-                    name.textContent = w.project || '';
-                    hdr.appendChild(name);
-                    const badge = document.createElement('span');
-                    badge.className = 'project-status-badge ' + st;
-                    badge.textContent = st.replace(/_/g, ' ');
-                    hdr.appendChild(badge);
-                    card.appendChild(hdr);
+                    // Group row
+                    const row = document.createElement('div');
+                    row.className = 'home-group-row';
+                    row.onclick = () => {
+                        if (homeExpandedGroups.has(pid)) {
+                            homeExpandedGroups.delete(pid);
+                        } else {
+                            homeExpandedGroups.add(pid);
+                        }
+                        chevron.classList.toggle('expanded');
+                        agentsPanel.classList.toggle('expanded');
+                    };
 
-                    const summary = document.createElement('div');
-                    summary.className = 'project-card-summary';
-                    summary.textContent = w.summary || '';
-                    card.appendChild(summary);
+                    const chevron = document.createElement('span');
+                    chevron.className = 'home-group-chevron' + (isExpanded ? ' expanded' : '');
+                    chevron.textContent = '\u25B6';
+                    row.appendChild(chevron);
 
-                    if (w.next_action) {
-                        const na = document.createElement('div');
-                        na.className = 'project-next-action';
-                        na.textContent = w.next_action;
-                        card.appendChild(na);
+                    const nameEl = document.createElement('span');
+                    nameEl.className = 'home-group-name';
+                    nameEl.textContent = g.name;
+                    row.appendChild(nameEl);
+
+                    const meta = document.createElement('span');
+                    meta.className = 'home-group-meta';
+                    if (g.running_count > 0) {
+                        const runSpan = document.createElement('span');
+                        runSpan.className = 'running';
+                        runSpan.textContent = g.running_count + ' running';
+                        meta.appendChild(runSpan);
+                        meta.appendChild(document.createTextNode(' \u00B7 '));
+                    }
+                    meta.appendChild(document.createTextNode(g.agent_count + ' agent' + (g.agent_count !== 1 ? 's' : '')));
+                    row.appendChild(meta);
+
+                    container.appendChild(row);
+
+                    // Agents panel (accordion body)
+                    const agentsPanel = document.createElement('div');
+                    agentsPanel.className = 'home-group-agents' + (isExpanded ? ' expanded' : '');
+
+                    const agents = g.agents || [];
+                    if (agents.length === 0) {
+                        const empty = document.createElement('span');
+                        empty.style.cssText = 'font-size:0.72rem;color:var(--text-muted);';
+                        empty.textContent = 'No agents in this group';
+                        agentsPanel.appendChild(empty);
+                    } else {
+                        agents.forEach(a => {
+                            const status = a.status || 'completed';
+                            const isSpecops = a.is_specops || false;
+                            const pill = document.createElement('span');
+                            pill.className = 'home-agent-pill' + (isSpecops ? ' specops' : '') + ' status-' + status;
+                            pill.onclick = (e) => { e.stopPropagation(); switchToTab('agents'); };
+
+                            const dot = document.createElement('span');
+                            dot.className = 'home-agent-dot ' + status;
+                            pill.appendChild(dot);
+
+                            const nameLabel = document.createTextNode(a.call_sign || a.id);
+                            pill.appendChild(nameLabel);
+
+                            // Show status label for non-completed agents
+                            if (status !== 'completed' && status !== 'stopped') {
+                                const statusLabel = document.createElement('span');
+                                statusLabel.className = 'home-agent-status-label';
+                                statusLabel.textContent = status === 'cycling' ? 'idle' : status;
+                                pill.appendChild(statusLabel);
+                            }
+
+                            agentsPanel.appendChild(pill);
+                        });
                     }
 
-                    const btn = document.createElement('button');
-                    btn.className = 'project-continue-btn';
-                    btn.textContent = 'Continue';
-                    btn.onclick = (e) => { e.stopPropagation(); openHomeDetail('project', { title: w.project || 'Project', project: w.project || '', status: st, summary: w.summary || '', next_action: w.next_action || '', key_files: w.key_files || [], icon: '\u{1F4C1}' }); };
-                    card.appendChild(btn);
-
-                    container.appendChild(card);
+                    container.appendChild(agentsPanel);
                 });
             } catch (e) {
                 container.textContent = '';
                 const empty = document.createElement('div');
                 empty.className = 'live-empty';
-                empty.textContent = 'Could not load projects';
+                empty.textContent = 'Could not load agent groups';
                 container.appendChild(empty);
+            }
+        }
+
+        async function createGroupFromHome() {
+            var name = await cerebroPrompt('Enter a name for the new group:', '', { title: 'New Group', confirmText: 'Create', placeholder: 'Group name' });
+            if (!name || !name.trim()) return;
+            name = name.trim();
+
+            try {
+                var response = await fetch(API_URL + '/agents/projects/create', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name })
+                });
+                var data = await response.json();
+                if (data.status === 'error') {
+                    showToast(data.error || 'Failed to create group', 'error');
+                    return;
+                }
+
+                agentProjects[data.project_id] = { id: data.project_id, name: data.name, tech_tags: [] };
+                showToast('Created group: ' + name, 'success');
+                loadHomeGroups();
+            } catch (err) {
+                showToast('Error creating group', 'error');
             }
         }
 
@@ -29235,7 +29431,39 @@
                 set('intel-recent-learnings', d.recent_learnings || 0);
                 set('intel-patterns', d.promoted_patterns || 0);
                 set('intel-contradictions', d.contradictions_pending || 0);
-                set('intel-faiss', d.faiss_size_mb ? d.faiss_size_mb + 'MB' : '--');
+                // FAISS card: vector count, search mode subtitle, dynamic color
+                var faissVectors = d.faiss_vectors || 0;
+                var faissLoaded = d.faiss_index_loaded || false;
+                set('intel-faiss', faissLoaded ? faissVectors.toLocaleString() : '--');
+
+                // Search mode subtitle
+                var modeEl = document.getElementById('intel-faiss-mode');
+                if (modeEl && d.search_mode) {
+                    modeEl.textContent = d.search_mode.replace(/_/g, ' ');
+                }
+
+                // Dynamic color: green (<10k), amber (10k-50k), red (>50k), purple (offline)
+                var faissTile = document.getElementById('faiss-tile');
+                if (faissTile) {
+                    faissTile.classList.remove('green', 'amber', 'purple', 'red');
+                    if (!faissLoaded) {
+                        faissTile.classList.add('purple');
+                    } else if (faissVectors >= 50000) {
+                        faissTile.classList.add('red');
+                    } else if (faissVectors >= 10000) {
+                        faissTile.classList.add('amber');
+                    } else {
+                        faissTile.classList.add('green');
+                    }
+                }
+
+                // Rich detail for click modal
+                window._faissDetailContext = 'FAISS vector search index for semantic memory retrieval.'
+                    + (d.search_mode ? '\nSearch mode: ' + d.search_mode.replace(/_/g, ' ') : '')
+                    + (d.fts5_count ? '\nKeyword index: ' + d.fts5_count + ' entries' : '')
+                    + (d.engine_available ? '\nEmbeddings engine: online' : '\nEmbeddings engine: offline')
+                    + (d.model_loaded ? '\nLocal model: loaded' : '')
+                    + (d.dgx_available ? '\nDGX acceleration: available' : '');
 
                 // Hero pills: memories, learnings, patterns, goals
                 var memTotal = (d.total_memories || 0) + (d.fact_count || 0);

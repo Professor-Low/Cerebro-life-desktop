@@ -5696,6 +5696,7 @@ async def list_agent_projects(user: str = Depends(verify_token)):
                 "agent_count": len(agents),
                 "running_count": running,
                 "latest_activity": latest,
+                "agents": [{"id": a.get("id"), "call_sign": a.get("call_sign", a.get("id")), "status": a.get("status", "completed"), "is_specops": bool(a.get("is_specops")), "type": a.get("type", "")} for a in agents],
             })
 
         # Sort: most recent activity first, uncategorized always last
@@ -11237,6 +11238,22 @@ def _compute_memory_intelligence() -> dict:
     }
 
 
+async def _enrich_with_faiss_stats(result: dict) -> dict:
+    """Merge live FAISS stats from embeddings engine into memory-intelligence result."""
+    try:
+        stats = await mcp_bridge.get_search_stats()
+        result["faiss_vectors"] = stats.get("faiss_vectors", 0)
+        result["faiss_index_loaded"] = stats.get("faiss_index_loaded", False)
+        result["search_mode"] = stats.get("search_mode", "unknown")
+        result["engine_available"] = stats.get("engine_available", False)
+        result["fts5_count"] = stats.get("fts5_count", 0)
+        result["model_loaded"] = stats.get("model_loaded", False)
+        result["dgx_available"] = stats.get("dgx_available", False)
+    except Exception:
+        pass
+    return result
+
+
 @app.get("/api/memory-intelligence")
 async def get_memory_intelligence(user: str = Depends(verify_token)):
     """Aggregated memory stats for homepage dashboard — stale-while-revalidate cache."""
@@ -11246,7 +11263,7 @@ async def get_memory_intelligence(user: str = Depends(verify_token)):
 
     # Fresh cache — return immediately
     if _memory_intel_cache and cache_age < 60:
-        return _memory_intel_cache
+        return await _enrich_with_faiss_stats(dict(_memory_intel_cache))
 
     # Stale cache — return stale data immediately, refresh in background
     if _memory_intel_cache and cache_age < 300:
@@ -11259,7 +11276,7 @@ async def get_memory_intelligence(user: str = Depends(verify_token)):
             except Exception:
                 pass
         asyncio.create_task(_refresh_cache())
-        return _memory_intel_cache
+        return await _enrich_with_faiss_stats(dict(_memory_intel_cache))
 
     # No cache yet (first load) — return loading placeholder
     if not _memory_intel_cache:
@@ -11279,7 +11296,7 @@ async def get_memory_intelligence(user: str = Depends(verify_token)):
         result = await asyncio.get_event_loop().run_in_executor(_io_executor, _compute_memory_intelligence)
         _memory_intel_cache = result
         _memory_intel_cache_time = now
-        return result
+        return await _enrich_with_faiss_stats(dict(result))
     except Exception as e:
         return _memory_intel_cache if _memory_intel_cache else {"error": str(e)}
 
