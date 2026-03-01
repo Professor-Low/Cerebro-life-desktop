@@ -1358,15 +1358,20 @@ class MCPBridge:
                     engine = self._embeddings_engine
                     info = {}
                     # Check FAISS index
-                    if hasattr(engine, '_index') and engine._index is not None:
+                    if hasattr(engine, 'index') and engine.index is not None:
                         info["faiss_index_loaded"] = True
-                        info["faiss_vectors"] = engine._index.ntotal if hasattr(engine._index, 'ntotal') else 0
-                    # Check model
+                        info["faiss_vectors"] = engine.index.ntotal if hasattr(engine.index, 'ntotal') else 0
+                    # Check model (lazy-loaded via @property, check _model directly)
                     if hasattr(engine, '_model') and engine._model is not None:
                         info["model_loaded"] = True
+                    elif hasattr(engine, 'model') and engine.model is not None:
+                        info["model_loaded"] = True
                     # Check DGX client
-                    if hasattr(engine, '_dgx_client') and engine._dgx_client is not None:
-                        info["dgx_available"] = True
+                    try:
+                        from dgx_embedding_client import is_dgx_embedding_available_sync
+                        info["dgx_available"] = is_dgx_embedding_available_sync()
+                    except (ImportError, Exception):
+                        pass
                     return info
                 engine_info = await loop.run_in_executor(_executor, _engine_stats)
                 stats.update(engine_info)
