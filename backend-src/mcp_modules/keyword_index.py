@@ -298,6 +298,74 @@ class KeywordIndex:
         self.conn.commit()
         return indexed
 
+    def index_single_learning(self, learn_file) -> bool:
+        """Incrementally index a single learning file without full rebuild.
+
+        Same logic as build_index_from_memory() Part 3 but for one file.
+
+        Args:
+            learn_file: Path to the learning JSON file
+
+        Returns:
+            True if indexed successfully
+        """
+        learn_file = Path(learn_file)
+        if not learn_file.exists():
+            return False
+
+        try:
+            mtime = learn_file.stat().st_mtime
+            learn_id = learn_file.stem
+
+            # Remove old entries for this learning
+            self.conn.execute(
+                "DELETE FROM chunks_fts WHERE chunk_id = ?",
+                (learn_id,)
+            )
+
+            with open(learn_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            # Build searchable text from structured fields
+            parts = []
+            if isinstance(data, dict):
+                for field in ["problem", "solution", "what_not_to_do",
+                              "why_it_failed", "context"]:
+                    if data.get(field):
+                        parts.append(str(data[field]))
+                for learn in data.get("learnings", []):
+                    if isinstance(learn, dict):
+                        parts.append(learn.get("content", learn.get("problem", "")))
+                    elif isinstance(learn, str):
+                        parts.append(learn)
+                for tag in data.get("tags", []):
+                    parts.append(str(tag))
+
+            content = " ".join(parts) if parts else json.dumps(data)
+
+            self.conn.execute("""
+                INSERT INTO chunks_fts (conversation_id, chunk_id, chunk_type, content, metadata)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                data.get("conversation_id", "learnings"),
+                learn_id,
+                "learning",
+                content,
+                json.dumps({"type": data.get("type", "learning")})
+            ))
+
+            self.conn.execute("""
+                INSERT OR REPLACE INTO indexed_files (filename, mtime, chunk_count)
+                VALUES (?, ?, ?)
+            """, (f"learn:{learn_file.name}", mtime, 1))
+
+            self.conn.commit()
+            return True
+
+        except Exception as e:
+            print(f"Warning: Failed to index learning {learn_file}: {e}")
+            return False
+
     def search(self, query: str, top_k: int = 10) -> List[Dict]:
         """Fast keyword search using FTS5"""
         try:

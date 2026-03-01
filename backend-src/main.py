@@ -503,6 +503,7 @@ sio = socketio.AsyncServer(
     ping_interval=25,
     ping_timeout=20,
     max_http_buffer_size=10_000_000,
+    allow_upgrades=False,  # Force polling — uvicorn 0.41 + engineio 4.13 WebSocket upgrade bug
 )
 socket_app = socketio.ASGIApp(sio, app)
 
@@ -10386,6 +10387,64 @@ async def search_learnings(problem: str, limit: int = 5, user: str = Depends(ver
         return result
     except Exception as e:
         return {"solutions": [], "problem": problem, "error": str(e)}
+
+
+class RecordFailureRequest(BaseModel):
+    solution_id: str
+    description: str
+    error_message: Optional[str] = ""
+
+
+@app.post("/api/learnings/record-failure")
+async def record_failure(request: RecordFailureRequest, user: str = Depends(verify_token)):
+    """Record that a solution failed."""
+    try:
+        result = await mcp_bridge.learning(
+            "record_failure",
+            solution_id=request.solution_id,
+            description=request.description,
+            error_message=request.error_message
+        )
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+class ConfirmSolutionRequest(BaseModel):
+    solution_id: str
+
+
+@app.post("/api/learnings/confirm")
+async def confirm_solution(request: ConfirmSolutionRequest, user: str = Depends(verify_token)):
+    """Confirm that a solution works."""
+    try:
+        result = await mcp_bridge.learning(
+            "confirm_solution",
+            solution_id=request.solution_id
+        )
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/learnings/chain/{solution_id}")
+async def get_solution_chain(solution_id: str, user: str = Depends(verify_token)):
+    """Get the full evolution chain of a solution."""
+    try:
+        result = await mcp_bridge.learning("solution_chain", solution_id=solution_id)
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/learnings/summary")
+async def get_learnings_summary(user: str = Depends(verify_token)):
+    """Get summary of all learnings and solution patterns."""
+    try:
+        result = await mcp_bridge.learning("summary")
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 @app.get("/api/causal")

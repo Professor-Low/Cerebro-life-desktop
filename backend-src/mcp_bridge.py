@@ -50,6 +50,7 @@ class MCPBridge:
         self._predictor = None
         self._learning_extractor = None
         self._memory_service = None
+        self._solution_tracker = None
         self._initialized = False
 
     async def _ensure_initialized(self):
@@ -67,6 +68,7 @@ class MCPBridge:
                 from predictor import Predictor
                 from learning_extractor import LearningExtractor
                 from ai_memory_ultimate import UltimateMemoryService
+                from solution_tracker import SolutionTracker
 
                 bp = str(self.base_path)
                 return {
@@ -74,7 +76,8 @@ class MCPBridge:
                     'causal_manager': CausalModelManager(bp),
                     'predictor': Predictor(bp),
                     'learning_extractor': LearningExtractor(bp),
-                    'memory_service': UltimateMemoryService(bp)
+                    'memory_service': UltimateMemoryService(bp),
+                    'solution_tracker': SolutionTracker(bp)
                 }
             except ImportError as e:
                 print(f"[MCP Bridge] Import error: {e}")
@@ -97,6 +100,7 @@ class MCPBridge:
             self._predictor = result['predictor']
             self._learning_extractor = result['learning_extractor']
             self._memory_service = result.get('memory_service')
+            self._solution_tracker = result.get('solution_tracker')
             self._initialized = True
             print("[MCP Bridge] Initialized successfully")
         else:
@@ -510,22 +514,77 @@ class MCPBridge:
                 problem = kwargs.get("problem", "")
                 limit = kwargs.get("limit", 5)
                 def _find():
-                    learnings_path = self.base_path / "learnings"
                     results = []
-                    if learnings_path.exists():
-                        for f in sorted(learnings_path.glob("*.json"),
-                                       key=lambda x: x.stat().st_mtime, reverse=True)[:30]:
-                            try:
-                                with open(f, 'r', encoding='utf-8') as file:
-                                    data = json.load(file)
-                                # Simple keyword match
-                                if problem.lower() in json.dumps(data).lower():
-                                    results.append(data)
-                                    if len(results) >= limit:
-                                        break
-                            except:
-                                pass
-                    return results
+                    seen_ids = set()
+
+                    # Tier 1: FTS5 keyword search
+                    try:
+                        from keyword_index import get_keyword_index
+                        idx = get_keyword_index()
+                        fts_results = idx.search(problem, top_k=limit * 3)
+                        for r in fts_results:
+                            chunk_id = r.get("chunk_id", "")
+                            if chunk_id in seen_ids:
+                                continue
+                            seen_ids.add(chunk_id)
+                            # Boost learning-type results
+                            entry = {
+                                "id": chunk_id,
+                                "problem": r.get("content", "")[:200],
+                                "solution": r.get("content", ""),
+                                "type": r.get("metadata", {}).get("type", "learning"),
+                                "score": r.get("similarity", 0),
+                                "source": "fts5"
+                            }
+                            if r.get("chunk_type") == "learning":
+                                entry["score"] = min(1.0, entry["score"] * 1.5)
+                            results.append(entry)
+                    except Exception as e:
+                        print(f"[MCP Bridge] FTS5 search failed: {e}")
+
+                    # Tier 2: SolutionTracker versioned solutions
+                    if self._solution_tracker:
+                        try:
+                            solutions = self._solution_tracker.find_solution(problem)
+                            for s in solutions:
+                                sid = s.get("id", "")
+                                if sid in seen_ids:
+                                    continue
+                                seen_ids.add(sid)
+                                confidence = s.get("success_confirmations", 0) - s.get("failure_count", 0)
+                                results.append({
+                                    "id": sid,
+                                    "problem": s.get("problem", ""),
+                                    "solution": s.get("solution", ""),
+                                    "type": "solution",
+                                    "status": s.get("status", "active"),
+                                    "version": s.get("current_version", 1),
+                                    "confidence": confidence,
+                                    "score": min(1.0, 0.5 + confidence * 0.1),
+                                    "source": "solution_tracker"
+                                })
+                        except Exception as e:
+                            print(f"[MCP Bridge] SolutionTracker search failed: {e}")
+
+                    # Tier 3: Fallback - old substring scan (only if tiers 1+2 empty)
+                    if not results:
+                        learnings_path = self.base_path / "learnings"
+                        if learnings_path.exists():
+                            for f in sorted(learnings_path.glob("*.json"),
+                                           key=lambda x: x.stat().st_mtime, reverse=True)[:30]:
+                                try:
+                                    with open(f, 'r', encoding='utf-8') as file:
+                                        data = json.load(file)
+                                    if problem.lower() in json.dumps(data).lower():
+                                        data["source"] = "file_scan"
+                                        results.append(data)
+                                except:
+                                    pass
+
+                    # Sort by score descending, return up to limit
+                    results.sort(key=lambda x: x.get("score", 0), reverse=True)
+                    return results[:limit]
+
                 learnings = await loop.run_in_executor(_executor, _find)
                 return {"learnings": learnings, "count": len(learnings), "success": True}
 
@@ -534,6 +593,7 @@ class MCPBridge:
                 problem = kwargs.get("problem", "")
                 solution = kwargs.get("solution", "")
                 tags = kwargs.get("tags", [])
+                what_not_to_do = kwargs.get("what_not_to_do", "")
                 def _record():
                     learnings_path = self.base_path / "learnings"
                     learnings_path.mkdir(parents=True, exist_ok=True)
@@ -547,32 +607,121 @@ class MCPBridge:
                         "tags": tags,
                         "created_at": datetime.now().isoformat()
                     }
+                    if what_not_to_do:
+                        learning["what_not_to_do"] = what_not_to_do
 
-                    with open(learnings_path / f"{learning_id}.json", 'w', encoding='utf-8') as f:
+                    learning_file = learnings_path / f"{learning_id}.json"
+                    with open(learning_file, 'w', encoding='utf-8') as f:
                         json.dump(learning, f, indent=2)
 
+                    # Also record in SolutionTracker for versioning + confidence
+                    tracker_result = None
+                    if self._solution_tracker:
+                        try:
+                            if learning_type == "solution" and solution:
+                                tracker_result = self._solution_tracker.record_solution(
+                                    problem=problem, solution=solution, tags=tags
+                                )
+                            elif learning_type == "antipattern" and what_not_to_do:
+                                tracker_result = self._solution_tracker.record_antipattern(
+                                    what_not_to_do=what_not_to_do,
+                                    why_it_failed=solution or problem,
+                                    original_problem=problem,
+                                    tags=tags
+                                )
+                        except Exception as e:
+                            print(f"[MCP Bridge] SolutionTracker record failed: {e}")
+
+                    # Incremental index for immediate searchability
+                    try:
+                        from keyword_index import get_keyword_index
+                        idx = get_keyword_index()
+                        idx.index_single_learning(learning_file)
+                    except Exception as e:
+                        print(f"[MCP Bridge] Incremental index failed: {e}")
+
+                    if tracker_result:
+                        learning["tracker_id"] = tracker_result.get("id")
                     return learning
+
                 learning = await loop.run_in_executor(_executor, _record)
                 return {"learning": learning, "success": True}
 
             elif action == "get_antipatterns":
                 context = kwargs.get("context", "")
+                tags = kwargs.get("tags", [])
                 def _antipatterns():
-                    learnings_path = self.base_path / "learnings"
                     antipatterns = []
-                    if learnings_path.exists():
-                        for f in learnings_path.glob("*.json"):
-                            try:
-                                with open(f, 'r', encoding='utf-8') as file:
-                                    data = json.load(file)
-                                if data.get("type") == "antipattern":
-                                    if context.lower() in json.dumps(data).lower():
-                                        antipatterns.append(data)
-                            except:
-                                pass
+
+                    # Primary: SolutionTracker word-similarity matching
+                    if self._solution_tracker:
+                        try:
+                            antipatterns = self._solution_tracker.find_antipatterns(
+                                problem=context, tags=tags
+                            )
+                        except Exception as e:
+                            print(f"[MCP Bridge] SolutionTracker antipattern search failed: {e}")
+
+                    # Fallback: old file scan (only if SolutionTracker returned nothing)
+                    if not antipatterns:
+                        learnings_path = self.base_path / "learnings"
+                        if learnings_path.exists():
+                            for f in learnings_path.glob("*.json"):
+                                try:
+                                    with open(f, 'r', encoding='utf-8') as file:
+                                        data = json.load(file)
+                                    if data.get("type") == "antipattern":
+                                        if context.lower() in json.dumps(data).lower():
+                                            antipatterns.append(data)
+                                except:
+                                    pass
+
                     return antipatterns[:5]
                 patterns = await loop.run_in_executor(_executor, _antipatterns)
                 return {"antipatterns": patterns, "count": len(patterns), "success": True}
+
+            elif action == "record_failure":
+                if not self._solution_tracker:
+                    return {"error": "SolutionTracker not available", "success": False}
+                solution_id = kwargs.get("solution_id", "")
+                description = kwargs.get("description", "")
+                error_message = kwargs.get("error_message", "")
+                def _record_failure():
+                    return self._solution_tracker.record_failure(
+                        solution_id=solution_id,
+                        failure_description=description,
+                        error_message=error_message
+                    )
+                result = await loop.run_in_executor(_executor, _record_failure)
+                return {**result, "success": True}
+
+            elif action == "confirm_solution":
+                if not self._solution_tracker:
+                    return {"error": "SolutionTracker not available", "success": False}
+                solution_id = kwargs.get("solution_id", "")
+                def _confirm():
+                    return self._solution_tracker.confirm_solution_works(solution_id)
+                result = await loop.run_in_executor(_executor, _confirm)
+                if result.get("error"):
+                    return {"error": result["error"], "success": False}
+                return {**result, "success": True}
+
+            elif action == "solution_chain":
+                if not self._solution_tracker:
+                    return {"error": "SolutionTracker not available", "success": False}
+                solution_id = kwargs.get("solution_id", "")
+                def _chain():
+                    return self._solution_tracker.get_solution_chain(solution_id)
+                result = await loop.run_in_executor(_executor, _chain)
+                return {**result, "success": True}
+
+            elif action == "summary":
+                if not self._solution_tracker:
+                    return {"error": "SolutionTracker not available", "success": False}
+                def _summary():
+                    return self._solution_tracker.get_learnings_summary()
+                result = await loop.run_in_executor(_executor, _summary)
+                return {**result, "success": True}
 
             else:
                 return {"error": f"Unknown action: {action}", "success": False}
