@@ -929,16 +929,16 @@ app.whenReady().then(async () => {
   // here — before ANY network/Docker activity — and give the user a chance
   // to add the exclusion manually. A frontend toast is too late; the process
   // would already be dead.
-  if (process.platform === 'win32' && defenderExclusionFailed) {
+  // IMPORTANT: Only show the blocking dialog when the prior session actually
+  // crashed. If the exclusion just failed but the app runs fine (UAC denied
+  // on a machine Defender doesn't kill), the softer frontend warning handles it.
+  if (process.platform === 'win32' && defenderExclusionFailed && crashedLastSession) {
     const appDir = path.dirname(process.execPath);
     const dataDir = path.join(require('os').homedir(), '.cerebro');
-    const severity = crashedLastSession ? 'error' : 'warning';
-    const headline = crashedLastSession
-      ? 'Cerebro was killed by Windows Defender last session.'
-      : 'Windows Defender exclusion could not be added automatically.';
+    const headline = 'Cerebro was killed by Windows Defender last session.';
 
     const { response } = await dialog.showMessageBox({
-      type: severity,
+      type: 'error',
       title: 'Windows Defender — Action Required',
       message: headline,
       detail:
