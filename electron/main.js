@@ -923,6 +923,66 @@ app.whenReady().then(async () => {
     await ensureDefenderExclusion();
   } catch (err) {
     console.warn('[Main] Defender exclusion failed (non-fatal):', err.message);
+    defenderExclusionFailed = true;
+  }
+
+  // ── BLOCKING Defender gate ──────────────────────────────────────
+  // If exclusion failed (especially after a prior crash), Defender WILL kill
+  // the process within seconds once Docker/Chrome CDP starts. We MUST block
+  // here — before ANY network/Docker activity — and give the user a chance
+  // to add the exclusion manually. A frontend toast is too late; the process
+  // would already be dead.
+  if (process.platform === 'win32' && defenderExclusionFailed) {
+    const appDir = path.dirname(process.execPath);
+    const dataDir = path.join(require('os').homedir(), '.cerebro');
+    const severity = crashedLastSession ? 'error' : 'warning';
+    const headline = crashedLastSession
+      ? 'Cerebro was killed by Windows Defender last session.'
+      : 'Windows Defender exclusion could not be added automatically.';
+
+    const { response } = await dialog.showMessageBox({
+      type: severity,
+      title: 'Windows Defender — Action Required',
+      message: headline,
+      detail:
+        'Without an exclusion, Defender will detect Cerebro\'s Docker and Chrome activity ' +
+        'as a false positive (Behavior:Win32/LummaStealer) and silently kill the app.\n\n' +
+        'Please add BOTH of these folders as exclusions:\n' +
+        `  1.  ${appDir}\n` +
+        `  2.  ${dataDir}\n\n` +
+        'Click "Open Windows Security" below, then go to:\n' +
+        'Virus & threat protection  ›  Manage settings  ›  Exclusions  ›  Add an exclusion  ›  Folder\n\n' +
+        'After adding both folders, click "I Added It" to continue.',
+      buttons: ['Open Windows Security', 'I Added It — Continue', 'Skip (app may crash)'],
+      defaultId: 0,
+      cancelId: 2,
+      noLink: true,
+    });
+
+    if (response === 0) {
+      // Open Windows Security to the threat protection page
+      try {
+        shell.openExternal('windowsdefender://threatsettings');
+      } catch (_) {
+        try { shell.openExternal('ms-settings:windowsdefender'); } catch (_2) {}
+      }
+      // Wait for user to confirm they added it
+      await dialog.showMessageBox({
+        type: 'info',
+        title: 'Waiting for Defender Exclusion',
+        message: 'Add both folders as exclusions, then click OK.',
+        detail:
+          'In Windows Security, navigate to:\n' +
+          'Virus & threat protection  ›  Manage settings  ›  Exclusions  ›  Add an exclusion  ›  Folder\n\n' +
+          `Folder 1:  ${appDir}\n` +
+          `Folder 2:  ${dataDir}\n\n` +
+          'After adding both, click OK to launch Cerebro.',
+        buttons: ['OK — I Added the Exclusions'],
+        noLink: true,
+      });
+    }
+    // response 1 = user says they already added it, continue
+    // response 2 = skip, proceed at risk
   }
 
   installDesktopIntegration();
