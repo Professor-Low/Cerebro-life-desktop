@@ -4082,6 +4082,10 @@ class TaskRequest(BaseModel):
 class LoginRequest(BaseModel):
     password: str
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
 class SetupRequest(BaseModel):
     name: str
     password: str
@@ -5060,7 +5064,15 @@ async def process_with_claude_code(content: str, session_id: str = "default", mo
         # Use minimal config dir: no hooks, no MCP servers, just auth credentials
         agent_env = os.environ.copy()
         agent_env.pop("CLAUDECODE", None)
-        agent_env["CLAUDE_CONFIG_DIR"] = os.path.expanduser("~/.claude-chat")
+        chat_config_dir = Path.home() / ".claude-chat"
+        chat_config_dir.mkdir(parents=True, exist_ok=True)
+        # Copy credentials from main .claude dir so the CLI can authenticate
+        main_creds = Path.home() / ".claude" / ".credentials.json"
+        chat_creds = chat_config_dir / ".credentials.json"
+        if main_creds.exists() and not chat_creds.exists():
+            import shutil
+            shutil.copy2(str(main_creds), str(chat_creds))
+        agent_env["CLAUDE_CONFIG_DIR"] = str(chat_config_dir)
 
         # Use /tmp on Linux, home dir on Windows
         chat_cwd = "/tmp" if os.path.exists("/tmp") else os.path.expanduser("~")
@@ -5201,9 +5213,9 @@ async def _process_chat_offloaded(content: str, session_id: str, model: str, dev
     effective_model = model or config.DEFAULT_MODEL
 
     # Build context-injected prompt (same as local)
-    prompt = _build_chat_prompt(content, session_id)
+    system_prompt, user_message = _build_chat_prompt(content, session_id)
     if image_path:
-        prompt = f"[Image attached at: {image_path}]\nUse the Read tool to view this image, then respond.\n\n{prompt}"
+        user_message = f"[Image attached at: {image_path}]\nUse the Read tool to view this image, then respond.\n\n{user_message}"
 
     _ssh = device.get("ssh_config", {})
     _ssh_host = _ssh.get("host", device_id)
@@ -5245,14 +5257,19 @@ async def _process_chat_offloaded(content: str, session_id: str, model: str, dev
     except Exception as _ce:
         print(f"[Chat Offload] Credential sync failed (non-fatal): {_ce}")
 
-    # Build remote command: PATH fix + claude -p via temp file
+    # Build remote command: PATH fix + claude -p via temp files (user msg + system prompt)
     _chat_id = f"chat-{session_id}-{int(datetime.now(timezone.utc).timestamp())}"
+    _msg_file = f"/tmp/.cerebro-chat-{_chat_id}-msg"
+    _sys_file = f"/tmp/.cerebro-chat-{_chat_id}-sys"
+    import base64 as _b64
+    _sys_b64 = _b64.b64encode(system_prompt.encode('utf-8')).decode('ascii')
     _remote_cmd = (
         f'export PATH="$HOME/.local/bin:$PATH"; '
-        f'cat > /tmp/.cerebro-chat-{_chat_id} && '
-        f'claude -p "$(cat /tmp/.cerebro-chat-{_chat_id})" --model {effective_model} '
+        f'cat > {_msg_file} && '
+        f'echo "{_sys_b64}" | base64 -d > {_sys_file} && '
+        f'claude -p "$(cat {_msg_file})" --system-prompt "$(cat {_sys_file})" --model {effective_model} '
         f'--output-format stream-json --verbose --dangerously-skip-permissions; '
-        f'rm -f /tmp/.cerebro-chat-{_chat_id}'
+        f'rm -f {_msg_file} {_sys_file}'
     )
     _ssh_args.append(_remote_cmd)
 
@@ -5270,8 +5287,8 @@ async def _process_chat_offloaded(content: str, session_id: str, model: str, dev
             env=agent_env,
         )
 
-        # Pipe prompt via stdin
-        process.stdin.write(prompt.encode('utf-8'))
+        # Pipe user message via stdin
+        process.stdin.write(user_message.encode('utf-8'))
         process.stdin.close()
 
         print(f"[Chat Offload] Routing to {_device_name} ({_ssh_host}), model={effective_model}")
@@ -5453,6 +5470,52 @@ async def login(request: LoginRequest):
 
     token = create_token(username)
     return {"token": token, "user": username}
+
+@app.post("/auth/change-password")
+async def change_password(request: ChangePasswordRequest, user: str = Depends(verify_token)):
+    """Change password — requires current password verification."""
+    profile = _load_user_profile()
+    stored_password = profile.get("password", "")
+
+    if not stored_password:
+        raise HTTPException(status_code=400, detail="No password set")
+
+    # Verify current password
+    if stored_password.startswith("$2b$"):
+        if not bcrypt.checkpw(request.current_password.encode(), stored_password.encode()):
+            raise HTTPException(status_code=401, detail="Current password is incorrect")
+    else:
+        if request.current_password != stored_password:
+            raise HTTPException(status_code=401, detail="Current password is incorrect")
+
+    # Hash and save new password
+    profile["password"] = bcrypt.hashpw(request.new_password.encode(), bcrypt.gensalt()).decode()
+    _save_user_profile(profile)
+
+    # Return fresh token
+    token = create_token(user)
+    return {"token": token, "message": "Password changed successfully"}
+
+@app.get("/auth/token-info")
+async def token_info(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Decode JWT and return token metadata. Works even on expired tokens."""
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = jwt.decode(credentials.credentials, config.SECRET_KEY, algorithms=["HS256"], options={"verify_exp": False})
+        iat = payload.get("iat", 0)
+        exp = payload.get("exp", 0)
+        now = datetime.now(timezone.utc).timestamp()
+        days_remaining = max(0, (exp - now) / 86400)
+        return {
+            "user": payload.get("sub", "Unknown"),
+            "issued_at": datetime.fromtimestamp(iat, tz=timezone.utc).isoformat(),
+            "expires_at": datetime.fromtimestamp(exp, tz=timezone.utc).isoformat(),
+            "days_remaining": round(days_remaining, 1),
+            "is_expired": now > exp
+        }
+    except jwt.DecodeError:
+        raise HTTPException(status_code=400, detail="Invalid token format")
 
 @app.get("/briefing", response_model=BriefingResponse)
 async def get_briefing(user: str = Depends(verify_token)):

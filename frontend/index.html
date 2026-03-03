@@ -14477,6 +14477,39 @@
         .cred-modal-btn-dismiss { background: transparent; color: var(--text-muted); }
         .cred-modal-btn-dismiss:hover { background: var(--bg-hover); color: var(--text-primary); }
         .cred-modal-status { font-size: 0.78rem; color: var(--text-muted); margin-top: 14px; min-height: 20px; }
+
+        /* ===== RE-LOGIN MODAL ===== */
+        .relogin-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); z-index: 10002; display: flex; align-items: center; justify-content: center; animation: msg-fade-in 0.2s ease; }
+        .relogin-box { width: 90vw; max-width: 380px; background: rgba(12,12,20,0.98); border: 1px solid rgba(139,92,246,0.3); border-radius: 16px; padding: 32px 28px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 40px rgba(139,92,246,0.08); animation: relogin-appear 0.25s ease; }
+        @keyframes relogin-appear { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+        .relogin-icon { font-size: 2.4rem; margin-bottom: 12px; }
+        .relogin-title { font-family: 'Rajdhani', sans-serif; font-size: 1.2rem; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
+        .relogin-desc { font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 20px; }
+        .relogin-input { width: 100%; padding: 12px 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(139,92,246,0.25); border-radius: 10px; color: var(--text-primary); font-size: 0.9rem; outline: none; transition: border-color 0.2s; box-sizing: border-box; }
+        .relogin-input:focus { border-color: var(--accent); }
+        .relogin-error { font-size: 0.78rem; color: #ef4444; margin-top: 8px; min-height: 18px; }
+        .relogin-actions { display: flex; gap: 10px; margin-top: 18px; }
+        .relogin-btn { flex: 1; padding: 11px 16px; border-radius: 10px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.2s; border: 1px solid var(--border); }
+        .relogin-btn-signin { background: var(--accent-gradient); color: #fff; border-color: var(--accent) !important; }
+        .relogin-btn-signin:hover { opacity: 0.85; transform: translateY(-1px); }
+        .relogin-btn-signin:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .relogin-btn-signout { background: transparent; color: var(--text-muted); }
+        .relogin-btn-signout:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+        /* ===== SETTINGS SECURITY SECTION ===== */
+        .security-token-status { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; }
+        .security-token-status.active { background: rgba(34,197,94,0.12); color: #22c55e; }
+        .security-token-status.expired { background: rgba(239,68,68,0.12); color: #ef4444; }
+        .security-days-remaining { font-weight: 700; }
+        .security-days-remaining.green { color: #22c55e; }
+        .security-days-remaining.amber { color: #f59e0b; }
+        .security-days-remaining.red { color: #ef4444; }
+        .security-pw-input { width: 100%; padding: 10px 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); font-size: 0.85rem; outline: none; transition: border-color 0.2s; margin-top: 6px; box-sizing: border-box; }
+        .security-pw-input:focus { border-color: var(--accent); }
+        .security-msg { font-size: 0.78rem; margin-top: 10px; min-height: 18px; }
+        .security-msg.error { color: #ef4444; }
+        .security-msg.success { color: #22c55e; }
+
         /* ===== GUIDE MODAL ===== */
         .guide-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 10000; display: flex; align-items: center; justify-content: center; animation: msg-fade-in 0.2s ease; }
         .guide-modal { width: 85vw; max-width: 700px; max-height: 85vh; background: rgba(12,12,20,0.97); border: 1px solid rgba(139,92,246,0.2); border-radius: 14px; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
@@ -25885,6 +25918,10 @@
                                     <span class="settings-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
                                     <span class="settings-nav-label">File Access</span>
                                 </div>
+                                <div class="settings-nav-item" data-section="security" onclick="switchSettingsSection('security')">
+                                    <span class="settings-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+                                    <span class="settings-nav-label">Security</span>
+                                </div>
                                 <div class="settings-nav-item" data-section="about-account" onclick="switchSettingsSection('about-account')">
                                     <span class="settings-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
                                     <span class="settings-nav-label">About</span>
@@ -26230,6 +26267,48 @@
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
                                     </div>
                                     File access settings are only available in the Cerebro desktop app.
+                                </div>
+                            </div>
+
+                            <!-- Section: Security -->
+                            <div class="settings-section" id="settings-section-security">
+                                <div class="settings-section-heading">Session</div>
+                                <div class="settings-card" id="security-session-card">
+                                    <div class="settings-row">
+                                        <span class="settings-label">Token Status</span>
+                                        <span class="settings-value" id="security-token-status">Loading...</span>
+                                    </div>
+                                    <div class="settings-row">
+                                        <span class="settings-label">Issued</span>
+                                        <span class="settings-value" id="security-issued-at">--</span>
+                                    </div>
+                                    <div class="settings-row">
+                                        <span class="settings-label">Expires</span>
+                                        <span class="settings-value" id="security-expires-at">--</span>
+                                    </div>
+                                    <div class="settings-row">
+                                        <span class="settings-label">Days Remaining</span>
+                                        <span class="settings-value"><span class="security-days-remaining" id="security-days-remaining">--</span></span>
+                                    </div>
+                                </div>
+
+                                <div class="settings-divider"></div>
+                                <div class="settings-section-heading">Change Password</div>
+                                <div class="settings-card">
+                                    <div style="margin-bottom: 12px;">
+                                        <label class="settings-label" style="display:block; margin-bottom: 4px;">Current Password</label>
+                                        <input type="password" class="security-pw-input" id="security-current-pw" placeholder="Current password" autocomplete="current-password" />
+                                    </div>
+                                    <div style="margin-bottom: 12px;">
+                                        <label class="settings-label" style="display:block; margin-bottom: 4px;">New Password</label>
+                                        <input type="password" class="security-pw-input" id="security-new-pw" placeholder="New password" autocomplete="new-password" />
+                                    </div>
+                                    <div style="margin-bottom: 12px;">
+                                        <label class="settings-label" style="display:block; margin-bottom: 4px;">Confirm New Password</label>
+                                        <input type="password" class="security-pw-input" id="security-confirm-pw" placeholder="Confirm new password" autocomplete="new-password" />
+                                    </div>
+                                    <div class="security-msg" id="security-pw-msg"></div>
+                                    <button class="btn btn-primary btn-block" style="margin-top: 14px;" onclick="changePassword()">Change Password</button>
                                 </div>
                             </div>
 
@@ -27928,6 +28007,113 @@
             } catch (e) {
                 errorEl.textContent = e.message || 'Login failed';
                 errorEl.style.display = 'block';
+            }
+        }
+
+        // ==================== GLOBAL 401 INTERCEPTOR ====================
+        const _originalFetch = window.fetch.bind(window);
+        let _reloginPromise = null;
+        const _authSkipPaths = ['/auth/login', '/auth/setup', '/auth/status'];
+
+        window.fetch = async function(input, init) {
+            const response = await _originalFetch(input, init);
+            if (response.status !== 401) return response;
+
+            // Skip interception for auth endpoints
+            const url = typeof input === 'string' ? input : (input.url || '');
+            if (_authSkipPaths.some(p => url.includes(p))) return response;
+
+            // Request re-login (deduped — all concurrent 401s share one Promise)
+            const newToken = await _requestRelogin();
+            if (!newToken) {
+                // User dismissed — sign out
+                logout();
+                return response;
+            }
+
+            // Retry the original request with the new token
+            const retryInit = Object.assign({}, init || {});
+            retryInit.headers = new Headers(retryInit.headers || {});
+            retryInit.headers.set('Authorization', 'Bearer ' + newToken);
+            return _originalFetch(input, retryInit);
+        };
+
+        function _requestRelogin() {
+            if (_reloginPromise) return _reloginPromise;
+            _reloginPromise = new Promise(function(resolve) {
+                _showReloginModal(resolve);
+            }).finally(function() {
+                _reloginPromise = null;
+            });
+            return _reloginPromise;
+        }
+
+        function _showReloginModal(resolve) {
+            const overlay = document.getElementById('relogin-overlay');
+            const pwInput = document.getElementById('relogin-password');
+            const errorEl = document.getElementById('relogin-error');
+            const submitBtn = document.getElementById('relogin-submit-btn');
+            const dismissBtn = document.getElementById('relogin-dismiss-btn');
+
+            overlay.style.display = 'flex';
+            pwInput.value = '';
+            errorEl.textContent = '';
+            submitBtn.disabled = false;
+            setTimeout(() => pwInput.focus(), 100);
+
+            function cleanup() {
+                overlay.style.display = 'none';
+                pwInput.removeEventListener('keydown', onKey);
+                submitBtn.removeEventListener('click', onSubmit);
+                dismissBtn.removeEventListener('click', onDismiss);
+            }
+
+            async function onSubmit() {
+                const pw = pwInput.value.trim();
+                if (!pw) { errorEl.textContent = 'Password required'; return; }
+                errorEl.textContent = '';
+                submitBtn.disabled = true;
+                try {
+                    const resp = await _originalFetch(API_URL + '/auth/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password: pw })
+                    });
+                    if (!resp.ok) throw new Error('Invalid password');
+                    const data = await resp.json();
+                    token = data.token;
+                    if (data.user) CEREBRO_USERNAME = data.user;
+                    localStorage.setItem('cerebro_token', token);
+                    _reconnectSocketWithNewToken();
+                    cleanup();
+                    if (typeof showToast === 'function') showToast('Session restored', 'success');
+                    resolve(token);
+                } catch (e) {
+                    errorEl.textContent = e.message || 'Login failed';
+                    submitBtn.disabled = false;
+                }
+            }
+
+            function onDismiss() {
+                cleanup();
+                resolve(null);
+            }
+
+            function onKey(e) {
+                if (e.key === 'Enter') onSubmit();
+                if (e.key === 'Escape') onDismiss();
+            }
+
+            pwInput.addEventListener('keydown', onKey);
+            submitBtn.addEventListener('click', onSubmit);
+            dismissBtn.addEventListener('click', onDismiss);
+        }
+
+        function _reconnectSocketWithNewToken() {
+            if (typeof socket !== 'undefined' && socket) {
+                socket.disconnect();
+                socket.auth = { token };
+                socket.connect();
             }
         }
 
@@ -33956,6 +34142,92 @@
             if (content) content.scrollTop = 0;
             // Lazy-load AI & Memory data
             if (name === 'ai-memory') { initStorageConfig(); initOffloadConfig(); }
+            if (name === 'security') { loadSecurityInfo(); }
+        }
+
+        async function loadSecurityInfo() {
+            try {
+                const resp = await fetch(API_URL + '/auth/token-info', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (!resp.ok) throw new Error('Failed to load');
+                const info = await resp.json();
+
+                // Token status badge
+                const statusEl = document.getElementById('security-token-status');
+                statusEl.textContent = '';
+                const badge = document.createElement('span');
+                badge.className = 'security-token-status ' + (info.is_expired ? 'expired' : 'active');
+                badge.textContent = info.is_expired ? 'Expired' : 'Active';
+                statusEl.appendChild(badge);
+
+                // Dates
+                const fmtDate = (iso) => { try { return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch(e) { return '--'; } };
+                document.getElementById('security-issued-at').textContent = fmtDate(info.issued_at);
+                document.getElementById('security-expires-at').textContent = fmtDate(info.expires_at);
+
+                // Days remaining
+                const daysEl = document.getElementById('security-days-remaining');
+                const d = info.days_remaining;
+                daysEl.textContent = info.is_expired ? 'Expired' : d + ' days';
+                daysEl.className = 'security-days-remaining ' + (info.is_expired || d < 1 ? 'red' : d <= 7 ? 'amber' : 'green');
+            } catch (e) {
+                document.getElementById('security-token-status').textContent = 'Unable to load';
+            }
+        }
+
+        async function changePassword() {
+            const msgEl = document.getElementById('security-pw-msg');
+            const currentPw = document.getElementById('security-current-pw').value;
+            const newPw = document.getElementById('security-new-pw').value;
+            const confirmPw = document.getElementById('security-confirm-pw').value;
+            msgEl.textContent = '';
+            msgEl.className = 'security-msg';
+
+            if (!currentPw || !newPw || !confirmPw) {
+                msgEl.textContent = 'All fields are required';
+                msgEl.classList.add('error');
+                return;
+            }
+            if (newPw !== confirmPw) {
+                msgEl.textContent = 'New passwords do not match';
+                msgEl.classList.add('error');
+                return;
+            }
+            if (newPw.length < 4) {
+                msgEl.textContent = 'Password must be at least 4 characters';
+                msgEl.classList.add('error');
+                return;
+            }
+
+            try {
+                const resp = await fetch(API_URL + '/auth/change-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ current_password: currentPw, new_password: newPw })
+                });
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({}));
+                    throw new Error(err.detail || 'Failed to change password');
+                }
+                const data = await resp.json();
+                // Update token
+                token = data.token;
+                localStorage.setItem('cerebro_token', token);
+                _reconnectSocketWithNewToken();
+
+                // Clear fields + show success
+                document.getElementById('security-current-pw').value = '';
+                document.getElementById('security-new-pw').value = '';
+                document.getElementById('security-confirm-pw').value = '';
+                msgEl.textContent = 'Password changed successfully';
+                msgEl.classList.add('success');
+                // Refresh token info display
+                loadSecurityInfo();
+            } catch (e) {
+                msgEl.textContent = e.message || 'Failed to change password';
+                msgEl.classList.add('error');
+            }
         }
 
         function toggleSettingsSidebar() {
@@ -52717,6 +52989,21 @@ Please proceed with implementing this recommendation. You have full permissions.
             <div class="cerebro-confirm-actions">
                 <button class="cerebro-confirm-btn cancel" id="cerebro-confirm-cancel">Cancel</button>
                 <button class="cerebro-confirm-btn confirm" id="cerebro-confirm-ok">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Re-Login Modal (Session Expired) -->
+    <div class="relogin-overlay" id="relogin-overlay" style="display:none;">
+        <div class="relogin-box">
+            <div class="relogin-icon">&#x1F512;</div>
+            <div class="relogin-title">Session Expired</div>
+            <div class="relogin-desc">Your session has expired. Enter your password to continue.</div>
+            <input type="password" class="relogin-input" id="relogin-password" placeholder="Password" autocomplete="current-password" />
+            <div class="relogin-error" id="relogin-error"></div>
+            <div class="relogin-actions">
+                <button class="relogin-btn relogin-btn-signout" id="relogin-dismiss-btn">Sign Out</button>
+                <button class="relogin-btn relogin-btn-signin" id="relogin-submit-btn">Sign In</button>
             </div>
         </div>
     </div>
