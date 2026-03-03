@@ -17,10 +17,23 @@ const ACTIVATION_CODE_REGEX = /^[A-Z0-9]{4,12}$/;
 
 class LicenseManager {
   constructor() {
-    this.store = new Store({
+    const storeOpts = {
       name: 'cerebro-license',
       encryptionKey: this._deriveEncryptionKey(),
-    });
+    };
+    try {
+      this.store = new Store(storeOpts);
+    } catch (err) {
+      console.error('[License] Store corrupted, resetting:', err.message);
+      // Delete corrupted store file and create a fresh one
+      try {
+        const { app } = require('electron');
+        const storePath = require('path').join(app.getPath('userData'), 'cerebro-license.json');
+        require('fs').unlinkSync(storePath);
+        console.log('[License] Deleted corrupted store file:', storePath);
+      } catch (_) {}
+      this.store = new Store(storeOpts);
+    }
   }
 
   _deriveEncryptionKey() {

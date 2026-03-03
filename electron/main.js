@@ -32,7 +32,22 @@ if (process.platform === 'win32') {
 
 const isDev = process.env.CEREBRO_DEV === '1';
 const dockerManager = new DockerManager();
-const licenseManager = new LicenseManager();
+
+let licenseManager;
+try {
+  licenseManager = new LicenseManager();
+} catch (err) {
+  console.error('[Main] LicenseManager init failed, retrying:', err.message);
+  try {
+    licenseManager = new LicenseManager();
+  } catch (err2) {
+    console.error('[Main] LicenseManager init failed permanently:', err2.message);
+    licenseManager = null;
+  }
+}
+
+let defenderExclusionFailed = false;
+let crashedLastSession = false;
 
 // Prevent multiple instances — focus existing window if second copy is launched
 const gotTheLock = app.requestSingleInstanceLock();
@@ -198,6 +213,16 @@ function createMainWindow() {
     mainWindow = null;
   });
 
+  // Recover from renderer/GPU crashes — reload instead of leaving a blank window
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error('[Main] Renderer crashed:', details.reason);
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.loadURL('http://localhost:61000');
+      }
+    }, 2000);
+  });
+
   return mainWindow;
 }
 
@@ -211,6 +236,7 @@ function updateSplashStatus(message) {
 
 async function checkLicense() {
   if (isDev) return true;
+  if (!licenseManager) return false;
 
   updateSplashStatus('Checking license...');
   const result = await licenseManager.revalidate();
@@ -541,6 +567,7 @@ async function ensureDefenderExclusion() {
   const result = await dockerManager.addDefenderExclusion();
   if (!result.success) {
     console.warn('[Main] Defender exclusion failed (non-fatal):', result.error);
+    defenderExclusionFailed = true;
   }
 }
 
@@ -675,6 +702,25 @@ async function loadFrontend() {
     }
     mainWindow.show();
     mainWindow.focus();
+
+    // Show Defender warning if exclusion failed or prior session crashed unexpectedly
+    if (defenderExclusionFailed || crashedLastSession) {
+      const reason = crashedLastSession
+        ? 'Cerebro shut down unexpectedly last session. This is often caused by Windows Defender killing the process.'
+        : 'Windows Defender exclusion could not be added automatically.';
+      mainWindow.webContents.executeJavaScript(`
+        (function() {
+          var msg = ${JSON.stringify(reason)} +
+            ' To prevent this, open Windows Security > Virus & threat protection > Manage settings > Exclusions,' +
+            ' and add the Cerebro install folder.';
+          if (typeof window.cerebroAlert === 'function') {
+            window.cerebroAlert(msg, { title: 'Windows Defender Warning' });
+          } else {
+            console.warn('[Defender]', msg);
+          }
+        })();
+      `).catch(() => {});
+    }
 
     // Check for updates in the background — aggressive early, then every 30 min.
     // Early checks catch releases published right after the user launched the app.
@@ -848,6 +894,25 @@ app.on('second-instance', () => {
 app.whenReady().then(async () => {
   console.log('[Main] Cerebro Desktop starting (Docker architecture)');
 
+  // ── Crash detection markers ──────────────────────────────────────
+  // If last-launch is newer than last-shutdown (or no shutdown marker),
+  // the prior session was killed unexpectedly (Defender, power loss, etc.)
+  const cerebroDir = path.join(require('os').homedir(), '.cerebro');
+  const launchMarker = path.join(cerebroDir, '.last-launch');
+  const shutdownMarker = path.join(cerebroDir, '.last-shutdown');
+  try {
+    const lastLaunch = fs.existsSync(launchMarker) ? new Date(fs.readFileSync(launchMarker, 'utf-8').trim()) : null;
+    const lastShutdown = fs.existsSync(shutdownMarker) ? new Date(fs.readFileSync(shutdownMarker, 'utf-8').trim()) : null;
+    if (lastLaunch && (!lastShutdown || lastLaunch > lastShutdown)) {
+      console.warn('[Main] Previous session did not shut down cleanly — possible crash or Defender kill');
+      crashedLastSession = true;
+    }
+  } catch (_) {}
+  try {
+    fs.mkdirSync(cerebroDir, { recursive: true });
+    fs.writeFileSync(launchMarker, new Date().toISOString());
+  } catch (_) {}
+
   // ── STEP 0: Windows Defender exclusion ──────────────────────────
   // MUST run before ANY network activity, Docker calls, or Chrome CDP.
   // Defender's behavioral detection (Behavior:Win32/LummaStealer.CER!MTB)
@@ -923,7 +988,7 @@ app.whenReady().then(async () => {
   // License gate
   const licensed = await checkLicense();
   if (!licensed) {
-    const licenseStatus = licenseManager.getStatus();
+    const licenseStatus = licenseManager ? licenseManager.getStatus() : { valid: false, reason: 'init_failed' };
     showSetupWizard();
     // Tell the activation page WHY the user is here (expired vs first-time)
     mainWindow.webContents.once('did-finish-load', () => {
@@ -960,7 +1025,9 @@ app.whenReady().then(async () => {
   await loadFrontend();
   updateTrayStatus(tray, 'running');
   startLicenseRefreshTimer();
-  refreshMcpConfigSilently();
+  refreshMcpConfigSilently().catch(err => {
+    console.warn('[Main] MCP refresh failed:', err.message);
+  });
 
   // Start periodic storage sync if local mirror is configured
   {
@@ -999,6 +1066,12 @@ app.on('before-quit', async (e) => {
   if (!isQuitting) {
     isQuitting = true;
     e.preventDefault();
+
+    // Write clean shutdown marker (absence = crash detection on next launch)
+    try {
+      const shutdownPath = path.join(require('os').homedir(), '.cerebro', '.last-shutdown');
+      fs.writeFileSync(shutdownPath, new Date().toISOString());
+    } catch (_) {}
 
     // Push final local changes to NAS before shutting down
     if (storageSyncTimer) {
