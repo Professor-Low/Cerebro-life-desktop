@@ -645,13 +645,10 @@ async function startDockerStack() {
     }
   }
 
-  // 3. Launch Chrome with CDP so Docker containers can access the browser
-  updateSplashStatus('Starting browser for agents...');
-  try {
-    cdpChromeProcess = await ensureChromeWithCDP();
-  } catch (err) {
-    console.error('[Main] Chrome CDP launch failed (non-fatal):', err.message);
-  }
+  // 3. Chrome CDP is launched on-demand (via 'launch-chrome-cdp' IPC) when
+  //    a browser agent is spawned, NOT at startup. Launching Chrome with
+  //    --remote-debugging-port at startup triggers Defender's behavioral
+  //    detection (Behavior:Win32/LummaStealer.CER!MTB) and kills the process.
 
   // 4. Write/refresh config (always refresh compose to fix volume mounts)
   updateSplashStatus('Writing configuration...');
