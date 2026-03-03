@@ -1249,30 +1249,40 @@
             z-index: 1;
         }
         .hero-orb-mini {
-            width: 56px;
-            height: 56px;
+            width: 52px;
+            height: 52px;
             position: relative;
             flex-shrink: 0;
         }
         .hero-orb-mini .hero-orb-img {
-            width: 40px;
-            height: 40px;
+            width: 36px;
+            height: 36px;
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            filter: drop-shadow(0 0 10px rgba(167, 139, 250, 0.6))
-                    drop-shadow(0 0 20px rgba(139, 92, 246, 0.4));
+            filter: drop-shadow(0 0 8px rgba(167, 139, 250, 0.6))
+                    drop-shadow(0 0 14px rgba(139, 92, 246, 0.3));
+            animation: none;
+            box-shadow: none;
         }
         .hero-orb-mini .core-ring {
-            width: 52px;
-            height: 52px;
+            width: 48px;
+            height: 48px;
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            top: calc(50% - 24px);
+            left: calc(50% - 24px);
+            border-width: 1.5px;
+            animation: ringRotate 3s linear infinite;
         }
-        .hero-orb-mini .core-ring:nth-child(2) { width: 48px; height: 48px; }
+        .hero-orb-mini .core-ring:nth-child(2) {
+            width: 42px;
+            height: 42px;
+            top: calc(50% - 21px);
+            left: calc(50% - 21px);
+            animation-duration: 4s;
+            animation-direction: reverse;
+        }
         .hero-info { flex: 1; min-width: 0; }
         .hero-greeting {
             display: block !important;
@@ -1304,7 +1314,7 @@
         .hero-pills {
             display: flex;
             gap: 6px;
-            margin-top: 10px;
+            margin-top: 18px;
             flex-wrap: wrap;
             position: relative;
             z-index: 1;
@@ -10295,6 +10305,20 @@
             }
         }
 
+        /* === TOOL PHASE INDICATOR (shown during command execution) === */
+        .tool-phase-indicator {
+            font-size: 0.78rem;
+            color: var(--accent, #a78bfa);
+            font-style: italic;
+            padding: 6px 0 2px;
+            opacity: 0.8;
+            animation: phasePulse 1.5s ease-in-out infinite;
+        }
+        @keyframes phasePulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
         /* === AI THINKING ANIMATION (Orbital Dots) === */
         .thinking-indicator {
             display: flex;
@@ -11167,6 +11191,192 @@
             flex-shrink: 0;
         }
         .offload-option.selected .offload-check {
+            opacity: 1;
+        }
+
+        /* Capability Pack Selector */
+        .chat-pack-selector {
+            position: relative;
+        }
+        .chat-pack-btn {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--glass-bg);
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.7rem;
+            font-family: inherit;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        .chat-pack-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        .chat-pack-btn.has-packs {
+            background: rgba(139, 92, 246, 0.12);
+            color: var(--accent);
+            border-color: rgba(139, 92, 246, 0.3);
+        }
+        .pack-badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            min-width: 14px;
+            height: 14px;
+            border-radius: 7px;
+            background: var(--accent);
+            color: #fff;
+            font-size: 0.6rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 3px;
+            line-height: 1;
+        }
+        .pack-dropdown {
+            display: none;
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 0;
+            min-width: 280px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.5);
+            z-index: 1100;
+            padding: 8px;
+            opacity: 0;
+            transform: translateY(8px);
+            transition: opacity 0.15s ease, transform 0.15s ease;
+        }
+        .pack-dropdown.open {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .pack-dropdown-header {
+            padding: 6px 10px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .pack-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            padding: 8px 10px;
+            border: none;
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: background 0.15s ease;
+        }
+        .pack-item:hover {
+            background: var(--bg-hover);
+        }
+        .pack-item-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            background: var(--glass-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }
+        .pack-item-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .pack-item-name {
+            font-weight: 500;
+            font-size: 0.82rem;
+        }
+        .pack-item-desc {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-top: 1px;
+        }
+        .pack-toggle {
+            position: relative;
+            width: 32px;
+            height: 18px;
+            border-radius: 9px;
+            background: var(--bg-hover);
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+        .pack-toggle.active {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+        .pack-toggle::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #fff;
+            transition: transform 0.2s ease;
+        }
+        .pack-toggle.active::after {
+            transform: translateX(14px);
+        }
+
+        /* Active packs bar (chips above input) */
+        .active-packs-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            padding: 4px 8px 0;
+        }
+        .active-pack-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: rgba(139, 92, 246, 0.12);
+            color: var(--accent);
+            font-size: 0.68rem;
+            font-weight: 500;
+            border: 1px solid rgba(139, 92, 246, 0.2);
+        }
+        .active-pack-chip.auto {
+            background: rgba(34, 211, 238, 0.1);
+            color: #22d3ee;
+            border-color: rgba(34, 211, 238, 0.2);
+        }
+        .active-pack-chip .chip-label {
+            font-size: 0.55rem;
+            opacity: 0.7;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .active-pack-chip .chip-remove {
+            cursor: pointer;
+            opacity: 0.5;
+            font-size: 0.75rem;
+            line-height: 1;
+        }
+        .active-pack-chip .chip-remove:hover {
             opacity: 1;
         }
 
@@ -24570,6 +24780,7 @@
                     <div class="chat-input-area">
                         <div class="quick-action-pills"></div>
                         <div id="chat-image-preview" class="image-upload-preview"></div>
+                        <div id="active-packs-bar" class="active-packs-bar" style="display:none"></div>
                         <div class="chat-input-wrapper">
                             <div class="input-model-selector">
                                 <button class="input-model-btn" id="input-model-btn" onclick="toggleInputModelDropdown()">
@@ -24612,6 +24823,20 @@
                                         <div class="offload-opt-info"><div class="offload-opt-name">Local</div><div class="offload-opt-detail">Process on this machine</div></div>
                                         <svg class="offload-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
                                     </button>
+                                </div>
+                            </div>
+                            <div class="chat-pack-selector" id="chat-pack-selector">
+                                <button class="chat-pack-btn" id="chat-pack-btn" onclick="togglePackDropdown()" title="Capability packs">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                                        <line x1="12" y1="22.08" x2="12" y2="12"/>
+                                    </svg>
+                                    <span class="pack-badge" id="pack-badge" style="display:none">0</span>
+                                </button>
+                                <div class="pack-dropdown" id="pack-dropdown">
+                                    <div class="pack-dropdown-header">Capability Packs</div>
+                                    <div class="pack-dropdown-list" id="pack-dropdown-list"></div>
                                 </div>
                             </div>
                             <button class="attach-btn" onclick="triggerFileAttach()" title="Attach file">
@@ -27747,6 +27972,7 @@
 
             // Load persistent chat history
             await loadChatHistory();
+            fetchCapabilityPacks();
 
             await loadBriefing();
             loadHomepage(); // Non-blocking parallel homepage load
@@ -32238,7 +32464,25 @@
             _twReset();  // Fresh typewriter state for new message
             // Show thinking orb while waiting for response
             const thinkWrapper = currentAssistantMessage.querySelector('.message-content-wrapper');
-            if (thinkWrapper) thinkWrapper.innerHTML = '<div class="thinking-orb-container"><div class="thinking-orb-dot"></div><span class="thinking-orb-label">Thinking...</span></div>';
+            if (thinkWrapper) {
+                thinkWrapper.textContent = '';
+                var orbContainer = document.createElement('div');
+                orbContainer.className = 'thinking-orb-container';
+                var orbDot = document.createElement('div');
+                orbDot.className = 'thinking-orb-dot';
+                var orbLabel = document.createElement('span');
+                orbLabel.className = 'thinking-orb-label';
+                orbLabel.textContent = 'Initializing...';
+                orbContainer.appendChild(orbDot);
+                orbContainer.appendChild(orbLabel);
+                thinkWrapper.appendChild(orbContainer);
+            }
+            // Phase transition: Initializing → Thinking after CLI startup (~3s)
+            if (window._phaseTimer) clearTimeout(window._phaseTimer);
+            window._phaseTimer = setTimeout(function() {
+                var label = currentAssistantMessage?.querySelector('.thinking-orb-label');
+                if (label && label.textContent === 'Initializing...') label.textContent = 'Thinking...';
+            }, 3000);
             // Force scroll to show thinking orb
             scrollMessagesToBottom(true);
 
@@ -32253,7 +32497,7 @@
                             'Authorization': 'Bearer ' + token,
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ content: actualContent, session_id: sessionId, model: getSelectedModel() })
+                        body: JSON.stringify({ content: actualContent, session_id: sessionId, model: getSelectedModel(), packs: getActivePacks() })
                     });
 
                     const reader = response.body.getReader();
@@ -32283,6 +32527,12 @@
                     if (errWrapper) errWrapper.textContent = 'Error: Could not reach server';
                 }
             }
+
+            // Clear auto-detected and dismissed packs after send
+            autoDetectedPacks = new Set();
+            dismissedAutoPacks = new Set();
+            updatePackBadge();
+            updateActivePacksBar();
 
             document.getElementById('send-btn').disabled = false;
         }
@@ -32409,6 +32659,9 @@
                 if (orb) orb.remove();
                 const spinner = currentAssistantMessage.querySelector('.spinner');
                 if (spinner) spinner.remove();
+                // Remove any tool phase indicator
+                var toolPhase = currentAssistantMessage.querySelector('.tool-phase-indicator');
+                if (toolPhase) toolPhase.remove();
 
                 // Append to typewriter buffer
                 _twBuffer += data.content;
@@ -32420,21 +32673,49 @@
                     _twTimer = setInterval(_twTick, _twBaseSpeed);
                 }
             } else if (data.type === 'tool' || data.type === 'tool_result') {
-                // Tool tracking — silently track but don't show in UI
+                // Tool tracking
                 if (data.type === 'tool') {
                     toolTrackerData.tools.push({ name: data.name, done: false });
                     toolTrackerData.count = toolTrackerData.tools.length;
                     toolTrackerData.currentTool = data.name;
+                    // Phase label: show "Running command..." during tool execution
+                    var orbLabel = currentAssistantMessage.querySelector('.thinking-orb-label');
+                    if (orbLabel) {
+                        // Still in pre-text phase (orb visible)
+                        orbLabel.textContent = 'Running command...';
+                    } else {
+                        // During text streaming — show subtle indicator below text
+                        var existing = currentAssistantMessage.querySelector('.tool-phase-indicator');
+                        if (!existing) {
+                            var indicator = document.createElement('div');
+                            indicator.className = 'tool-phase-indicator';
+                            indicator.textContent = 'Running command...';
+                            var wrapper = currentAssistantMessage.querySelector('.message-content-wrapper');
+                            if (wrapper) wrapper.appendChild(indicator);
+                        }
+                    }
                 } else {
                     var tool = toolTrackerData.tools.find(function(t) { return t.name === data.name && !t.done; });
                     if (tool) tool.done = true;
                     var running = toolTrackerData.tools.find(function(t) { return !t.done; });
                     toolTrackerData.currentTool = running ? running.name : null;
+                    // Remove tool phase indicator if no more tools running
+                    if (!running) {
+                        var ind = currentAssistantMessage.querySelector('.tool-phase-indicator');
+                        if (ind) ind.remove();
+                        // If orb still visible, revert to "Thinking..."
+                        var orbLbl = currentAssistantMessage.querySelector('.thinking-orb-label');
+                        if (orbLbl) orbLbl.textContent = 'Thinking...';
+                    }
                 }
             } else if (data.type === 'session') {
                 sessionId = data.session_id;
                 document.getElementById('session-id').textContent = sessionId.substring(0, 8) + '...';
             } else if (data.type === 'done' || data.type === 'end') {
+                // Clean up phase timer and tool indicator
+                if (window._phaseTimer) { clearTimeout(window._phaseTimer); window._phaseTimer = null; }
+                var doneToolInd = currentAssistantMessage?.querySelector('.tool-phase-indicator');
+                if (doneToolInd) doneToolInd.remove();
                 // Reset tracker state
                 toolTrackerData = { tools: [], count: 0, currentTool: null };
                 currentToolMessage = null;
@@ -32463,8 +32744,9 @@
 
                 // Ensure final scroll after response completes
                 scrollMessagesToBottom(true);
-                // Save chat history after response completes
-                debouncedSave();
+                // Save chat history IMMEDIATELY after response completes (not debounced)
+                if (saveTimeout) clearTimeout(saveTimeout);
+                saveChatHistory();
 
                 // Update model badge in new msg-model element
                 if (currentAssistantMessage && data.model) {
@@ -35022,7 +35304,13 @@
                     if (msg.classList.contains('tool')) return;
 
                     const type = msg.classList.contains('user') ? 'user' : 'assistant';
-                    const content = msg.getAttribute('data-text') || msg.textContent.trim();
+                    // Only use data-text (authoritative) — never fall back to textContent
+                    // which would scrape "Thinking..." orb text from placeholder cards
+                    const content = (msg.getAttribute('data-text') || '').trim();
+
+                    // Skip empty, placeholder, or in-progress assistant messages
+                    if (!content || content === 'Thinking...' || content === 'Running...'
+                        || content.includes('CerebroThinking') || content.includes('CerebroRunning')) return;
 
                     if (content) {
                         const entry = { type, content, timestamp: Date.now() };
@@ -35129,6 +35417,42 @@
                     }));
                 }
 
+                // Reconcile with NAS persistent session (authoritative source)
+                // Recovers assistant responses lost during page refresh mid-stream
+                try {
+                    const bestMessages = backendCount > localCount
+                        ? backendData.messages
+                        : (localData?.messages || []);
+                    const nasSessionId = sessionId || 'default';
+                    const sessionResponse = await fetch(`${API_URL}/chat/session/${nasSessionId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (sessionResponse.ok) {
+                        const sessionData = await sessionResponse.json();
+                        const sessionMsgs = sessionData.messages || [];
+                        if (sessionMsgs.length > 0) {
+                            const lastUI = bestMessages[bestMessages.length - 1];
+                            const lastNAS = sessionMsgs[sessionMsgs.length - 1];
+                            if (lastUI && lastUI.type === 'user' && lastNAS.role === 'assistant' && lastNAS.content) {
+                                console.log('[Chat] Recovered assistant response from persistent session');
+                                bestMessages.push({
+                                    type: 'assistant',
+                                    content: lastNAS.content,
+                                    timestamp: lastNAS.timestamp ? new Date(lastNAS.timestamp).getTime() : Date.now()
+                                });
+                                renderChatHistory(bestMessages);
+                                localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify({
+                                    messages: bestMessages,
+                                    sessionId: sessionId,
+                                    lastSaved: Date.now()
+                                }));
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.log('Persistent session reconciliation skipped:', e.message);
+                }
+
             } catch (e) {
                 console.error('Failed to load chat history:', e);
             }
@@ -35209,6 +35533,12 @@
             if (saveTimeout) clearTimeout(saveTimeout);
             saveTimeout = setTimeout(saveChatHistory, 1000);
         }
+
+        // Save on page refresh/close — captures partial streaming responses
+        window.addEventListener('beforeunload', function() {
+            if (saveTimeout) clearTimeout(saveTimeout);
+            saveChatHistory();
+        });
 
         // ==================== QUICK ACTIONS ====================
         async function runQuickAction(command) {
@@ -41870,6 +42200,9 @@ Please proceed with implementing this recommendation. You have full permissions.
             if (!e.target.closest('.chat-offload-selector')) {
                 closeChatOffloadDropdown();
             }
+            if (!e.target.closest('.chat-pack-selector')) {
+                closePackDropdown();
+            }
         });
 
         function sendQuickAction(text) {
@@ -41991,6 +42324,16 @@ Please proceed with implementing this recommendation. You have full permissions.
             document.body.appendChild(fileInput);
             fileInput.click();
         }
+
+        // Auto-detect packs based on chat input
+        var _packDetectTimer = null;
+        document.getElementById('chat-input')?.addEventListener('input', function() {
+            if (_packDetectTimer) clearTimeout(_packDetectTimer);
+            _packDetectTimer = setTimeout(function() {
+                var val = document.getElementById('chat-input')?.value || '';
+                if (val.length > 3) autoDetectPacks(val);
+            }, 300);
+        });
 
         // Paste listeners for image upload
         document.getElementById('chat-input')?.addEventListener('paste', async (e) => {
@@ -49819,6 +50162,153 @@ Please proceed with implementing this recommendation. You have full permissions.
         function closeChatOffloadDropdown() {
             var dropdown = document.getElementById('chat-offload-dropdown');
             if (dropdown) dropdown.classList.remove('open');
+        }
+
+        // === Capability Packs ===
+        var capabilityPacks = [];
+        var activePacks = new Set(JSON.parse(localStorage.getItem('cerebro_active_packs') || '[]'));
+        var autoDetectedPacks = new Set();
+        var dismissedAutoPacks = new Set();
+
+        const PACK_ICONS = {
+            globe: '\u{1F310}', users: '\u{1F465}', clock: '\u23F0', chart: '\u{1F4C8}',
+            server: '\u{1F5A5}\uFE0F', folder: '\u{1F4C1}', code: '\u{1F4BB}', box: '\u{1F4E6}'
+        };
+
+        async function fetchCapabilityPacks() {
+            try {
+                const resp = await fetch(API_URL + '/api/capability-packs', {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('cerebro_token') }
+                });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                const data = await resp.json();
+                capabilityPacks = data.packs || [];
+                renderPackDropdown();
+                updatePackBadge();
+                updateActivePacksBar();
+            } catch (e) {
+                console.warn('[Packs] Failed to load:', e.message);
+            }
+        }
+
+        function renderPackDropdown() {
+            const list = document.getElementById('pack-dropdown-list');
+            if (!list) return;
+            // NOTE: innerHTML used here with pack data from our own backend (trusted source)
+            let html = '';
+            capabilityPacks.forEach(function(pack) {
+                const isManual = activePacks.has(pack.id);
+                const isAuto = autoDetectedPacks.has(pack.id);
+                const isActive = isManual || isAuto;
+                const icon = PACK_ICONS[pack.icon] || PACK_ICONS.box;
+                var clickAction = (isAuto && !isManual) ? 'dismissAutoPack' : 'togglePack';
+                html += '<div class="pack-item" onclick="' + clickAction + '(\'' + pack.id + '\')">'
+                    + '<div class="pack-item-icon">' + icon + '</div>'
+                    + '<div class="pack-item-info">'
+                    + '<div class="pack-item-name">' + pack.name + (isAuto && !isManual ? ' <span style="color:#22d3ee;font-size:0.6rem;font-weight:600">AUTO</span>' : '') + '</div>'
+                    + '<div class="pack-item-desc">' + pack.description + '</div>'
+                    + '</div>'
+                    + '<div class="pack-toggle' + (isActive ? ' active' : '') + '"></div>'
+                    + '</div>';
+            });
+            list.innerHTML = html;
+        }
+
+        function togglePack(id) {
+            if (activePacks.has(id)) {
+                activePacks.delete(id);
+            } else {
+                activePacks.add(id);
+                dismissedAutoPacks.delete(id);
+            }
+            localStorage.setItem('cerebro_active_packs', JSON.stringify([...activePacks]));
+            renderPackDropdown();
+            updatePackBadge();
+            updateActivePacksBar();
+        }
+
+        function dismissAutoPack(id) {
+            autoDetectedPacks.delete(id);
+            dismissedAutoPacks.add(id);
+            renderPackDropdown();
+            updatePackBadge();
+            updateActivePacksBar();
+        }
+
+        function togglePackDropdown() {
+            const dropdown = document.getElementById('pack-dropdown');
+            if (!dropdown) return;
+            const isOpen = dropdown.classList.contains('open');
+            dropdown.classList.toggle('open');
+            const btn = document.getElementById('chat-pack-btn');
+            if (btn) btn.classList.toggle('open', !isOpen);
+            if (!isOpen) fetchCapabilityPacks();
+        }
+
+        function closePackDropdown() {
+            const dropdown = document.getElementById('pack-dropdown');
+            const btn = document.getElementById('chat-pack-btn');
+            if (dropdown) dropdown.classList.remove('open');
+            if (btn) btn.classList.remove('open');
+        }
+
+        function getActivePacks() {
+            const merged = new Set([...activePacks, ...autoDetectedPacks]);
+            return merged.size > 0 ? [...merged] : null;
+        }
+
+        function updatePackBadge() {
+            const badge = document.getElementById('pack-badge');
+            if (!badge) return;
+            const count = activePacks.size + autoDetectedPacks.size;
+            badge.textContent = count;
+            badge.style.display = count > 0 ? '' : 'none';
+        }
+
+        function updateActivePacksBar() {
+            const bar = document.getElementById('active-packs-bar');
+            if (!bar) return;
+            const merged = new Set([...activePacks, ...autoDetectedPacks]);
+            if (merged.size === 0) {
+                bar.style.display = 'none';
+                bar.textContent = '';
+                return;
+            }
+            bar.style.display = '';
+            // NOTE: innerHTML used here with pack data from our own backend (trusted source)
+            let html = '';
+            merged.forEach(function(pid) {
+                const pack = capabilityPacks.find(p => p.id === pid);
+                if (!pack) return;
+                const isAuto = autoDetectedPacks.has(pid) && !activePacks.has(pid);
+                const icon = PACK_ICONS[pack.icon] || PACK_ICONS.box;
+                html += '<span class="active-pack-chip' + (isAuto ? ' auto' : '') + '">'
+                    + icon + ' ' + pack.name
+                    + (isAuto ? ' <span class="chip-label">auto</span> <span class="chip-remove" onclick="event.stopPropagation();dismissAutoPack(\'' + pid + '\')">&times;</span>'
+                             : ' <span class="chip-remove" onclick="event.stopPropagation();togglePack(\'' + pid + '\')">&times;</span>')
+                    + '</span>';
+            });
+            bar.innerHTML = html;
+        }
+
+        function autoDetectPacks(text) {
+            if (!capabilityPacks.length) return;
+            var textLower = text.toLowerCase();
+            var newAuto = new Set();
+            capabilityPacks.forEach(function(pack) {
+                if (activePacks.has(pack.id)) return;
+                if (dismissedAutoPacks.has(pack.id)) return;
+                var keywords = pack.keywords || [];
+                if (keywords.some(function(kw) { return textLower.includes(kw); })) {
+                    newAuto.add(pack.id);
+                }
+            });
+            if (newAuto.size !== autoDetectedPacks.size || ![...newAuto].every(function(id) { return autoDetectedPacks.has(id); })) {
+                autoDetectedPacks = newAuto;
+                renderPackDropdown();
+                updatePackBadge();
+                updateActivePacksBar();
+            }
         }
 
         // Check real browser status and sync the chat orb.

@@ -562,7 +562,7 @@ if COGNITIVE_LOOP_AVAILABLE:
 CHAT_SESSION_DIR = Path(config.AI_MEMORY_PATH) / "cerebro" / "chat_sessions"
 CHAT_SESSION_DIR.mkdir(parents=True, exist_ok=True)
 SUMMARY_TRIGGER_INTERVAL = 10   # Regenerate summary every 10 new messages
-RECENT_MESSAGES_COUNT = 10      # Keep last 10 messages verbatim in prompt
+RECENT_MESSAGES_COUNT = 5       # Keep last 5 messages verbatim in prompt
 MAX_PERSISTENT_MESSAGES = 200   # Trim file to last 200 messages
 
 _session_cache: dict[str, dict] = {}
@@ -1396,6 +1396,229 @@ curl -s -X POST http://localhost:59000/agents/projects/bulk-assign \
 - Set project_id to "" (empty string) to uncategorize an agent
 """
 
+# ============================================================================
+# Capability Pack Constants (self-contained text blocks for modular injection)
+# ============================================================================
+
+_CEREBRO_PACK_BROWSER = """## Browser Control (shared Chrome — user sees your actions in real-time)
+
+**Tab management (no auth needed):**
+- List tabs: `curl -s http://localhost:59000/internal/browser/tabs`
+- Open tab: `curl -s -X POST http://localhost:59000/internal/browser/tab/new -H "Content-Type: application/json" -d '{{"url": "https://google.com"}}'`
+- Close tab: `curl -s -X POST http://localhost:59000/internal/browser/tab/close -H "Content-Type: application/json" -d '{{"tab_id": "TAB_ID"}}'`
+- Navigate: `curl -s -X POST http://localhost:59000/internal/browser/navigate -H "Content-Type: application/json" -d '{{"url": "https://google.com"}}'`
+
+**Page interaction:**
+- Page state (text with numbered elements): `curl -s http://localhost:59000/api/browser/page_state -H "Authorization: Bearer $TOKEN"`
+  Returns: [0] input: "Search" / [1] button: "Submit" / [2] link: "Home"
+- Click by index: `curl -s -X POST http://localhost:59000/api/browser/click -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"element_index":5}}'`
+- Click by selector: `curl -s -X POST http://localhost:59000/api/browser/click -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"selector":"button.search-btn"}}'`
+- Fill input: `curl -s -X POST http://localhost:59000/api/browser/fill -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"element_index":3,"value":"search term"}}'`
+- Scroll: `curl -s -X POST http://localhost:59000/api/browser/scroll -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"direction":"down","amount":500}}'`
+- Press key: `curl -s -X POST http://localhost:59000/api/browser/press_key -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"key":"Enter"}}'`
+- Screenshot (save to file, then Read the image): `curl -s http://localhost:59000/api/browser/screenshot/file -H "Authorization: Bearer $TOKEN"`
+
+**Workflow:** List tabs to get tab_id, then close. When user says "close the browser" they mean close the tab(s), not Chrome itself.
+"""
+
+_CEREBRO_PACK_AGENTS = """## Agent Management
+
+**Spawn an agent:**
+```bash
+curl -s -X POST http://localhost:59000/internal/chat-spawn-agent \\
+  -H "Content-Type: application/json" \\
+  -d '{{"task": "Your task here", "agent_type": "researcher", "model": "sonnet"}}'
+```
+Agent types: worker, researcher, coder, analyst, browser, specops_worker, specops_researcher
+
+**SpecOps Agent (timed cycling mission):**
+```bash
+curl -s -X POST http://localhost:59000/internal/chat-spawn-agent \\
+  -H "Content-Type: application/json" \\
+  -d '{{"task": "Mission prompt...", "agent_type": "specops_researcher", "model": "sonnet", "specops_config": {{"mission_name": "OPERATION NAME", "work_style": "cycle", "cycle_interval": 3600, "mission_duration": 259200, "target_scope": "Focus area", "success_criteria": "Success measure"}}}}'
+```
+
+**SpecOps Config:** mission_name, work_style ("cycle" REQUIRED), cycle_interval (seconds), mission_duration (seconds), target_scope, success_criteria.
+ALWAYS use work_style "cycle". Ask user for cycle_interval and mission_duration if not specified.
+
+**Optional fields:** context, expected_output, priority ("low"/"normal"/"high"/"critical"), model ("sonnet"/"opus"/"haiku"), timeout (seconds), project_id.
+
+**Agent Control (Central Command):**
+- List active: `curl -s http://localhost:59000/internal/agents/active`
+- Set directive: `curl -s -X PUT http://localhost:59000/internal/agent/AGENT_ID/directive -H "Content-Type: application/json" -d '{{"directive": "New instructions", "force_cycle": false, "mode": "override"}}'`
+  mode: "override" (replace) or "prepend" (add as priority)
+- Force cycle: `curl -s -X POST http://localhost:59000/agents/AGENT_ID/specops/force-cycle -H "Authorization: Bearer $TOKEN"`
+- Pause/Resume: `curl -s -X PATCH http://localhost:59000/agents/AGENT_ID/specops -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"auto_continue": false}}'`
+- Stop agent: `curl -s -X DELETE http://localhost:59000/agents/AGENT_ID -H "Authorization: Bearer $TOKEN"`
+
+RULES: Call /internal/agents/active first. Confirm agent identity before changes. After setting a directive, tell user when it takes effect.
+"""
+
+_CEREBRO_PACK_AUTOMATIONS = """## Automations (Auto Page)
+Create and manage scheduled automations that appear on the Auto page.
+
+**List all:** `curl -s http://localhost:59000/internal/automations`
+
+**Create automation:**
+```bash
+curl -s -X POST http://localhost:59000/internal/chat-create-automation \\
+  -H "Content-Type: application/json" \\
+  -d '{{"name": "Morning Crypto Report", "agent_type": "researcher", "prompt": "Check current crypto prices and summarize top movers", "schedule_type": "recurring", "frequency": "daily", "time": "09:00", "days_of_week": [1,2,3,4,5], "enabled": true, "timeout": 3600}}'
+```
+
+**Schedule types:**
+- schedule_type: "once" or "recurring"
+- One-time: set "date" (YYYY-MM-DD) and "time" (HH:MM)
+- Recurring: "frequency" = "daily"/"weekly"/"monthly"/"custom"
+  - weekly: "days_of_week" [0=Sun..6=Sat], default [1,2,3,4,5] (Mon-Fri)
+  - custom: "cron" field with cron expression
+- agent_type: "researcher", "coder", "worker", "analyst"
+- timeout: seconds (3600=1hr, 0=unlimited)
+
+**Update:** `curl -s -X PATCH http://localhost:59000/internal/automations/SCHEDULE_ID -H "Content-Type: application/json" -d '{{"enabled": false}}'`
+**Run now:** `curl -s -X POST http://localhost:59000/internal/automations/SCHEDULE_ID/run`
+**Delete:** `curl -s -X DELETE http://localhost:59000/internal/automations/SCHEDULE_ID`
+
+RULES: Extract name, prompt, schedule, agent_type. Defaults: daily 09:00, researcher, 1hr timeout.
+"""
+
+_CEREBRO_PACK_GROUPS = """## Agent Group/Project Management
+Organize agents into groups (projects) — folders on the Agents tab.
+
+**List all groups:** `curl -s http://localhost:59000/internal/projects`
+**Create group:** `curl -s -X POST http://localhost:59000/internal/projects/create -H "Content-Type: application/json" -d '{{"name": "Research"}}'`
+**Rename group:** `curl -s -X POST http://localhost:59000/internal/projects/PROJECT_ID/rename -H "Content-Type: application/json" -d '{{"name": "New Name"}}'`
+**Delete group:** `curl -s -X DELETE http://localhost:59000/internal/projects/PROJECT_ID`
+**Move agent:** `curl -s -X POST http://localhost:59000/internal/agents/AGENT_ID/project -H "Content-Type: application/json" -d '{{"project_id": "PROJECT_ID"}}'`
+**Bulk move:** `curl -s -X POST http://localhost:59000/internal/projects/bulk-assign -H "Content-Type: application/json" -d '{{"agent_ids": ["id1", "id2"], "project_id": "PROJECT_ID"}}'`
+
+RULES: List groups first. Use bulk-assign for 2+ agents. Empty project_id uncategorizes.
+"""
+
+_CEREBRO_PACK_TRADING = """## Trading (Alpaca Paper Account, ~$100K)
+- **Positions:** `curl -s http://localhost:59000/api/trading/positions -H "Authorization: Bearer $TOKEN"`
+- **Place order:** `curl -s -X POST http://localhost:59000/api/trading/order -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"symbol":"AAPL","qty":1,"side":"buy","type":"market","time_in_force":"day"}}'`
+- **Account:** `curl -s http://localhost:59000/api/trading/account -H "Authorization: Bearer $TOKEN"`
+- **Orders:** `curl -s http://localhost:59000/api/trading/orders -H "Authorization: Bearer $TOKEN"`
+- **Close position:** `curl -s -X DELETE http://localhost:59000/api/trading/position/SYMBOL -H "Authorization: Bearer $TOKEN"`
+- **Cancel order:** `curl -s -X DELETE http://localhost:59000/api/trading/order/ORDER_ID -H "Authorization: Bearer $TOKEN"`
+- **Log activity:** `curl -s -X POST http://localhost:59000/api/wallet/log -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{{"category":"trade","description":"...","pnl":0.0,"symbol":"BTC/USD","source":"agent"}}'`
+  Categories: trade, backtest, bet, other
+
+When {user_name} mentions trades, positions, buying, selling, crypto, stocks — USE these endpoints.
+"""
+
+_CEREBRO_PACK_DEVICES = """## Remote Machines (SSH Access)
+SSH keys at ~/.ssh/. Registered devices:
+{device_list}
+
+### Agent Offloading
+When asked to spawn an agent on a specific device (e.g., "spawn on my DGX", "run this on Darkhorse"):
+1. Identify the device by its friendly name from the list above
+2. Tell the user you'll route the agent to that device
+3. The frontend handles actual device routing when the agent is launched
+Device names are case-insensitive. Match by friendly name.
+"""
+
+_CEREBRO_PACK_DEV_SERVER = """## Dev Server Hosting (Show Apps to User)
+When you build a web app (React, Flask, etc.), the user can view it through Cerebro's reverse proxy at `/app/PORT/`.
+
+**Option A — Dev Server (live reload):**
+1. Start dev server on all interfaces (`--host 0.0.0.0`):
+   - React/Vite: `npm run dev -- --host 0.0.0.0 --port 3001`
+   - Flask: `flask run --host 0.0.0.0 --port 5000`
+2. Register with Cerebro (auto-opens in Chrome):
+   ```bash
+   curl -s -X POST http://localhost:59000/api/dev-servers \\
+     -H "Authorization: Bearer $TOKEN" \\
+     -H "Content-Type: application/json" \\
+     -d '{{"port": 3001, "name": "My App", "framework": "react"}}'
+   ```
+
+**Option B — Serve a built app:**
+```bash
+curl -s -X POST http://localhost:59000/api/dev-servers/serve \\
+  -H "Authorization: Bearer $TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{{"directory": "/path/to/dist", "port": 3001, "spa": true, "name": "My App"}}'
+```
+
+**Base path config:** Vite: `base: '/app/PORT/'` in vite.config. CRA: `"homepage": "/app/PORT/"` in package.json.
+**API calls:** fetch() and XHR are auto-patched by the proxy. Use relative URLs for reliability.
+**Clean up:** `curl -s -X DELETE http://localhost:59000/api/dev-servers/3001 -H "Authorization: Bearer $TOKEN"`
+IMPORTANT: Always use `--host 0.0.0.0` so the server binds to all interfaces.
+"""
+
+# ============================================================================
+# Slim Environment Blocks (Step 2)
+# ============================================================================
+
+_CEREBRO_CHAT_ENV_LINUX = """## Environment
+You are running on the Cerebro Server (Linux, ARM64) with full system access.
+Native bash. Data at the configured AI_MEMORY_PATH. Dangerously-skip-permissions enabled.
+Use the endpoints described in your active capability packs."""
+
+_CEREBRO_CHAT_ENV_WINDOWS = """## Environment
+You are running on Windows Desktop. PowerShell and bash available.
+Data at the configured AI_MEMORY_PATH. Use endpoints in your active capability packs."""
+
+_CEREBRO_CHAT_ENV_STANDALONE = """## Environment
+You are running in a standalone Docker container with bash access.
+Use endpoints described in your active capability packs."""
+
+# ============================================================================
+# Pack Registry + Loader (Step 3)
+# ============================================================================
+
+_CAPABILITY_PACKS = {
+    "browser":     {"id": "browser",     "name": "Browser Control",  "icon": "globe",  "description": "Chrome tabs, page interaction, screenshots",
+                    "keywords": ["browser","chrome","tab","navigate","screenshot","click","scroll","page","website","web","browse","open site","close tab"],
+                    "content": _CEREBRO_PACK_BROWSER, "builtin": True, "token_estimate": 400},
+    "agents":      {"id": "agents",      "name": "Agent Management", "icon": "users",  "description": "Spawn agents, directives, SpecOps, pause/resume/stop",
+                    "keywords": ["agent","spawn","deploy","specops","mission","worker","researcher","coder","analyst","directive","kill agent"],
+                    "content": _CEREBRO_PACK_AGENTS, "builtin": True, "token_estimate": 400},
+    "automations": {"id": "automations", "name": "Automations",      "icon": "clock",  "description": "Create/run scheduled automations",
+                    "keywords": ["automation","schedule","cron","recurring","daily","weekly","automate"],
+                    "content": _CEREBRO_PACK_AUTOMATIONS, "builtin": True, "token_estimate": 300},
+    "trading":     {"id": "trading",     "name": "Trading",          "icon": "chart",  "description": "Alpaca positions, orders, market data",
+                    "keywords": ["trade","trading","stock","crypto","buy","sell","position","order","alpaca","portfolio","market","price"],
+                    "content": _CEREBRO_PACK_TRADING, "builtin": True, "token_estimate": 150},
+    "devices":     {"id": "devices",     "name": "Device Network",   "icon": "server", "description": "SSH targets, remote machine orchestration",
+                    "keywords": ["ssh","device","spark","asus","darkhorse","crystal","remote","machine"],
+                    "content": _CEREBRO_PACK_DEVICES, "builtin": True, "token_estimate": 150, "dynamic": True},
+    "groups":      {"id": "groups",      "name": "Group Management", "icon": "folder", "description": "Agent groups/projects, bulk assign",
+                    "keywords": ["group","project","folder","organize","categorize","move agent"],
+                    "content": _CEREBRO_PACK_GROUPS, "builtin": True, "token_estimate": 150},
+    "dev_server":  {"id": "dev_server",  "name": "Dev Server",       "icon": "code",   "description": "Host web apps via Cerebro reverse proxy",
+                    "keywords": ["dev server","host","react","flask","vite","npm","proxy","serve"],
+                    "content": _CEREBRO_PACK_DEV_SERVER, "builtin": True, "token_estimate": 300},
+}
+
+_CUSTOM_PACKS_DIR = Path(config.AI_MEMORY_PATH) / "cerebro" / "capability_packs"
+
+def _load_all_packs():
+    """Load built-in + custom capability packs."""
+    packs = dict(_CAPABILITY_PACKS)
+    try:
+        _CUSTOM_PACKS_DIR.mkdir(parents=True, exist_ok=True)
+        for f in _CUSTOM_PACKS_DIR.glob("*.json"):
+            try:
+                data = json.loads(f.read_text())
+                data["id"] = data.get("id", f.stem)
+                data["builtin"] = False
+                packs[data["id"]] = data
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return packs
+
+def _auto_detect_packs(message: str) -> list[str]:
+    """Auto-detect which packs match a message based on keywords."""
+    msg_lower = message.lower()
+    packs = _load_all_packs()
+    return [pid for pid, p in packs.items() if any(kw in msg_lower for kw in p.get("keywords", []))]
+
 # Layer 5: Chat identity (full hub persona for the chat page)
 _CEREBRO_CHAT_IDENTITY = """You are Cerebro — {user_name}'s persistent AI companion and operational hub.
 
@@ -1423,7 +1646,7 @@ You are the central hub of a full-stack AI operations platform:
 - Dry humor is welcome. Sycophancy is not.
 - You're part of {user_name}'s team, not a tool they're renting
 
-{platform_context}"""
+You can create new capability packs via POST /internal/capability-packs to extend your own abilities."""
 
 # Chat platform contexts (environment-specific, only used by chat)
 _CHAT_PLATFORM_STANDALONE = """
@@ -3850,6 +4073,7 @@ class ChatMessage(BaseModel):
     content: str
     session_id: Optional[str] = None
     model: Optional[str] = None
+    packs: Optional[list[str]] = None
 
 class TaskRequest(BaseModel):
     prompt: str
@@ -4320,6 +4544,7 @@ async def chat_message(sid, data):
     session_id = data.get("session_id") or "default"
     model = data.get("model")
     image_path = data.get("image_path")
+    packs = data.get("packs")
 
     # Validate model if provided
     if model and model not in VALID_MODEL_IDS:
@@ -4366,17 +4591,20 @@ async def chat_message(sid, data):
     if _offload_device:
         stream = _process_chat_offloaded(content, session_id, model=model, device=_offload_device, device_id=offload_device_id, image_path=image_path)
     else:
-        stream = process_chat_stream(content, session_id, model=model, image_path=image_path)
+        stream = process_chat_stream(content, session_id, model=model, image_path=image_path, packs=packs)
 
-    async for chunk in stream:
-        await sio.emit("chat_response", chunk, room=os.environ.get("CEREBRO_ROOM", "default"))
-        if chunk.get("type") == "text":
-            full_response += chunk.get("content", "")
-
-    # Save assistant response to session + AI Memory
-    if full_response.strip():
-        add_to_session(session_id, "assistant", full_response)
-    asyncio.create_task(save_chat_to_memory(session_id, content, full_response))
+    try:
+        async for chunk in stream:
+            await sio.emit("chat_response", chunk, room=os.environ.get("CEREBRO_ROOM", "default"))
+            if chunk.get("type") == "text":
+                full_response += chunk.get("content", "")
+    except Exception as e:
+        print(f"[Chat] Socket stream error, saving partial response ({len(full_response)} chars): {e}")
+    finally:
+        # Always save assistant response to session + AI Memory, even on disconnect
+        if full_response.strip():
+            add_to_session(session_id, "assistant", full_response)
+        asyncio.create_task(save_chat_to_memory(session_id, content, full_response))
 
 @sio.event
 async def change_model(sid, data):
@@ -4680,39 +4908,70 @@ def _build_projects_roster() -> str:
         return ""
 
 
-def _build_chat_prompt(content: str, session_id: str) -> str:
-    """Build a prompt with conversation context injected for Claude CLI."""
+def _build_chat_prompt(content: str, session_id: str, active_packs: list[str] = None) -> tuple[str, str]:
+    """Build a system prompt (context) and user message for chat.
+
+    Returns (system_prompt, user_message) tuple.
+    system_prompt: identity + env + packs + rosters + history
+    user_message: the current user message
+    """
     data = _load_persistent_session(session_id)
     summary = data.get("summary", "")
     messages = data.get("messages", [])
 
     user_name = _get_user_name()
-    platform_ctx = _CHAT_PLATFORM_STANDALONE if _IS_STANDALONE else (_CHAT_PLATFORM_LINUX if _IS_LINUX else _CHAT_PLATFORM_WINDOWS)
-    chat_identity = _CEREBRO_CHAT_IDENTITY.format(user_name=user_name, platform_context=platform_ctx)
-    parts = [chat_identity, _CEREBRO_CAP_DEV_SERVER]
+    chat_identity = _CEREBRO_CHAT_IDENTITY.format(user_name=user_name)
 
-    # Inject device list so Cerebro knows about available remote machines
-    device_list = _build_device_list()
-    if device_list and device_list != "No devices registered.":
-        parts.append(_CEREBRO_CAP_DEVICES.format(device_list=device_list))
-        parts.append("""### Agent Offloading
-When the user asks you to spawn an agent on a specific device (e.g., "spawn on my DGX", "run this on Darkhorse"), you should:
-1. Identify the device by its friendly name from the device list above
-2. Tell the user you'll route the agent to that device
-3. The frontend will handle the actual device routing when the agent is launched
-Note: Device names are case-insensitive. Match by friendly name.""")
+    # Slim environment block
+    if _IS_STANDALONE:
+        env_block = _CEREBRO_CHAT_ENV_STANDALONE
+    elif _IS_LINUX:
+        env_block = _CEREBRO_CHAT_ENV_LINUX
+    else:
+        env_block = _CEREBRO_CHAT_ENV_WINDOWS
 
-    # Inject active agent roster so Cerebro is immediately aware of deployed agents
+    parts = [chat_identity, env_block]
+
+    # Capability packs — use frontend selection, or auto-detect as fallback
+    all_packs = _load_all_packs()
+    requested = set(active_packs) if active_packs is not None else set()
+    # Only auto-detect if frontend didn't send any pack selection at all
+    # (empty list = user explicitly chose no packs; None = old client / no pack support)
+    if active_packs is None:
+        auto = set(_auto_detect_packs(content))
+    else:
+        auto = set()
+    merged_pack_ids = requested | auto
+
+    active_pack_names = []
+    for pid in sorted(merged_pack_ids):
+        pack = all_packs.get(pid)
+        if not pack:
+            continue
+        pack_content = pack.get("content", "")
+        if pack.get("dynamic") and pid == "devices":
+            device_list = _build_device_list()
+            if device_list:
+                pack_content = pack_content.format(device_list=device_list)
+        if "{user_name}" in pack_content:
+            pack_content = pack_content.replace("{user_name}", user_name)
+        parts.append(pack_content)
+        active_pack_names.append(pack["name"])
+
+    # Pack awareness labels
+    available_names = [p["name"] for pid, p in all_packs.items() if pid not in merged_pack_ids]
+    if active_pack_names:
+        parts.append(f"\n**Active capability packs:** {', '.join(active_pack_names)}")
+    if available_names:
+        parts.append(f"**Available packs (ask user to enable if needed):** {', '.join(available_names)}")
+
+    # Dynamic rosters (always included — they're small and situational)
     roster = _build_active_agent_roster()
     if roster:
         parts.append(roster)
-
-    # Inject automations roster so Cerebro knows about scheduled tasks
     auto_roster = _build_automations_roster()
     if auto_roster:
         parts.append(auto_roster)
-
-    # Inject projects roster so Cerebro knows about agent groups
     projects_roster = _build_projects_roster()
     if projects_roster:
         parts.append(projects_roster)
@@ -4725,18 +4984,22 @@ Note: Device names are case-insensitive. Match by friendly name.""")
         parts.append("\n## Recent Conversation")
         for m in recent:
             role = "User" if m["role"] == "user" else "Cerebro"
-            parts.append(f"{role}: {m['content'][:2000]}")
+            text = m['content']
+            if len(text) > 500:
+                text = text[:500] + "... [truncated]"
+            parts.append(f"{role}: {text}")
 
-    parts.append(f"\n## Current Message\n{content}")
-    return "\n".join(parts)
+    system_prompt = "\n".join(parts)
+    print(f"[Chat Prompt] sys={len(system_prompt)} chars, ~{len(system_prompt)//4} tokens | msg={len(content)} chars | packs: {active_pack_names or 'none'} | auto-detected: {list(auto)} | recent msgs: {len(recent) if recent else 0}")
+    return system_prompt, content
 
 
-async def process_chat_stream(content: str, session_id: Optional[str] = None, model: Optional[str] = None, image_path: Optional[str] = None):
+async def process_chat_stream(content: str, session_id: Optional[str] = None, model: Optional[str] = None, image_path: Optional[str] = None, packs: Optional[list[str]] = None):
     """Process a chat message using Claude Code CLI with conversation context."""
-    async for chunk in process_with_claude_code(content, session_id=session_id or "default", model=model, image_path=image_path):
+    async for chunk in process_with_claude_code(content, session_id=session_id or "default", model=model, image_path=image_path, packs=packs):
         yield chunk
 
-async def process_with_claude_code(content: str, session_id: str = "default", model: Optional[str] = None, image_path: Optional[str] = None) -> AsyncGenerator[dict, None]:
+async def process_with_claude_code(content: str, session_id: str = "default", model: Optional[str] = None, image_path: Optional[str] = None, packs: Optional[list[str]] = None) -> AsyncGenerator[dict, None]:
     """
     Process chat using the REAL Claude Code CLI!
     This spawns an actual Claude Code session and streams the output.
@@ -4747,12 +5010,12 @@ async def process_with_claude_code(content: str, session_id: str = "default", mo
     import shutil
     import threading
 
-    # Build context-injected prompt
-    prompt = _build_chat_prompt(content, session_id)
+    # Build system prompt (context) and user message separately
+    system_prompt, user_message = _build_chat_prompt(content, session_id, active_packs=packs)
 
-    # If an image is attached, prepend instructions
+    # If an image is attached, prepend instructions to user message
     if image_path:
-        prompt = f"[Image attached at: {image_path}]\nUse the Read tool to view this image, then respond.\n\n{prompt}"
+        user_message = f"[Image attached at: {image_path}]\nPlease describe and respond to this image.\n\n{user_message}"
 
     # Find claude executable
     claude_path = shutil.which("claude")
@@ -4779,21 +5042,35 @@ async def process_with_claude_code(content: str, session_id: str = "default", mo
         return
 
     process = None
+    _t_start = __import__('time').time()
     try:
         # Build command with model selection
-        cmd_args = [claude_path, "-p", prompt, "--model", effective_model,
-                    "--output-format", "stream-json", "--dangerously-skip-permissions", "--verbose"]
+        # Chat-optimized CLI flags:
+        # --system-prompt: our chat context (replaces Claude Code's default system prompt)
+        # --strict-mcp-config (boolean flag): skip ALL MCP servers
+        # --tools "Bash": only Bash tool (for curl commands to Cerebro's own API)
+        # CLAUDE_CONFIG_DIR: use minimal config with no hooks
+        # CWD /tmp (Linux) or ~ (Windows): avoid loading project-level settings
+        cmd_args = [claude_path, "-p", user_message,
+                    "--system-prompt", system_prompt,
+                    "--model", effective_model,
+                    "--output-format", "stream-json", "--dangerously-skip-permissions", "--verbose",
+                    "--strict-mcp-config", "--tools", "Bash"]
 
-        # Strip CLAUDECODE env var so spawned CLI doesn't think it's nested
+        # Use minimal config dir: no hooks, no MCP servers, just auth credentials
         agent_env = os.environ.copy()
         agent_env.pop("CLAUDECODE", None)
+        agent_env["CLAUDE_CONFIG_DIR"] = os.path.expanduser("~/.claude-chat")
+
+        # Use /tmp on Linux, home dir on Windows
+        chat_cwd = "/tmp" if os.path.exists("/tmp") else os.path.expanduser("~")
 
         # Use subprocess.Popen (works with SelectorEventLoop on Windows)
         process = subprocess.Popen(
             cmd_args,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            cwd=config.AI_MEMORY_PATH,
+            cwd=chat_cwd,
             env=agent_env,
         )
 
@@ -4814,6 +5091,7 @@ async def process_with_claude_code(content: str, session_id: str = "default", mo
         reader.start()
 
         full_response = ""
+        _first_token = True
 
         # Stream lines from the queue
         while True:
@@ -4870,6 +5148,11 @@ async def process_with_claude_code(content: str, session_id: str = "default", mo
                     error_msg = data.get("error", {}).get("message", str(data))
                     yield {"type": "text", "content": f"Error: {error_msg}"}
 
+                # Log time to first token (standalone check, not part of msg_type chain)
+                if _first_token and full_response:
+                    _first_token = False
+                    print(f"[Chat] First token in {__import__('time').time() - _t_start:.1f}s | model={effective_model}")
+
             except json.JSONDecodeError:
                 # Not JSON, might be raw text
                 text = line.decode('utf-8', errors='replace').strip()
@@ -4883,11 +5166,15 @@ async def process_with_claude_code(content: str, session_id: str = "default", mo
             process.kill()
             yield {"type": "text", "content": "\n\nClaude Code timed out after 5 minutes."}
 
-        # Check for errors (but only report if we got no output)
+        # Log stderr for debugging (always), but only show to user if no output
+        stderr_raw = process.stderr.read() if process.stderr else b""
+        if stderr_raw:
+            stderr_text = stderr_raw.decode('utf-8', errors='replace').strip()
+            if stderr_text:
+                print(f"[Chat] Stderr (rc={process.returncode}): {stderr_text[:500]}")
         if process.returncode != 0 and not full_response:
-            stderr = process.stderr.read()
-            if stderr:
-                yield {"type": "text", "content": f"\n\nClaude Code exited with error: {stderr.decode('utf-8', errors='replace')}"}
+            if stderr_raw:
+                yield {"type": "text", "content": f"\n\nClaude Code exited with error: {stderr_raw.decode('utf-8', errors='replace')}"}
 
     except FileNotFoundError:
         yield {"type": "text", "content": "Error: Claude Code CLI not found. Install with: npm install -g @anthropic-ai/claude-code"}
@@ -5283,7 +5570,7 @@ async def chat(message: ChatMessage, user: str = Depends(verify_token)):
     add_to_session(original_session_id, "user", message.content)
 
     responses = []
-    async for chunk in process_chat_stream(message.content, original_session_id, model=message.model):
+    async for chunk in process_chat_stream(message.content, original_session_id, model=message.model, packs=message.packs):
         responses.append(chunk)
 
     # Combine text responses
@@ -5313,18 +5600,118 @@ async def chat_stream(message: ChatMessage, user: str = Depends(verify_token)):
 
     async def event_generator():
         full_response = ""
-        async for chunk in process_chat_stream(message.content, original_session_id, model=message.model):
-            yield f"data: {json.dumps(chunk)}\n\n"
-            if chunk.get("type") == "text":
-                full_response += chunk.get("content", "")
-        # Final done event
-        yield f"data: {json.dumps({'type': 'done'})}\n\n"
-        # Save to session history + AI Memory
-        if full_response.strip():
-            add_to_session(original_session_id, "assistant", full_response)
-        asyncio.create_task(save_chat_to_memory(original_session_id, message.content, full_response))
+        try:
+            async for chunk in process_chat_stream(message.content, original_session_id, model=message.model, packs=message.packs):
+                yield f"data: {json.dumps(chunk)}\n\n"
+                if chunk.get("type") == "text":
+                    full_response += chunk.get("content", "")
+            # Final done event
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        except (GeneratorExit, asyncio.CancelledError):
+            print(f"[Chat] Client disconnected mid-stream, saving partial response ({len(full_response)} chars)")
+        finally:
+            # Always save to session history + AI Memory, even on disconnect
+            if full_response.strip():
+                add_to_session(original_session_id, "assistant", full_response)
+            asyncio.create_task(save_chat_to_memory(original_session_id, message.content, full_response))
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+# ============================================================================
+# Capability Pack API Endpoints
+# ============================================================================
+
+@app.get("/api/capability-packs")
+async def list_capability_packs(user: str = Depends(verify_token)):
+    """List all capability packs (built-in + custom)."""
+    packs = _load_all_packs()
+    result = []
+    for pid, p in packs.items():
+        result.append({
+            "id": p["id"],
+            "name": p.get("name", pid),
+            "icon": p.get("icon", "box"),
+            "description": p.get("description", ""),
+            "keywords": p.get("keywords", []),
+            "builtin": p.get("builtin", False),
+            "token_estimate": p.get("token_estimate", 0),
+        })
+    return {"packs": result}
+
+@app.post("/api/capability-packs")
+async def create_capability_pack(request: Request, user: str = Depends(verify_token)):
+    """Create a custom capability pack (saved to NAS)."""
+    data = await request.json()
+    pack_id = data.get("id", "").strip()
+    if not pack_id:
+        raise HTTPException(status_code=400, detail="Pack ID is required")
+    if pack_id in _CAPABILITY_PACKS:
+        raise HTTPException(status_code=400, detail="Cannot overwrite built-in pack")
+    _CUSTOM_PACKS_DIR.mkdir(parents=True, exist_ok=True)
+    pack_file = _CUSTOM_PACKS_DIR / f"{pack_id}.json"
+    pack_file.write_text(json.dumps(data, indent=2))
+    return {"status": "created", "id": pack_id}
+
+@app.post("/internal/capability-packs")
+async def create_capability_pack_internal(request: Request):
+    """Create a custom capability pack (no auth — for Cerebro/agents self-service)."""
+    data = await request.json()
+    pack_id = data.get("id", "").strip()
+    if not pack_id:
+        raise HTTPException(status_code=400, detail="Pack ID is required")
+    if pack_id in _CAPABILITY_PACKS:
+        raise HTTPException(status_code=400, detail="Cannot overwrite built-in pack")
+    _CUSTOM_PACKS_DIR.mkdir(parents=True, exist_ok=True)
+    pack_file = _CUSTOM_PACKS_DIR / f"{pack_id}.json"
+    pack_file.write_text(json.dumps(data, indent=2))
+    return {"status": "created", "id": pack_id}
+
+@app.delete("/api/capability-packs/{pack_id}")
+async def delete_capability_pack(pack_id: str, user: str = Depends(verify_token)):
+    """Delete a custom capability pack (built-ins are protected)."""
+    if pack_id in _CAPABILITY_PACKS:
+        raise HTTPException(status_code=400, detail="Cannot delete built-in pack")
+    pack_file = _CUSTOM_PACKS_DIR / f"{pack_id}.json"
+    if not pack_file.exists():
+        raise HTTPException(status_code=404, detail="Pack not found")
+    pack_file.unlink()
+    return {"status": "deleted", "id": pack_id}
+
+# ============================================================================
+# Chat Warmup
+# ============================================================================
+
+@app.post("/api/chat/warmup")
+async def warmup_chat(user: str = Depends(verify_token)):
+    """Pre-warm the Claude CLI for faster first response."""
+    import shutil
+    effective_model = config.DEFAULT_MODEL
+    claude_path = shutil.which("claude")
+    if not claude_path:
+        possible_paths = [
+            os.path.join(os.path.expanduser("~"), ".local", "bin", "claude"),
+            os.path.join(os.path.expanduser("~"), ".npm-global", "claude.cmd"),
+        ]
+        for p in possible_paths:
+            if os.path.exists(p):
+                claude_path = p
+                break
+    if not claude_path:
+        return {"success": False, "error": "Claude CLI not found"}
+    try:
+        agent_env = os.environ.copy()
+        agent_env.pop("CLAUDECODE", None)
+        result = subprocess.run(
+            [claude_path, "-p", "respond with exactly: warm", "--model", effective_model,
+             "--output-format", "text", "--dangerously-skip-permissions", "--max-turns", "1"],
+            capture_output=True, text=True, timeout=30, env=agent_env,
+            cwd=config.AI_MEMORY_PATH,
+        )
+        return {"success": True, "model": effective_model, "output": result.stdout.strip()[:100]}
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "Warmup timed out (30s)"}
+    except Exception as e:
+        return {"success": False, "error": str(e)[:200]}
 
 # ============================================================================
 # Chat History Persistence
@@ -15754,8 +16141,8 @@ async def _sync_project_to_remote(device: dict, local_path: str, agent_id: str) 
     if not host or not username:
         return {"success": False, "error": "SSH not configured"}
 
-    # Validate path is under /mounts/ (Docker bind mount)
-    if not local_path.startswith("/mounts/"):
+    # Validate path is under /mounts/ (Docker) or any valid directory (native)
+    if _IS_STANDALONE and not local_path.startswith("/mounts/"):
         return {"success": False, "error": f"Path must be under /mounts/, got: {local_path}"}
     if not os.path.isdir(local_path):
         return {"success": False, "error": f"Directory not found: {local_path}"}
@@ -16669,8 +17056,9 @@ async def register_dev_server(request: Request, user: str = Depends(verify_token
         server_entry["pid"] = pid
     _active_dev_servers[port] = server_entry
 
-    # The external-facing URL uses port 61000 (Docker maps 61000→59000)
-    proxy_url = f"http://localhost:61000/app/{port}/"
+    # External-facing URL: use CEREBRO_EXTERNAL_PORT if set, else auto-detect
+    _ext_port = os.environ.get("CEREBRO_EXTERNAL_PORT", "61000" if _IS_STANDALONE else "59000")
+    proxy_url = f"http://localhost:{_ext_port}/app/{port}/"
 
     print(f"[DevServer] Registered: {name} on port {port} (agent: {agent_id})")
 
@@ -16700,7 +17088,7 @@ async def list_dev_servers(user: str = Depends(verify_token)):
     for port, info in _active_dev_servers.items():
         servers.append({
             **info,
-            "proxy_url": f"http://localhost:61000/app/{port}/",
+            "proxy_url": f"http://localhost:{os.environ.get('CEREBRO_EXTERNAL_PORT', '61000' if _IS_STANDALONE else '59000')}/app/{port}/",
         })
     return {"servers": servers}
 
@@ -16860,7 +17248,8 @@ async def serve_static_directory(request: Request, user: str = Depends(verify_to
         "builtin": True,
     }
 
-    proxy_url = f"http://localhost:61000/app/{port}/"
+    _ext_port = os.environ.get("CEREBRO_EXTERNAL_PORT", "61000" if _IS_STANDALONE else "59000")
+    proxy_url = f"http://localhost:{_ext_port}/app/{port}/"
     print(f"[DevServer] Built-in server started: {name} serving {directory} on port {port}")
 
     try:
