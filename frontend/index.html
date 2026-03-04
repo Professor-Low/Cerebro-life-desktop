@@ -46,8 +46,8 @@
         }
     </style>
     <script>
-        // Detect standalone early: Electron preload or Docker localhost:61000
-        window.__STANDALONE = !!(window.cerebroDesktop) || (location.port === '61000' && location.hostname === 'localhost');
+        // Detect standalone early: Electron preload or any localhost with a port
+        window.__STANDALONE = !!(window.cerebroDesktop) || (location.hostname === 'localhost' && !!location.port);
         if (window.__STANDALONE) {
             document.addEventListener('DOMContentLoaded', function() {
                 document.body.classList.add('standalone-mode');
@@ -52419,7 +52419,7 @@ Please proceed with implementing this recommendation. You have full permissions.
 
         // ==================== STANDALONE / ELECTRON DETECTION ====================
         // Standalone mode: running inside Electron or Docker (not the Linux server)
-        const _IS_STANDALONE = !!(window.cerebroDesktop) || (window.location.port === '61000' && window.location.hostname === 'localhost');
+        const _IS_STANDALONE = !!(window.cerebroDesktop) || (window.location.hostname === 'localhost' && !!window.location.port);
 
         // ==================== PARTICLE BACKGROUND ====================
         function initParticleBackground() {

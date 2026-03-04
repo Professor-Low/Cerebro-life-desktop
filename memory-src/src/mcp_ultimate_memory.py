@@ -153,6 +153,11 @@ NAS_IP = _CONFIG_NAS_IP or os.environ.get("CEREBRO_NAS_IP", "")
 NAS_SMB_PORT = 445  # SMB port
 
 
+def _is_nas_configured():
+    """Check if NAS IP is configured (non-empty)."""
+    return bool(NAS_IP and NAS_IP.strip())
+
+
 def is_nas_reachable(timeout: float = 2.0) -> bool:
     """
     Fast NAS reachability check using socket + filesystem test.
@@ -161,6 +166,10 @@ def is_nas_reachable(timeout: float = 2.0) -> bool:
     """
     import socket
     import threading
+
+    # Standalone mode: no NAS configured, operate locally
+    if not _is_nas_configured():
+        return True
 
     # Step 1: Socket check (fast network test)
     try:
@@ -6822,7 +6831,12 @@ def _blocking_init():
     sys.stderr.write("\n")
     sys.stderr.write("=" * 50 + "\n")
 
-    if not nas_available:
+    if not _is_nas_configured():
+        sys.stderr.write("  AI Memory: Standalone mode (local storage)\n")
+        sys.stderr.write("=" * 50 + "\n\n")
+        sys.stderr.flush()
+        # Fall through to normal init — operate against local /data/memory
+    elif not nas_available:
         # NAS unavailable - use local-only mode
         sys.stderr.write("  AI Memory: NAS OFFLINE - local mode\n")
         sys.stderr.write("  > record_learning saves locally, syncs later\n")
@@ -6832,9 +6846,9 @@ def _blocking_init():
         _memory = None
         _embeddings = None
         return
-
-    # NAS available - show status with latency
-    sys.stderr.write(f"  AI Memory: NAS connected ({latency_ms}ms latency)\n")
+    else:
+        # NAS available - show status with latency
+        sys.stderr.write(f"  AI Memory: NAS connected ({latency_ms}ms latency)\n")
     sys.stderr.flush()
 
     # Initialize memory service

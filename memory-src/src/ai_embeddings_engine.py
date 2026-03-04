@@ -137,6 +137,8 @@ class EmbeddingsEngine:
         import socket
 
         NAS_IP = os.environ.get("CEREBRO_NAS_IP", "")
+        if not NAS_IP or not NAS_IP.strip():
+            return True  # No NAS configured — standalone mode
         NAS_SMB_PORT = 445
 
         # Step 1: Socket check (fast network test)

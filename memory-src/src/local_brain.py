@@ -277,6 +277,8 @@ class LocalReadCache:
 
     def _is_nas_reachable(self, timeout: float = 2.0) -> bool:
         """Quick socket check for NAS availability."""
+        if not self.NAS_IP or not self.NAS_IP.strip():
+            return False  # No NAS configured — LocalBrain is a cache layer, don't try to sync
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(timeout)

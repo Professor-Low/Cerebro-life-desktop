@@ -22,11 +22,24 @@ class DockerManager extends EventEmitter {
     this._running = false;
     this._dockerInstalledThisSession = false;
     this._needsRestart = false;
+    this._portConfig = null;
     this._ensureCerebroDir();
   }
 
   _ensureCerebroDir() {
     fs.mkdirSync(CEREBRO_DIR, { recursive: true });
+  }
+
+  setPortConfig(cfg) {
+    this._portConfig = cfg;
+  }
+
+  get backendPort() {
+    return (this._portConfig && this._portConfig.backendPort) || 61000;
+  }
+
+  get redisPort() {
+    return (this._portConfig && this._portConfig.redisPort) || 16379;
   }
 
   /**
@@ -325,6 +338,7 @@ class DockerManager extends EventEmitter {
 
     content = this._injectStorageMount(content);
     content = this._injectFileMounts(content);
+    content = this._injectPorts(content);
     fs.writeFileSync(COMPOSE_FILE, content);
     console.log(`[Docker] Wrote docker-compose.yml to ${COMPOSE_FILE}`);
   }
@@ -613,14 +627,14 @@ class DockerManager extends EventEmitter {
   async startStack(options = {}) {
     this.emit('status', 'starting');
 
-    // Pre-flight: check if port 61000 is available before trying compose up
+    // Pre-flight: check if port is available before trying compose up
     // Skip this check during updates — we need to force-recreate with the new image
     if (!options.forceRecreate) {
-      const portCheck = await this.checkPort(61000);
+      const portCheck = await this.checkPort(this.backendPort);
       if (!portCheck.available) {
         if (portCheck.reason === 'cerebro-running') {
           // Backend is already running (e.g. leftover from previous session) — just reconnect
-          console.log('[Docker] Backend already running on port 61000, reconnecting');
+          console.log(`[Docker] Backend already running on port ${this.backendPort}, reconnecting`);
           this._running = true;
           this.emit('status', 'running');
           this.startCredentialWatch();
@@ -855,7 +869,7 @@ class DockerManager extends EventEmitter {
         }
         attempts++;
 
-        const req = http.get('http://127.0.0.1:61000/health', (res) => {
+        const req = http.get(`http://127.0.0.1:${this.backendPort}/health`, (res) => {
           let data = '';
           res.on('data', (chunk) => { data += chunk; });
           res.on('end', () => {
@@ -1517,7 +1531,7 @@ class DockerManager extends EventEmitter {
    */
   _hasRunningAgents() {
     return new Promise((resolve) => {
-      const req = http.get('http://localhost:61000/agents', { timeout: 3000 }, (res) => {
+      const req = http.get(`http://localhost:${this.backendPort}/agents`, { timeout: 3000 }, (res) => {
         let data = '';
         res.on('data', (chunk) => { data += chunk; });
         res.on('end', () => {
@@ -1797,6 +1811,40 @@ class DockerManager extends EventEmitter {
         const restartEnd = result.indexOf('\n', restartIdx);
         result = result.slice(0, restartEnd + 1) + entrypointLine + '\n' + result.slice(restartEnd + 1);
       }
+    }
+
+    return result;
+  }
+
+  _injectPorts(composeContent) {
+    let result = composeContent;
+    const bp = this.backendPort;
+    const rp = this.redisPort;
+
+    // Replace Redis external port
+    result = result.replace(
+      /127\.0\.0\.1:16379:6379/g,
+      `127.0.0.1:${rp}:6379`
+    );
+
+    // Replace backend external port mapping
+    result = result.replace(
+      /127\.0\.0\.1:61000:59000/g,
+      `127.0.0.1:${bp}:59000`
+    );
+
+    // Replace CORS origin
+    result = result.replace(
+      /CEREBRO_CORS_ORIGINS: "http:\/\/localhost:61000"/g,
+      `CEREBRO_CORS_ORIGINS: "http://localhost:${bp}"`
+    );
+
+    // Inject CEREBRO_EXTERNAL_PORT env var (after CEREBRO_CORS_ORIGINS line)
+    if (!result.includes('CEREBRO_EXTERNAL_PORT')) {
+      result = result.replace(
+        /CEREBRO_CORS_ORIGINS: "http:\/\/localhost:\d+"/,
+        `$&\n      CEREBRO_EXTERNAL_PORT: "${bp}"`
+      );
     }
 
     return result;

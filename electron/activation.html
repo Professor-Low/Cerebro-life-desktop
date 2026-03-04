@@ -1058,13 +1058,14 @@
       });
     }
 
-    function showPortConflictError(reason) {
+    function showPortConflictError(reason, data) {
+      var conflictPort = (data && data.port) || 61000;
       var statusEl = document.getElementById('launch-status');
       while (statusEl.firstChild) statusEl.removeChild(statusEl.firstChild);
 
       if (reason === 'hyper-v') {
         var title = document.createElement('strong');
-        title.textContent = 'Port 61000 is blocked by Windows';
+        title.textContent = 'Port ' + conflictPort + ' is blocked by Windows';
         statusEl.appendChild(title);
         statusEl.appendChild(document.createElement('br'));
         statusEl.appendChild(document.createTextNode('Hyper-V reserved this port. Open an Admin terminal and run:'));
@@ -1072,13 +1073,13 @@
 
         var code = document.createElement('code');
         code.style.cssText = 'display:block;text-align:left;background:rgba(0,0,0,0.3);padding:8px 12px;border-radius:6px;margin:8px 0;font-size:12px;line-height:1.6;white-space:pre';
-        code.textContent = 'net stop winnat\nnetsh int ipv4 add excludedportrange protocol=tcp startport=61000 numberofports=1 store=persistent\nnet start winnat';
+        code.textContent = 'net stop winnat\nnetsh int ipv4 add excludedportrange protocol=tcp startport=' + conflictPort + ' numberofports=1 store=persistent\nnet start winnat';
         statusEl.appendChild(code);
 
         statusEl.appendChild(document.createTextNode('Then click Retry Launch.'));
       } else {
         var title2 = document.createElement('strong');
-        title2.textContent = 'Port 61000 is unavailable';
+        title2.textContent = 'Port ' + conflictPort + ' is unavailable';
         statusEl.appendChild(title2);
         statusEl.appendChild(document.createElement('br'));
         statusEl.appendChild(document.createTextNode(
@@ -1205,9 +1206,10 @@
         // Clear existing content
         while (statusEl.firstChild) statusEl.removeChild(statusEl.firstChild);
 
+        var conflictPort = (data && data.port) || 61000;
         if (data.reason === 'hyper-v') {
           var title = document.createElement('strong');
-          title.textContent = 'Port 61000 is blocked by Windows';
+          title.textContent = 'Port ' + conflictPort + ' is blocked by Windows';
           statusEl.appendChild(title);
           statusEl.appendChild(document.createElement('br'));
           statusEl.appendChild(document.createTextNode('Hyper-V reserved this port. Open an Admin terminal and run:'));
@@ -1215,7 +1217,7 @@
 
           var code = document.createElement('code');
           code.style.cssText = 'display:block;text-align:left;background:rgba(0,0,0,0.3);padding:8px 12px;border-radius:6px;margin:8px 0;font-size:12px;line-height:1.6;white-space:pre';
-          code.textContent = 'net stop winnat\nnetsh int ipv4 add excludedportrange protocol=tcp startport=61000 numberofports=1 store=persistent\nnet start winnat';
+          code.textContent = 'net stop winnat\nnetsh int ipv4 add excludedportrange protocol=tcp startport=' + conflictPort + ' numberofports=1 store=persistent\nnet start winnat';
           statusEl.appendChild(code);
 
           var retryHint = document.createElement('span');
@@ -1223,7 +1225,7 @@
           statusEl.appendChild(retryHint);
         } else {
           var title2 = document.createElement('strong');
-          title2.textContent = 'Port 61000 is unavailable';
+          title2.textContent = 'Port ' + conflictPort + ' is unavailable';
           statusEl.appendChild(title2);
           statusEl.appendChild(document.createElement('br'));
           statusEl.appendChild(document.createTextNode(

@@ -145,5 +145,9 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
     ipcRenderer.on('credentials-refreshed', (_event, data) => callback(data));
   },
 
+  // Port configuration
+  getPortConfig: () => ipcRenderer.invoke('get-port-config'),
+  setPortConfig: (cfg) => ipcRenderer.invoke('set-port-config', cfg),
+
   isElectron: true,
 });

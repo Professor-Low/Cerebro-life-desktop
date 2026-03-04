@@ -37,6 +37,12 @@ AI_MEMORY_BASE = DATA_DIR
 NAS_PATH = Path(os.environ.get("CEREBRO_NAS_PATH", ""))
 NAS_IP = os.environ.get("CEREBRO_NAS_IP", "")
 
+
+def is_nas_configured() -> bool:
+    """Check if a NAS IP address has been configured."""
+    return bool(NAS_IP and NAS_IP.strip())
+
+
 # ============== DERIVED PATHS ==============
 CONVERSATIONS_DIR = DATA_DIR / "conversations"
 CACHE_DIR = DATA_DIR / "cache"

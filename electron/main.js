@@ -5,8 +5,12 @@ const net = require('net');
 const { spawn, execFile } = require('child_process');
 const { autoUpdater } = require('electron-updater');
 const { DockerManager } = require('./docker-manager');
+const { loadPortConfig, savePortConfig, getBackendUrl } = require('./port-config');
 const { LicenseManager } = require('./license-manager');
 const { createTray, updateTrayStatus } = require('./tray');
+
+const portConfig = loadPortConfig();
+const BACKEND_URL = getBackendUrl(portConfig);
 
 process.on('uncaughtException', (err) => {
   console.error('[Main] Uncaught exception:', err);
@@ -218,7 +222,7 @@ function createMainWindow() {
     console.error('[Main] Renderer crashed:', details.reason);
     setTimeout(() => {
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.loadURL('http://localhost:61000');
+        mainWindow.loadURL(BACKEND_URL);
       }
     }, 2000);
   });
@@ -690,7 +694,7 @@ async function loadFrontend() {
   let retries = 0;
   const maxRetries = 15;
 
-  mainWindow.loadURL('http://localhost:61000');
+  mainWindow.loadURL(BACKEND_URL);
 
   mainWindow.webContents.on('did-finish-load', () => {
     if (splashWindow) {
@@ -732,7 +736,7 @@ async function loadFrontend() {
     console.error(`[Main] Frontend failed to load (attempt ${retries}/${maxRetries}): ${errorCode} ${errorDescription}`);
     if (retries < maxRetries) {
       setTimeout(() => {
-        if (mainWindow) mainWindow.loadURL('http://localhost:61000');
+        if (mainWindow) mainWindow.loadURL(BACKEND_URL);
       }, 2000);
     } else {
       console.error('[Main] Frontend failed to load after max retries, showing wizard');
@@ -1164,6 +1168,13 @@ app.on('before-quit', async (e) => {
 ipcMain.handle('get-app-version', () => app.getVersion());
 ipcMain.handle('get-edition', () => 'docker');
 
+// Port configuration
+ipcMain.handle('get-port-config', () => loadPortConfig());
+ipcMain.handle('set-port-config', (_e, cfg) => {
+  savePortConfig(cfg);
+  return { success: true, note: 'Restart required for changes to take effect' };
+});
+
 // License
 ipcMain.handle('get-license-status', () => licenseManager.getStatus());
 ipcMain.handle('activate-license', async (_event, key) => {
@@ -1483,7 +1494,7 @@ ipcMain.handle('apply-update', async () => {
 
     // Docker-only update — reload frontend and re-inject suppression timestamp
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.loadURL('http://localhost:61000');
+      mainWindow.loadURL(BACKEND_URL);
       mainWindow.webContents.once('did-finish-load', () => {
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.executeJavaScript(
@@ -1495,7 +1506,7 @@ ipcMain.handle('apply-update', async () => {
     return { success: true };
   } catch (err) {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.loadURL('http://localhost:61000');
+      mainWindow.loadURL(BACKEND_URL);
     }
     return { success: false, error: err.message };
   }

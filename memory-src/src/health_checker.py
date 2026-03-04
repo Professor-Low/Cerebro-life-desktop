@@ -91,6 +91,11 @@ class FastHealthChecker:
 
     def _check_nas_socket(self) -> Dict[str, Any]:
         """Socket-only NAS check with latency measurement."""
+        if not self.NAS_IP or not self.NAS_IP.strip():
+            return {
+                'status': 'not_configured',
+                'note': 'NAS not configured — using local storage'
+            }
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(2.0)
@@ -182,7 +187,7 @@ class FastHealthChecker:
 
     def _compute_overall(self) -> str:
         """Determine overall system status."""
-        status_priority = {'down': 3, 'degraded': 2, 'healthy': 1, 'unknown': 2, 'not_checked': 1}
+        status_priority = {'down': 3, 'degraded': 2, 'healthy': 1, 'unknown': 2, 'not_checked': 1, 'not_configured': 1}
 
         max_priority = max(
             (status_priority.get(r.get('status', 'unknown'), 2)
@@ -216,6 +221,15 @@ class HealthChecker:
 
     def check_nas_connection(self):
         """Verify NAS is accessible."""
+        # No NAS configured — standalone mode, local storage only
+        nas_ip = os.environ.get("CEREBRO_NAS_IP", "")
+        if not nas_ip or not nas_ip.strip():
+            self.results['nas'] = {
+                'status': 'not_configured',
+                'note': 'NAS not configured — using local storage',
+                'path': str(self.base_path)
+            }
+            return
         try:
             if not self.base_path.exists():
                 self.results['nas'] = {
@@ -419,7 +433,7 @@ class HealthChecker:
     def get_report(self) -> Dict[str, Any]:
         """Generate health report."""
         # Determine overall status
-        status_priority = {'down': 3, 'degraded': 2, 'healthy': 1, 'unknown': 2}
+        status_priority = {'down': 3, 'degraded': 2, 'healthy': 1, 'unknown': 2, 'not_configured': 1}
         overall_priority = max(
             (status_priority.get(r.get('status', 'unknown'), 2)
              for r in self.results.values()),
@@ -470,7 +484,8 @@ class HealthChecker:
                 'healthy': '✓',
                 'degraded': '⚠',
                 'down': '✗',
-                'unknown': '?'
+                'unknown': '?',
+                'not_configured': '○'
             }.get(status, '?')
 
             print(f"{status_symbol} {component.upper()}: {status}")

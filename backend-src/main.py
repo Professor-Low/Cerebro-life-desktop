@@ -64,7 +64,7 @@ class Config:
     OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:14b")
 
     # Claude model selection
-    DEFAULT_MODEL = os.environ.get("CEREBRO_DEFAULT_MODEL", "claude-sonnet-4-5-20250929")
+    DEFAULT_MODEL = os.environ.get("CEREBRO_DEFAULT_MODEL", "claude-sonnet-4-6")
 
     # Architecture: User â†' Cerebro â†' Claude Code CLI â†' Response
     # No middle LLM - all messages go directly to Claude Code for maximum capability
@@ -2062,11 +2062,11 @@ NEVER use `open` — that's macOS, not Windows.
 You have a **shared Chrome browser** that YOU control via Cerebro's backend API. When the user mentions "the browser", "Chrome", or asks you to open/close tabs, they mean YOUR browser.
 
 **Tab management (no auth needed):**
-- List tabs: `curl -s http://localhost:61000/internal/browser/tabs`
-- Open tab: `curl -s -X POST http://localhost:61000/internal/browser/tab/new -H "Content-Type: application/json" -d '{{"url": "https://google.com"}}'`
-- Close tab: `curl -s -X POST http://localhost:61000/internal/browser/tab/close -H "Content-Type: application/json" -d '{{"tab_id": "TAB_ID"}}'`
-- Navigate: `curl -s -X POST http://localhost:61000/internal/browser/navigate -H "Content-Type: application/json" -d '{{"url": "https://google.com"}}'`
-- Screenshot: `curl -s http://localhost:61000/api/browser/screenshot/file`
+- List tabs: `curl -s http://localhost:{ext_port}/internal/browser/tabs`
+- Open tab: `curl -s -X POST http://localhost:{ext_port}/internal/browser/tab/new -H "Content-Type: application/json" -d '{{"url": "https://google.com"}}'`
+- Close tab: `curl -s -X POST http://localhost:{ext_port}/internal/browser/tab/close -H "Content-Type: application/json" -d '{{"tab_id": "TAB_ID"}}'`
+- Navigate: `curl -s -X POST http://localhost:{ext_port}/internal/browser/navigate -H "Content-Type: application/json" -d '{{"url": "https://google.com"}}'`
+- Screenshot: `curl -s http://localhost:{ext_port}/api/browser/screenshot/file`
 
 **To close a tab:** List tabs first to find the tab_id, then close it.
 
@@ -2075,12 +2075,12 @@ You can monitor and control running SpecOps agents from chat.
 
 **List active agents:**
 ```bash
-curl -s http://localhost:61000/internal/agents/active
+curl -s http://localhost:{ext_port}/internal/agents/active
 ```
 
 **Set directive for next cycle (hot-swap what agent does):**
 ```bash
-curl -s -X PUT http://localhost:61000/internal/agent/AGENT_ID/directive \
+curl -s -X PUT http://localhost:{ext_port}/internal/agent/AGENT_ID/directive \
   -H "Content-Type: application/json" \
   -d '{{"directive": "New instructions here", "force_cycle": false, "mode": "override"}}'
 ```
@@ -2090,19 +2090,19 @@ curl -s -X PUT http://localhost:61000/internal/agent/AGENT_ID/directive \
 
 **Force next cycle immediately:**
 ```bash
-curl -s -X POST http://localhost:61000/agents/AGENT_ID/specops/force-cycle -H "Authorization: Bearer $TOKEN"
+curl -s -X POST http://localhost:{ext_port}/agents/AGENT_ID/specops/force-cycle -H "Authorization: Bearer $TOKEN"
 ```
 
 **Pause/Resume agent:**
 ```bash
-curl -s -X PATCH http://localhost:61000/agents/AGENT_ID/specops \
+curl -s -X PATCH http://localhost:{ext_port}/agents/AGENT_ID/specops \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{{"auto_continue": false}}'
 ```
 
 **Stop agent:**
 ```bash
-curl -s -X DELETE http://localhost:61000/agents/AGENT_ID -H "Authorization: Bearer $TOKEN"
+curl -s -X DELETE http://localhost:{ext_port}/agents/AGENT_ID -H "Authorization: Bearer $TOKEN"
 ```
 
 RULES: When the user asks about agents, call /internal/agents/active first. Confirm agent identity before making changes. After setting a directive, tell the user when it takes effect.
@@ -2155,38 +2155,38 @@ You can organize agents into groups (projects). These correspond to the folders/
 
 **List all groups:**
 ```bash
-curl -s http://localhost:61000/internal/projects
+curl -s http://localhost:{ext_port}/internal/projects
 ```
 
 **Create a group:**
 ```bash
-curl -s -X POST http://localhost:61000/internal/projects/create \
+curl -s -X POST http://localhost:{ext_port}/internal/projects/create \
   -H "Content-Type: application/json" \
   -d '{{"name": "Research"}}'
 ```
 
 **Rename a group:**
 ```bash
-curl -s -X POST http://localhost:61000/internal/projects/PROJECT_ID/rename \
+curl -s -X POST http://localhost:{ext_port}/internal/projects/PROJECT_ID/rename \
   -H "Content-Type: application/json" \
   -d '{{"name": "New Name"}}'
 ```
 
 **Delete a group** (agents become uncategorized):
 ```bash
-curl -s -X DELETE http://localhost:61000/internal/projects/PROJECT_ID
+curl -s -X DELETE http://localhost:{ext_port}/internal/projects/PROJECT_ID
 ```
 
 **Move one agent to a group:**
 ```bash
-curl -s -X POST http://localhost:61000/internal/agents/AGENT_ID/project \
+curl -s -X POST http://localhost:{ext_port}/internal/agents/AGENT_ID/project \
   -H "Content-Type: application/json" \
   -d '{{"project_id": "PROJECT_ID"}}'
 ```
 
 **Bulk move agents:**
 ```bash
-curl -s -X POST http://localhost:61000/internal/projects/bulk-assign \
+curl -s -X POST http://localhost:{ext_port}/internal/projects/bulk-assign \
   -H "Content-Type: application/json" \
   -d '{{"agent_ids": ["id1", "id2"], "project_id": "PROJECT_ID"}}'
 ```
@@ -14939,9 +14939,12 @@ async def notify_file_ready(request: Request, user: str = Depends(verify_token))
     description = body.get("description", "")
 
     # Build the Windows-accessible UNC path
-    nas_ip = os.environ.get("CEREBRO_NAS_IP", "localhost")
+    nas_ip = os.environ.get("CEREBRO_NAS_IP", "")
     data_dir = os.environ.get("CEREBRO_DATA_DIR", "/data/memory")
-    windows_path = filepath.replace(f"{data_dir}/", f"\\\\{nas_ip}\\home\\AI_MEMORY\\").replace("/", "\\")
+    if nas_ip and nas_ip.strip():
+        windows_path = filepath.replace(f"{data_dir}/", f"\\\\{nas_ip}\\home\\AI_MEMORY\\").replace("/", "\\")
+    else:
+        windows_path = filepath  # No NAS — use container path as-is
 
     notification = {
         "type": "file_ready",
