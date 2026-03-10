@@ -30,7 +30,7 @@ function savePortConfig(cfg) {
 
 function getBackendUrl(cfg) {
   const port = (cfg && cfg.backendPort) || DEFAULTS.backendPort;
-  return `http://localhost:${port}`;
+  return `http://127.0.0.1:${port}`;
 }
 
 module.exports = { loadPortConfig, savePortConfig, getBackendUrl, DEFAULTS };

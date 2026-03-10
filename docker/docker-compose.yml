@@ -2,7 +2,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "16379:6379"
+      - "127.0.0.1:16379:6379"
     volumes:
       - cerebro-redis:/data
     restart: unless-stopped
@@ -15,13 +15,13 @@ services:
   backend:
     image: ghcr.io/professor-low/cerebro-backend:latest
     ports:
-      - "61000:59000"
+      - "127.0.0.1:61000:59000"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
       REDIS_URL: redis://redis:6379/0
       AI_MEMORY_PATH: /data/memory
-      CEREBRO_CORS_ORIGINS: "http://localhost:61000"
+      CEREBRO_CORS_ORIGINS: "http://localhost:61000,http://127.0.0.1:61000"
       CEREBRO_HOST: "0.0.0.0"
       CEREBRO_PORT: "59000"
       CEREBRO_STANDALONE: "1"
@@ -52,7 +52,7 @@ services:
   kokoro-tts:
     image: ghcr.io/remsky/kokoro-fastapi-cpu:v0.2.4
     ports:
-      - "8880:8880"
+      - "127.0.0.1:8880:8880"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8880/health"]

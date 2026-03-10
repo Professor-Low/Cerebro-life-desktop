@@ -47,7 +47,7 @@
     </style>
     <script>
         // Detect standalone early: Electron preload or any localhost with a port
-        window.__STANDALONE = !!(window.cerebroDesktop) || (location.hostname === 'localhost' && !!location.port);
+        window.__STANDALONE = !!(window.cerebroDesktop) || ((location.hostname === 'localhost' || location.hostname === '127.0.0.1') && !!location.port);
         if (window.__STANDALONE) {
             document.addEventListener('DOMContentLoaded', function() {
                 document.body.classList.add('standalone-mode');
@@ -27964,7 +27964,7 @@
         const CEREBRO_TTS_URL = CEREBRO_CONFIG.ttsUrl || '';
         const CEREBRO_DGX_HOST = CEREBRO_CONFIG.dgxHost || '';
         const CEREBRO_DATA_DIR = CEREBRO_CONFIG.dataDir || '';
-        const CEREBRO_CDP_URL = CEREBRO_CONFIG.cdpUrl || 'http://localhost:9222';
+        const CEREBRO_CDP_URL = CEREBRO_CONFIG.cdpUrl || 'http://127.0.0.1:9222';
         let CEREBRO_USERNAME = CEREBRO_CONFIG.username || '';
 
         console.log('Cerebro connecting to:', API_URL);
@@ -33945,7 +33945,7 @@
             btnIcon.appendChild(p1); btnIcon.appendChild(p2); btnIcon.appendChild(p3);
             viewBtn.appendChild(btnIcon);
             viewBtn.appendChild(document.createTextNode(' View in SimEngine'));
-            viewBtn.addEventListener('click', () => window.open(CEREBRO_CONFIG.simEngineUrl || 'http://localhost:5173', '_blank'));
+            viewBtn.addEventListener('click', () => window.open(CEREBRO_CONFIG.simEngineUrl || 'http://127.0.0.1:5173', '_blank'));
             actions.appendChild(viewBtn);
             card.appendChild(actions);
 
@@ -52419,7 +52419,7 @@ Please proceed with implementing this recommendation. You have full permissions.
 
         // ==================== STANDALONE / ELECTRON DETECTION ====================
         // Standalone mode: running inside Electron or Docker (not the Linux server)
-        const _IS_STANDALONE = !!(window.cerebroDesktop) || (window.location.hostname === 'localhost' && !!window.location.port);
+        const _IS_STANDALONE = !!(window.cerebroDesktop) || ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !!window.location.port);
 
         // ==================== PARTICLE BACKGROUND ====================
         function initParticleBackground() {

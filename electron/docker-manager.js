@@ -1531,7 +1531,7 @@ class DockerManager extends EventEmitter {
    */
   _hasRunningAgents() {
     return new Promise((resolve) => {
-      const req = http.get(`http://localhost:${this.backendPort}/agents`, { timeout: 3000 }, (res) => {
+      const req = http.get(`http://127.0.0.1:${this.backendPort}/agents`, { timeout: 3000 }, (res) => {
         let data = '';
         res.on('data', (chunk) => { data += chunk; });
         res.on('end', () => {
@@ -1833,16 +1833,16 @@ class DockerManager extends EventEmitter {
       `127.0.0.1:${bp}:59000`
     );
 
-    // Replace CORS origin
+    // Replace CORS origin (match old single-origin and new dual-origin formats)
     result = result.replace(
-      /CEREBRO_CORS_ORIGINS: "http:\/\/localhost:61000"/g,
-      `CEREBRO_CORS_ORIGINS: "http://localhost:${bp}"`
+      /CEREBRO_CORS_ORIGINS: "http:\/\/localhost:61000(?:,http:\/\/127\.0\.0\.1:61000)?"/g,
+      `CEREBRO_CORS_ORIGINS: "http://localhost:${bp},http://127.0.0.1:${bp}"`
     );
 
     // Inject CEREBRO_EXTERNAL_PORT env var (after CEREBRO_CORS_ORIGINS line)
     if (!result.includes('CEREBRO_EXTERNAL_PORT')) {
       result = result.replace(
-        /CEREBRO_CORS_ORIGINS: "http:\/\/localhost:\d+"/,
+        /CEREBRO_CORS_ORIGINS: "http:\/\/localhost:\d+(?:,http:\/\/127\.0\.0\.1:\d+)?"/,
         `$&\n      CEREBRO_EXTERNAL_PORT: "${bp}"`
       );
     }
@@ -2054,7 +2054,7 @@ class DockerManager extends EventEmitter {
     environment:
       REDIS_URL: redis://redis:6379/0
       AI_MEMORY_PATH: /data/memory
-      CEREBRO_CORS_ORIGINS: "http://localhost:61000"
+      CEREBRO_CORS_ORIGINS: "http://localhost:61000,http://127.0.0.1:61000"
       CEREBRO_HOST: "0.0.0.0"
       CEREBRO_PORT: "59000"
       CEREBRO_STANDALONE: "1"
