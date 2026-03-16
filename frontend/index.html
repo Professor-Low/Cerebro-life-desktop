@@ -3112,11 +3112,6 @@
             gap: 10px;
         }
 
-        /* Self-improvement category special styling */
-        .suggestion-category:has(.category-name:contains('Self')) .suggestion-card {
-            border-left: 3px solid var(--accent);
-        }
-
         /* Animate suggestion cards on render */
         .suggestion-card {
             animation: cardSlideIn 0.3s ease-out forwards;
@@ -13516,212 +13511,6 @@
             vertical-align: middle;
             font-weight: 600;
         }
-
-        .wallet-badge {
-            background: #22c55e;
-            color: #0a0a1a;
-            font-weight: 700;
-        }
-
-        /* Wallet tab pane */
-        .mind-wallet-items {
-            flex: 1;
-            overflow-y: auto;
-            padding: 12px 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        .mind-wallet-items.hidden { display: none; }
-
-        .wallet-pnl-header {
-            background: rgba(255,255,255,0.03);
-            border: 1px solid rgba(255,255,255,0.06);
-            border-radius: 14px;
-            padding: 20px;
-            text-align: center;
-            backdrop-filter: blur(12px);
-        }
-        .wallet-pnl-label {
-            font-size: 0.7rem;
-            color: rgba(255,255,255,0.35);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 4px;
-        }
-        .wallet-pnl-amount {
-            font-size: 1.8rem;
-            font-weight: 700;
-            font-variant-numeric: tabular-nums;
-        }
-        .wallet-pnl-amount.positive { color: #22c55e; }
-        .wallet-pnl-amount.negative { color: #ef4444; }
-        .wallet-pnl-amount.zero { color: rgba(255,255,255,0.5); }
-        .wallet-pnl-unrealized {
-            font-size: 0.72rem;
-            color: rgba(255,255,255,0.35);
-            margin-top: 4px;
-        }
-        .wallet-period-bar {
-            display: flex;
-            gap: 4px;
-            justify-content: center;
-            margin-top: 12px;
-        }
-        .wallet-period-btn {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.08);
-            color: rgba(255,255,255,0.45);
-            padding: 4px 14px;
-            border-radius: 8px;
-            font-size: 0.72rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.15s;
-        }
-        .wallet-period-btn.active {
-            background: rgba(139, 92, 246, 0.2);
-            border-color: rgba(139, 92, 246, 0.4);
-            color: #c4b5fd;
-        }
-        .wallet-columns {
-            display: flex;
-            gap: 0;
-            flex: 1;
-            min-height: 0;
-            overflow: hidden;
-        }
-        .wallet-col {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            min-width: 0;
-            overflow-y: auto;
-            padding: 0 4px;
-        }
-        .wallet-col + .wallet-col {
-            border-left: 1px solid rgba(255,255,255,0.06);
-        }
-        .wallet-col-header {
-            font-size: 0.68rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: rgba(255,255,255,0.3);
-            padding: 8px 8px 6px;
-            border-bottom: 1px solid rgba(255,255,255,0.04);
-            flex-shrink: 0;
-        }
-        .wallet-col-content {
-            flex: 1;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            padding: 6px 2px;
-        }
-        .wallet-position-card {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 10px;
-            background: rgba(255,255,255,0.025);
-            border: 1px solid rgba(255,255,255,0.05);
-            border-radius: 10px;
-            border-left: 3px solid #22c55e;
-        }
-        .wallet-position-card .pos-symbol {
-            font-size: 0.8rem;
-            font-weight: 700;
-            color: rgba(255,255,255,0.85);
-        }
-        .wallet-position-card .pos-detail {
-            font-size: 0.65rem;
-            color: rgba(255,255,255,0.3);
-            margin-top: 1px;
-        }
-        .wallet-position-card .pos-pnl {
-            margin-left: auto;
-            font-size: 0.8rem;
-            font-weight: 700;
-            font-variant-numeric: tabular-nums;
-            flex-shrink: 0;
-        }
-        .wallet-position-card .pos-pnl.positive { color: #22c55e; }
-        .wallet-position-card .pos-pnl.negative { color: #ef4444; }
-        .wallet-col-empty {
-            color: rgba(255,255,255,0.2);
-            font-size: 0.75rem;
-            text-align: center;
-            padding: 20px 8px;
-        }
-        .wallet-entry-card {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 12px;
-            background: rgba(255,255,255,0.025);
-            border: 1px solid rgba(255,255,255,0.05);
-            border-radius: 10px;
-            border-left: 3px solid rgba(255,255,255,0.1);
-            transition: background 0.15s;
-        }
-        .wallet-entry-card:hover { background: rgba(255,255,255,0.05); }
-        .wallet-entry-card.cat-trade { border-left-color: #22c55e; }
-        .wallet-entry-card.cat-backtest { border-left-color: #a78bfa; }
-        .wallet-entry-card.cat-bet { border-left-color: #eab308; }
-        .wallet-entry-card.cat-other { border-left-color: #3b82f6; }
-        .wallet-entry-info {
-            flex: 1;
-            min-width: 0;
-        }
-        .wallet-entry-desc {
-            font-size: 0.78rem;
-            color: rgba(255,255,255,0.8);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .wallet-entry-meta {
-            font-size: 0.65rem;
-            color: rgba(255,255,255,0.25);
-            margin-top: 2px;
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-        .wallet-entry-category {
-            font-size: 0.6rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            padding: 1px 6px;
-            border-radius: 6px;
-        }
-        .wallet-entry-category.cat-trade { background: rgba(34,197,94,0.15); color: #22c55e; }
-        .wallet-entry-category.cat-backtest { background: rgba(167,139,250,0.15); color: #a78bfa; }
-        .wallet-entry-category.cat-bet { background: rgba(234,179,8,0.15); color: #eab308; }
-        .wallet-entry-category.cat-other { background: rgba(59,130,246,0.15); color: #3b82f6; }
-        .wallet-entry-pnl {
-            font-size: 0.82rem;
-            font-weight: 700;
-            font-variant-numeric: tabular-nums;
-            flex-shrink: 0;
-        }
-        .wallet-entry-pnl.positive { color: #22c55e; }
-        .wallet-entry-pnl.negative { color: #ef4444; }
-        .wallet-entry-pnl.zero { color: rgba(255,255,255,0.3); }
-        .wallet-empty {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            flex: 1;
-            color: rgba(255,255,255,0.25);
-            font-size: 0.85rem;
-            padding-top: 40px;
-        }
-        .wallet-empty .empty-icon { font-size: 2rem; margin-bottom: 8px; }
 
         /* Answers items container */
         .mind-answers-items {
@@ -25330,7 +25119,7 @@
                                         <button class="mind-chat-tab" data-tab="answers" onclick="switchMindTab('answers')">Answers <span class="stored-badge answers-badge" id="answers-badge" style="display:none">0</span></button>
                                         <button class="mind-chat-tab" data-tab="stored" onclick="switchMindTab('stored')">Stored <span class="stored-badge" id="stored-badge" style="display:none">0</span></button>
                                         <button class="mind-chat-tab" data-tab="agents" onclick="switchMindTab('agents')">Agents <span class="stored-badge agents-tab-badge" id="agents-tab-badge" style="display:none">0</span></button>
-                                        <button class="mind-chat-tab" data-tab="wallet" onclick="switchMindTab('wallet')">Wallet <span class="stored-badge wallet-badge" id="wallet-badge" style="display:none">0</span></button>
+                                        
                                     </div>
                                     <!-- Mind chat FAB menu -->
                                     <div class="mind-fab-container">
@@ -25398,8 +25187,7 @@
                                     <div class="mind-agents-items hidden" id="mind-agents-items">
                                         <!-- rendered cerebro agent cards go here -->
                                     </div>
-                                    <div class="mind-wallet-items hidden" id="mind-wallet-items">
-                                        <!-- rendered wallet entries go here -->
+                                    
                                     </div>
                                     <div id="mind-image-preview" class="image-upload-preview"></div>
                                     <div class="mind-chat-input-bar">
@@ -32035,13 +31823,6 @@
             socket.on('ask_response_ready', (data) => {
                 console.log('Ask response ready:', data);
                 handleAskResponseReady(data);
-            });
-
-            // Listen for wallet updates (real-time from agent POST /api/wallet/log)
-            socket.on('wallet_update', (entry) => {
-                console.log('Wallet update:', entry);
-                // Refresh wallet data to get updated totals + badge
-                fetchWalletData();
             });
 
 // ==================== NETWORK SECURITY ALERT ====================
@@ -49013,7 +48794,6 @@ Please proceed with implementing this recommendation. You have full permissions.
             const answersDiv = document.getElementById('mind-answers-items');
             const storedDiv = document.getElementById('mind-stored-items');
             const agentsDiv = document.getElementById('mind-agents-items');
-            const walletDiv = document.getElementById('mind-wallet-items');
             const inputBar = document.querySelector('.mind-chat-input-bar');
             const fabContainer = document.querySelector('.mind-fab-container');
             document.querySelectorAll('.mind-chat-tab').forEach(t => {
@@ -49024,12 +48804,8 @@ Please proceed with implementing this recommendation. You have full permissions.
             if (answersDiv) answersDiv.classList.add('hidden');
             if (storedDiv) storedDiv.classList.add('hidden');
             if (agentsDiv) agentsDiv.classList.add('hidden');
-            if (walletDiv) walletDiv.classList.add('hidden');
             if (inputBar) inputBar.style.display = 'none';
             if (fabContainer) fabContainer.style.display = 'none';
-
-            // Stop wallet polling when leaving wallet tab
-            if (tab !== 'wallet') stopWalletPolling();
 
             if (tab === 'chat') {
                 if (chatMsgs) chatMsgs.style.display = '';
@@ -49040,12 +48816,7 @@ Please proceed with implementing this recommendation. You have full permissions.
                 renderAnswerItems();
             } else if (tab === 'agents') {
                 if (agentsDiv) agentsDiv.classList.remove('hidden');
-                renderMindAgents();
-            } else if (tab === 'wallet') {
-                if (walletDiv) walletDiv.classList.remove('hidden');
-                fetchWalletData();
-                startWalletPolling();
-            } else {
+                renderMindAgents();} else {
                 if (storedDiv) storedDiv.classList.remove('hidden');
                 renderStoredItems();
             }
@@ -49163,241 +48934,9 @@ Please proceed with implementing this recommendation. You have full permissions.
             } else {
                 badge.style.display = 'none';
             }
-        }
-
-        // ── Wallet Tab ──────────────────────────────────────────────
-        let _walletData = null;
-        let _walletPeriod = 'today';
-        let _walletPollTimer = null;
-
-        async function fetchWalletData() {
-            try {
-                const resp = await fetch(`${API_URL}/api/wallet/summary`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('cerebro_token')}` }
-                });
-                if (resp.ok) {
-                    _walletData = await resp.json();
-                    updateWalletBadge();
-                    if (_currentMindTab === 'wallet') renderWallet();
-                }
-            } catch (e) {
-                console.error('Wallet fetch failed:', e);
+        }            } catch (e) {
             }
         }
-
-        function _walletPnlClass(v) { return v > 0 ? 'positive' : v < 0 ? 'negative' : 'zero'; }
-        function _walletSign(v) { return v > 0 ? '+' : ''; }
-
-        function renderWallet() {
-            const container = document.getElementById('mind-wallet-items');
-            if (!container) return;
-            container.textContent = '';
-
-            if (!_walletData) {
-                const empty = document.createElement('div');
-                empty.className = 'wallet-empty';
-                const ico = document.createElement('div');
-                ico.className = 'empty-icon';
-                ico.textContent = '\u{1F4B0}';
-                const txt = document.createElement('div');
-                txt.textContent = 'Loading wallet...';
-                empty.append(ico, txt);
-                container.appendChild(empty);
-                return;
-            }
-
-            // P&L Header
-            const header = document.createElement('div');
-            header.className = 'wallet-pnl-header';
-
-            const label = document.createElement('div');
-            label.className = 'wallet-pnl-label';
-            const periodLabels = { today: "Today's", week: 'This Week', month: 'This Month', all: 'All Time' };
-            label.textContent = (periodLabels[_walletPeriod] || "Today's") + ' P&L';
-            header.appendChild(label);
-
-            const total = _walletData.totals[_walletPeriod] || 0;
-            const amtDiv = document.createElement('div');
-            amtDiv.className = 'wallet-pnl-amount ' + _walletPnlClass(total);
-            amtDiv.textContent = _walletSign(total) + '$' + total.toFixed(2);
-            header.appendChild(amtDiv);
-
-            const unrealized = _walletData.unrealized || 0;
-            if (unrealized !== 0) {
-                const uDiv = document.createElement('div');
-                uDiv.className = 'wallet-pnl-unrealized';
-                const posCount = (_walletData.open_positions || []).length;
-                uDiv.textContent = 'Unrealized: ' + _walletSign(unrealized) + '$' + unrealized.toFixed(2) + ' (' + posCount + ' position' + (posCount !== 1 ? 's' : '') + ')';
-                header.appendChild(uDiv);
-            }
-
-            const periodBar = document.createElement('div');
-            periodBar.className = 'wallet-period-bar';
-            for (const p of ['today', 'week', 'month', 'all']) {
-                const btn = document.createElement('button');
-                btn.className = 'wallet-period-btn' + (_walletPeriod === p ? ' active' : '');
-                btn.textContent = p.charAt(0).toUpperCase() + p.slice(1);
-                btn.addEventListener('click', () => setWalletPeriod(p));
-                periodBar.appendChild(btn);
-            }
-            header.appendChild(periodBar);
-            container.appendChild(header);
-
-            // Two-column layout: Open | History
-            const cols = document.createElement('div');
-            cols.className = 'wallet-columns';
-
-            // ── Open column ──
-            const openCol = document.createElement('div');
-            openCol.className = 'wallet-col';
-            const openHeader = document.createElement('div');
-            openHeader.className = 'wallet-col-header';
-            openHeader.textContent = 'Open';
-            openCol.appendChild(openHeader);
-            const openContent = document.createElement('div');
-            openContent.className = 'wallet-col-content';
-
-            const positions = _walletData.open_positions || [];
-            if (positions.length === 0) {
-                const emptyMsg = document.createElement('div');
-                emptyMsg.className = 'wallet-col-empty';
-                emptyMsg.textContent = 'No open positions';
-                openContent.appendChild(emptyMsg);
-            } else {
-                for (const pos of positions) {
-                    openContent.appendChild(buildPositionCard(pos));
-                }
-            }
-            openCol.appendChild(openContent);
-
-            // ── History column ──
-            const histCol = document.createElement('div');
-            histCol.className = 'wallet-col';
-            const histHeader = document.createElement('div');
-            histHeader.className = 'wallet-col-header';
-            histHeader.textContent = 'History';
-            histCol.appendChild(histHeader);
-            const histContent = document.createElement('div');
-            histContent.className = 'wallet-col-content';
-
-            const history = _walletData.history || [];
-            if (history.length === 0) {
-                const emptyMsg = document.createElement('div');
-                emptyMsg.className = 'wallet-col-empty';
-                emptyMsg.textContent = 'No activity yet';
-                histContent.appendChild(emptyMsg);
-            } else {
-                for (const entry of history) {
-                    histContent.appendChild(buildWalletEntryCard(entry));
-                }
-            }
-            histCol.appendChild(histContent);
-
-            cols.append(openCol, histCol);
-            container.appendChild(cols);
-        }
-
-        function buildPositionCard(pos) {
-            const card = document.createElement('div');
-            card.className = 'wallet-position-card';
-
-            const infoDiv = document.createElement('div');
-            infoDiv.className = 'wallet-entry-info';
-            const sym = document.createElement('div');
-            sym.className = 'pos-symbol';
-            sym.textContent = pos.symbol || '';
-            const detail = document.createElement('div');
-            detail.className = 'pos-detail';
-            const qty = parseFloat(pos.qty) || 0;
-            const side = pos.side || (qty > 0 ? 'long' : 'short');
-            const price = pos.avg_entry_price ? parseFloat(pos.avg_entry_price).toFixed(2) : '';
-            const cur = pos.current_price ? parseFloat(pos.current_price).toFixed(2) : '';
-            detail.textContent = side.toUpperCase() + ' ' + Math.abs(qty) + (price ? ' @ $' + price : '') + (cur ? ' → $' + cur : '');
-            infoDiv.append(sym, detail);
-
-            const pnlDiv = document.createElement('div');
-            pnlDiv.className = 'pos-pnl';
-            const upl = parseFloat(pos.unrealized_pl) || 0;
-            pnlDiv.className = 'pos-pnl ' + _walletPnlClass(upl);
-            pnlDiv.textContent = _walletSign(upl) + '$' + upl.toFixed(2);
-
-            card.append(infoDiv, pnlDiv);
-            return card;
-        }
-
-        function buildWalletEntryCard(entry) {
-            const card = document.createElement('div');
-            const cat = entry.category || 'other';
-            card.className = 'wallet-entry-card cat-' + cat;
-
-            const infoDiv = document.createElement('div');
-            infoDiv.className = 'wallet-entry-info';
-
-            const descDiv = document.createElement('div');
-            descDiv.className = 'wallet-entry-desc';
-            descDiv.textContent = entry.description || 'Activity';
-
-            const metaDiv = document.createElement('div');
-            metaDiv.className = 'wallet-entry-meta';
-            const catSpan = document.createElement('span');
-            catSpan.className = 'wallet-entry-category cat-' + cat;
-            catSpan.textContent = cat;
-            const timeSpan = document.createElement('span');
-            try {
-                const d = new Date(entry.timestamp);
-                timeSpan.textContent = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            } catch (e) { timeSpan.textContent = ''; }
-            metaDiv.append(catSpan, timeSpan);
-            if (entry.source && entry.source !== cat) {
-                const srcSpan = document.createElement('span');
-                srcSpan.textContent = entry.source;
-                metaDiv.appendChild(srcSpan);
-            }
-            infoDiv.append(descDiv, metaDiv);
-
-            const pnlDiv = document.createElement('div');
-            const pnl = parseFloat(entry.pnl) || 0;
-            pnlDiv.className = 'wallet-entry-pnl ' + _walletPnlClass(pnl);
-            pnlDiv.textContent = _walletSign(pnl) + '$' + pnl.toFixed(2);
-
-            card.append(infoDiv, pnlDiv);
-            return card;
-        }
-
-        function setWalletPeriod(period) {
-            _walletPeriod = period;
-            renderWallet();
-        }
-
-        function startWalletPolling() {
-            stopWalletPolling();
-            _walletPollTimer = setInterval(() => {
-                if (_currentMindTab === 'wallet') fetchWalletData();
-            }, 45000);
-        }
-
-        function stopWalletPolling() {
-            if (_walletPollTimer) {
-                clearInterval(_walletPollTimer);
-                _walletPollTimer = null;
-            }
-        }
-
-        function updateWalletBadge() {
-            const badge = document.getElementById('wallet-badge');
-            if (!badge) return;
-            const count = _walletData ? (_walletData.today_count || 0) : 0;
-            if (count > 0) {
-                badge.textContent = count;
-                badge.style.display = '';
-            } else {
-                badge.style.display = 'none';
-            }
-        }
-
-        // Initial wallet badge fetch on page load
-        setTimeout(() => fetchWalletData(), 3000);
-
         async function loadStoredItems() {
             try {
                 const resp = await fetch(`${API_URL}/api/stored-items`, {

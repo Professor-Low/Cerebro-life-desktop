@@ -24,9 +24,6 @@ class AutonomyConfig:
     ENABLE_TRADING = os.environ.get("CEREBRO_TRADING", "true").lower() == "true"
 
     # Alpaca Trading settings
-    ALPACA_API_KEY = os.environ.get("ALPACA_API_KEY", "")
-    ALPACA_SECRET_KEY = os.environ.get("ALPACA_SECRET_KEY", "")
-    ALPACA_PAPER = os.environ.get("ALPACA_PAPER", "true").lower() == "true"
 
     # SimEngine settings
     SIMENGINE_URL = os.environ.get("CEREBRO_SIMENGINE_URL", "http://localhost:8000")
@@ -67,8 +64,6 @@ class AutonomyConfig:
                 "simengine_url": cls.SIMENGINE_URL,
                 "simengine_path": cls.SIMENGINE_PATH,
                 "simengine_auto_start": cls.SIMENGINE_AUTO_START,
-                "alpaca_paper": cls.ALPACA_PAPER,
-                "alpaca_configured": bool(cls.ALPACA_API_KEY and cls.ALPACA_SECRET_KEY)
             }
         }
 
