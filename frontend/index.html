@@ -48865,7 +48865,7 @@
             const agentType = agent.type || 'worker';
             const typeEmoji = agentType === 'researcher' ? '🔍' :
                               agentType === 'coder' ? '💻' :
-                              agentType === 'analyst' ? '📊' :
+                              agentType === 'analyst' ? '📊' : '⚡';
 
             const displayName = agent.call_sign || agent.id;
             let titleText = `${typeEmoji} Agent ${displayName}`;
@@ -61881,10 +61881,6 @@ Please proceed with implementing this recommendation. You have full permissions.
 
         // Parse option symbol: "AAPL 20250321 C 170" -> {underlying, expiry, right, strike}
 
-        // Agent colors for chart markers
-            '#a855f7', '#3b82f6', '#22c55e', '#f59e0b', '#ef4444',
-            '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#8b5cf6'
-        ];
 
 
 
