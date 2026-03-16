@@ -1555,7 +1555,7 @@ _CAPABILITY_PACKS = {
                     "keywords": ["automation","schedule","cron","recurring","daily","weekly","automate"],
                     "content": _CEREBRO_PACK_AUTOMATIONS, "builtin": True, "token_estimate": 300},
     "devices":     {"id": "devices",     "name": "Device Network",   "icon": "server", "description": "SSH targets, remote machine orchestration",
-                    "keywords": ["ssh","device","spark","asus","darkhorse","crystal","remote","machine"],
+                    "keywords": ["ssh","device","remote","machine","server","network"],
                     "content": _CEREBRO_PACK_DEVICES, "builtin": True, "token_estimate": 150, "dynamic": True},
     "groups":      {"id": "groups",      "name": "Group Management", "icon": "folder", "description": "Agent groups/projects, bulk assign",
                     "keywords": ["group","project","folder","organize","categorize","move agent"],
