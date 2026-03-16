@@ -249,9 +249,7 @@ function validateRemoteMcpConfig(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { mcpServers: {} };
 
   const ALLOWED_SERVER_NAMES = new Set(['cerebro']);
-  const ALLOWED_COMMANDS = new Set(['docker', 'cerebro']);
-  const ALLOWED_IMAGE_PREFIX = 'ghcr.io/professor-low/';
-  const DANGEROUS_DOCKER_FLAGS = ['--privileged', '--pid=host', '--network=host', '--cap-add'];
+  const ALLOWED_COMMANDS = new Set(['cerebro']);
 
   const homedir = require('os').homedir();
   const SAFE_PREFIXES = [homedir];
@@ -285,14 +283,7 @@ function validateRemoteMcpConfig(raw) {
       if (args !== undefined) {
         if (!Array.isArray(args) || !args.every(a => typeof a === 'string')) continue;
         if ((isFullPathCerebro || cmd === 'cerebro') && (args.length !== 1 || args[0] !== 'serve')) continue;
-        if (cmd === 'docker') {
-          if (args.some(arg => DANGEROUS_DOCKER_FLAGS.some(flag => arg === flag || arg.startsWith(flag + '=')))) continue;
-          const runIdx = args.indexOf('run');
-          if (runIdx !== -1) {
-            const imageArg = args.find((a, i) => i > runIdx && !a.startsWith('-') && a.includes('/') && !a.includes('='));
-            if (imageArg && !imageArg.startsWith(ALLOWED_IMAGE_PREFIX)) continue;
-          }
-        }
+
       }
 
       const clean = { command: cmd };
