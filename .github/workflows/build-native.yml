@@ -1,0 +1,252 @@
+name: Build Native Desktop
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      skip_backend_build:
+        description: 'Skip backend build (use cached artifacts)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: write
+  packages: read
+
+jobs:
+  # ============================================================
+  # Stage 1: Build the Python backend with PyInstaller
+  # ============================================================
+  build-backend:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+            artifact: cerebro-server-win
+          - os: ubuntu-22.04
+            platform: linux
+            artifact: cerebro-server-linux
+    runs-on: ${{ matrix.os }}
+    if: ${{ github.event.inputs.skip_backend_build != 'true' }}
+
+    steps:
+      - name: Checkout public repo
+        uses: actions/checkout@v4
+
+      - name: Checkout backend source (private)
+        uses: actions/checkout@v4
+        with:
+          repository: Professor-Low/Cerebro
+          token: ${{ secrets.CEREBRO_PRIVATE_TOKEN }}
+          path: cerebro-private
+          sparse-checkout: |
+            backend/
+            memory/
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Prepare backend source
+        shell: bash
+        run: |
+          # Copy backend source to expected location
+          mkdir -p backend-src
+          cp -r cerebro-private/backend/* backend-src/
+          # Copy entry point
+          cp scripts/cerebro-entry.py backend-src/
+
+      - name: Install Python dependencies
+        shell: bash
+        run: |
+          pip install --upgrade pip
+          pip install pyinstaller
+          # Install CPU-only torch (much smaller)
+          pip install torch --extra-index-url https://download.pytorch.org/whl/cpu
+          pip install -r backend-src/requirements.txt
+
+      - name: Build with PyInstaller
+        shell: bash
+        run: |
+          pyinstaller scripts/cerebro-server.spec --noconfirm
+          ls -la dist/cerebro-server/
+
+      - name: Upload backend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/cerebro-server/
+          retention-days: 7
+
+  # ============================================================
+  # Stage 2: Download Redis binaries
+  # ============================================================
+  prepare-redis:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+            artifact: redis-win
+          - os: ubuntu-22.04
+            platform: linux
+            artifact: redis-linux
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Download Redis (Windows)
+        if: matrix.platform == 'win'
+        shell: powershell
+        run: |
+          # Use Memurai or Redis for Windows
+          $url = "https://github.com/redis-windows/redis-windows/releases/download/7.4.2/Redis-7.4.2-Windows-x64-msys2.zip"
+          Invoke-WebRequest -Uri $url -OutFile redis.zip
+          Expand-Archive redis.zip -DestinationPath redis-extract
+          mkdir redis
+          # Copy just redis-server.exe and redis-cli.exe
+          Copy-Item redis-extract/Redis-7.4.2-Windows-x64-msys2/redis-server.exe redis/
+          Copy-Item redis-extract/Redis-7.4.2-Windows-x64-msys2/redis-cli.exe redis/
+
+      - name: Download Redis (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update && sudo apt-get install -y redis-server
+          mkdir -p redis
+          cp /usr/bin/redis-server redis/
+          cp /usr/bin/redis-cli redis/
+          chmod +x redis/*
+
+      - name: Upload Redis artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: redis/
+          retention-days: 7
+
+  # ============================================================
+  # Stage 3: Package Electron app with bundled binaries
+  # ============================================================
+  package-electron:
+    needs: [build-backend, prepare-redis]
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+            build_cmd: npm run build:win
+            backend_artifact: cerebro-server-win
+            redis_artifact: redis-win
+          - os: ubuntu-22.04
+            platform: linux
+            build_cmd: npm run build:linux
+            backend_artifact: cerebro-server-linux
+            redis_artifact: redis-linux
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download backend binary
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.backend_artifact }}
+          path: bin/cerebro-server/
+
+      - name: Download Redis binary
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.redis_artifact }}
+          path: bin/redis/
+
+      - name: Set executable permissions (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          chmod +x bin/cerebro-server/cerebro-server
+          chmod +x bin/redis/redis-server
+          chmod +x bin/redis/redis-cli
+
+      - name: Checkout frontend (private)
+        uses: actions/checkout@v4
+        with:
+          repository: Professor-Low/Cerebro
+          token: ${{ secrets.CEREBRO_PRIVATE_TOKEN }}
+          path: cerebro-private
+          sparse-checkout: frontend/
+
+      - name: Prepare frontend
+        shell: bash
+        run: |
+          mkdir -p frontend
+          cp cerebro-private/frontend/* frontend/ 2>/dev/null || true
+
+      - name: Verify bin structure
+        shell: bash
+        run: |
+          echo "=== bin/ structure ==="
+          ls -laR bin/
+          echo "=== frontend/ ==="
+          ls -la frontend/ || echo "(empty)"
+
+      - name: Build Electron package
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ${{ matrix.build_cmd }}
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: cerebro-installer-${{ matrix.platform }}
+          path: |
+            dist/Cerebro-Installer.*
+            dist/*.AppImage
+            dist/*.deb
+          retention-days: 30
+
+  # ============================================================
+  # Stage 4: Create GitHub Release (on tag push)
+  # ============================================================
+  release:
+    needs: [package-electron]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Download Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: cerebro-installer-win
+          path: release/
+
+      - name: Download Linux installer
+        uses: actions/download-artifact@v4
+        with:
+          name: cerebro-installer-linux
+          path: release/
+
+      - name: List release files
+        run: ls -la release/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -10,16 +10,14 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
   activateLicense: (key) => ipcRenderer.invoke('activate-license', key),
   refreshLicense: () => ipcRenderer.invoke('refresh-license'),
 
-  // Docker prerequisites
+  // Backend prerequisites (compatibility — always returns ready in native mode)
   checkDocker: () => ipcRenderer.invoke('check-docker'),
   checkClaudeCode: () => ipcRenderer.invoke('check-claude-code'),
   checkWsl: () => ipcRenderer.invoke('check-wsl'),
 
-  // Docker install & daemon
+  // Backend lifecycle (compatibility wrappers)
   installDocker: () => ipcRenderer.invoke('install-docker'),
   startDockerDaemon: () => ipcRenderer.invoke('start-docker-daemon'),
-
-  // Docker lifecycle
   setupDocker: () => ipcRenderer.invoke('setup-docker'),
   pullImages: () => ipcRenderer.invoke('pull-images'),
   startStack: () => ipcRenderer.invoke('start-stack'),
@@ -34,7 +32,7 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
   // MCP configuration
   configureMcp: () => ipcRenderer.invoke('configure-mcp'),
 
-  // Kokoro TTS voice engine
+  // Voice engine (optional)
   installKokoroTts: () => ipcRenderer.invoke('install-kokoro-tts'),
   onKokoroInstallProgress: (callback) => {
     ipcRenderer.removeAllListeners('kokoro-install-progress');
@@ -50,7 +48,7 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
   getAutostart: () => ipcRenderer.invoke('get-autostart'),
   enableAutostart: () => ipcRenderer.invoke('enable-autostart'),
 
-  // File access settings
+  // File access
   getFileAccessConfig: () => ipcRenderer.invoke('get-file-access-config'),
   saveFileAccessConfig: (config) => ipcRenderer.invoke('save-file-access-config', config),
   getFileAccessPresets: () => ipcRenderer.invoke('get-file-access-presets'),
@@ -87,7 +85,7 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
   launchClaudeLogin: () => ipcRenderer.invoke('launch-claude-login'),
   silentRefreshOAuth: () => ipcRenderer.invoke('silent-refresh-oauth'),
 
-  // Event listeners for progress
+  // Event listeners
   onPullProgress: (callback) => {
     ipcRenderer.removeAllListeners('pull-progress');
     ipcRenderer.on('pull-progress', (_event, data) => callback(data));
@@ -104,38 +102,26 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
     ipcRenderer.removeAllListeners('docker-start-progress');
     ipcRenderer.on('docker-start-progress', (_event, data) => callback(data));
   },
-
-  // Resume after restart signal
   onResumeAfterRestart: (callback) => {
     ipcRenderer.removeAllListeners('resume-after-restart');
     ipcRenderer.on('resume-after-restart', (_event, state) => callback(state));
   },
-
-  // License expiry event (subscription cancelled mid-session)
   onLicenseExpired: (callback) => {
     ipcRenderer.removeAllListeners('license-expired');
     ipcRenderer.on('license-expired', (_event, data) => callback(data));
   },
-
-  // License failure reason (sent to activation page on startup)
   onLicenseFailure: (callback) => {
     ipcRenderer.removeAllListeners('license-failure');
     ipcRenderer.on('license-failure', (_event, data) => callback(data));
   },
-
-  // Port conflict error (sent to activation page when port 61000 is blocked)
   onPortConflict: (callback) => {
     ipcRenderer.removeAllListeners('port-conflict');
     ipcRenderer.on('port-conflict', (_event, data) => callback(data));
   },
-
-  // Storage health warning (Docker VHD detection)
   onStorageHealthWarning: (callback) => {
     ipcRenderer.removeAllListeners('storage-health-warning');
     ipcRenderer.on('storage-health-warning', (_event, data) => callback(data));
   },
-
-  // Credential events
   onCredentialsExpired: (callback) => {
     ipcRenderer.removeAllListeners('credentials-expired');
     ipcRenderer.on('credentials-expired', (_event, data) => callback(data));
@@ -144,8 +130,6 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
     ipcRenderer.removeAllListeners('credentials-refreshed');
     ipcRenderer.on('credentials-refreshed', (_event, data) => callback(data));
   },
-
-  // Port configuration
   getPortConfig: () => ipcRenderer.invoke('get-port-config'),
   setPortConfig: (cfg) => ipcRenderer.invoke('set-port-config', cfg),
 

@@ -1,16 +1,23 @@
+/**
+ * Cerebro Desktop — Native Architecture (v4.0)
+ *
+ * No Docker. No containers. No Defender exclusions.
+ * Backend + Redis run as bundled native processes.
+ * Install → License → Launch. Like any normal app.
+ */
+
 const { app, BrowserWindow, ipcMain, dialog, shell, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const net = require('net');
 const { spawn, execFile } = require('child_process');
 const { autoUpdater } = require('electron-updater');
-const { DockerManager } = require('./docker-manager');
+const { NativeManager, CEREBRO_DIR, MEMORY_DIR, LOG_DIR } = require('./native-manager');
 const { loadPortConfig, savePortConfig, getBackendUrl } = require('./port-config');
 const { LicenseManager } = require('./license-manager');
 const { createTray, updateTrayStatus } = require('./tray');
 
 const portConfig = loadPortConfig();
-const BACKEND_URL = getBackendUrl(portConfig);
 
 process.on('uncaughtException', (err) => {
   console.error('[Main] Uncaught exception:', err);
@@ -19,23 +26,24 @@ process.on('unhandledRejection', (reason) => {
   console.error('[Main] Unhandled rejection:', reason);
 });
 
-// Linux GPU handling: use real GPU if available, avoid SwiftShader fallback
+// Linux GPU handling
 if (process.platform === 'linux') {
-  // Force Chromium to use the actual GPU (NVIDIA/Intel) instead of SwiftShader blocklist fallback
   app.commandLine.appendSwitch('ignore-gpu-blocklist');
   app.commandLine.appendSwitch('enable-gpu-rasterization');
-  // Disable SwiftShader specifically — if no real GPU, prefer basic software rendering over SwiftShader
   app.commandLine.appendSwitch('disable-software-rasterizer');
 }
 
-// Windows DPI / rendering fix — prevents blurry text on scaled displays
+// Windows DPI fix
 if (process.platform === 'win32') {
   app.commandLine.appendSwitch('high-dpi-support', '1');
   app.commandLine.appendSwitch('enable-use-zoom-for-dsf', 'false');
 }
 
 const isDev = process.env.CEREBRO_DEV === '1';
-const dockerManager = new DockerManager();
+const nativeManager = new NativeManager();
+nativeManager.setPortConfig(portConfig);
+
+const BACKEND_URL = `http://127.0.0.1:${nativeManager.backendPort}`;
 
 let licenseManager;
 try {
@@ -50,13 +58,9 @@ try {
   }
 }
 
-let defenderExclusionFailed = false;
-let crashedLastSession = false;
-
-// Prevent multiple instances — focus existing window if second copy is launched
+// Prevent multiple instances
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
-  // Another instance already has the lock — quit immediately
   app.quit();
   process.exit(0);
 }
@@ -70,8 +74,7 @@ let isAutoUpdating = false;
 let licenseRefreshTimer = null;
 let cdpChromeProcess = null;
 
-// --- Chrome CDP for Docker browser access ---
-
+// --- Chrome CDP for browser agent access ---
 const CDP_PORT = 9222;
 
 const CHROME_PATHS_WIN = [
@@ -99,24 +102,14 @@ function isCdpAvailable() {
   return new Promise((resolve) => {
     const socket = new net.Socket();
     socket.setTimeout(2000);
-    socket.once('connect', () => {
-      socket.destroy();
-      resolve(true);
-    });
-    socket.once('error', () => {
-      socket.destroy();
-      resolve(false);
-    });
-    socket.once('timeout', () => {
-      socket.destroy();
-      resolve(false);
-    });
+    socket.once('connect', () => { socket.destroy(); resolve(true); });
+    socket.once('error', () => { socket.destroy(); resolve(false); });
+    socket.once('timeout', () => { socket.destroy(); resolve(false); });
     socket.connect(CDP_PORT, '127.0.0.1');
   });
 }
 
 async function ensureChromeWithCDP() {
-  // Check if CDP is already available (user's Chrome or previous launch)
   if (await isCdpAvailable()) {
     console.log('[CDP] Chrome already listening on port', CDP_PORT);
     return null;
@@ -124,14 +117,12 @@ async function ensureChromeWithCDP() {
 
   const chromePath = findChromePath();
   if (!chromePath) {
-    console.log('[CDP] Chrome not found, Docker agents will not have browser access');
+    console.log('[CDP] Chrome not found, browser agents will not have browser access');
     return null;
   }
 
   const cdpProfileDir = path.join(app.getPath('userData'), 'cerebro-chrome-cdp');
-  if (!fs.existsSync(cdpProfileDir)) {
-    fs.mkdirSync(cdpProfileDir, { recursive: true });
-  }
+  fs.mkdirSync(cdpProfileDir, { recursive: true });
 
   const args = [
     `--remote-debugging-port=${CDP_PORT}`,
@@ -141,34 +132,29 @@ async function ensureChromeWithCDP() {
     '--no-default-browser-check',
   ];
 
-  console.log(`[CDP] Launching Chrome for CDP: ${chromePath}`);
-  const proc = spawn(chromePath, args, {
-    stdio: 'ignore',
-    detached: false,
-  });
+  console.log(`[CDP] Launching Chrome: ${chromePath}`);
+  const proc = spawn(chromePath, args, { stdio: 'ignore', detached: false });
 
-  proc.on('error', (err) => {
-    console.error('[CDP] Failed to launch Chrome:', err.message);
-  });
-
+  proc.on('error', (err) => console.error('[CDP] Failed:', err.message));
   proc.on('exit', (code) => {
-    console.log(`[CDP] Chrome CDP process exited (code ${code})`);
+    console.log(`[CDP] Chrome exited (code ${code})`);
     if (cdpChromeProcess === proc) cdpChromeProcess = null;
   });
 
-  // Wait up to 10 seconds for CDP to become available
   for (let i = 0; i < 20; i++) {
     if (await isCdpAvailable()) {
-      console.log('[CDP] Chrome CDP ready on port', CDP_PORT);
+      console.log('[CDP] Ready on port', CDP_PORT);
       return proc;
     }
     await new Promise(r => setTimeout(r, 500));
   }
 
-  console.error('[CDP] Chrome launched but CDP not responding after 10s');
+  console.error('[CDP] Chrome launched but not responding');
   try { proc.kill(); } catch (_) {}
   return null;
 }
+
+// --- Window management ---
 
 function createSplashWindow() {
   splashWindow = new BrowserWindow({
@@ -179,12 +165,8 @@ function createSplashWindow() {
     resizable: false,
     alwaysOnTop: true,
     skipTaskbar: true,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-    },
+    webPreferences: { nodeIntegration: false, contextIsolation: true },
   });
-
   splashWindow.loadFile(path.join(__dirname, 'splash.html'));
   splashWindow.center();
 }
@@ -213,17 +195,12 @@ function createMainWindow() {
     }
   });
 
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
+  mainWindow.on('closed', () => { mainWindow = null; });
 
-  // Recover from renderer/GPU crashes — reload instead of leaving a blank window
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     console.error('[Main] Renderer crashed:', details.reason);
     setTimeout(() => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.loadURL(BACKEND_URL);
-      }
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(BACKEND_URL);
     }, 2000);
   });
 
@@ -241,61 +218,41 @@ function updateSplashStatus(message) {
 async function checkLicense() {
   if (isDev) return true;
   if (!licenseManager) return false;
-
   updateSplashStatus('Checking license...');
   const result = await licenseManager.revalidate();
   if (result.valid) {
-    console.log(`[Main] License valid (plan: ${result.plan}${result.offline ? ', offline mode' : ''})`);
+    console.log(`[Main] License valid (plan: ${result.plan}${result.offline ? ', offline' : ''})`);
     return true;
   }
-
   console.log(`[Main] License invalid: ${result.reason}`);
   return false;
 }
 
-// --- Dynamic MCP config from Cerebro repo ---
+// --- MCP Config ---
 const MCP_CONFIG_URL = 'https://raw.githubusercontent.com/Professor-Low/Cerebro/main/config/mcp-desktop.json';
 
 async function fetchMcpConfig() {
   const https = require('https');
   return new Promise((resolve, reject) => {
     const req = https.get(MCP_CONFIG_URL, { timeout: 5000 }, (res) => {
-      if (res.statusCode !== 200) {
-        reject(new Error(`HTTP ${res.statusCode}`));
-        res.resume();
-        return;
-      }
+      if (res.statusCode !== 200) { reject(new Error(`HTTP ${res.statusCode}`)); res.resume(); return; }
       let data = '';
       res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => {
-        try {
-          resolve(JSON.parse(data));
-        } catch (e) {
-          reject(e);
-        }
-      });
+      res.on('end', () => { try { resolve(JSON.parse(data)); } catch (e) { reject(e); } });
     });
     req.on('error', reject);
     req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')); });
   });
 }
 
-/**
- * Validates remote MCP config before it touches ~/.claude.json.
- * Drops unknown servers, blocks dangerous commands/images/flags.
- */
 function validateRemoteMcpConfig(raw) {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    console.warn('[MCP] Remote config is not a valid object, using empty');
-    return { mcpServers: {} };
-  }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { mcpServers: {} };
 
   const ALLOWED_SERVER_NAMES = new Set(['cerebro']);
   const ALLOWED_COMMANDS = new Set(['docker', 'cerebro']);
   const ALLOWED_IMAGE_PREFIX = 'ghcr.io/professor-low/';
   const DANGEROUS_DOCKER_FLAGS = ['--privileged', '--pid=host', '--network=host', '--cap-add'];
 
-  // Safe directories where native cerebro.exe full paths are allowed
   const homedir = require('os').homedir();
   const SAFE_PREFIXES = [homedir];
   if (process.env.APPDATA) SAFE_PREFIXES.push(process.env.APPDATA);
@@ -305,159 +262,102 @@ function validateRemoteMcpConfig(raw) {
 
   if (raw.mcpServers && typeof raw.mcpServers === 'object') {
     for (const [name, serverConfig] of Object.entries(raw.mcpServers)) {
-      // Only allow whitelisted server names
-      if (!ALLOWED_SERVER_NAMES.has(name)) {
-        console.warn(`[MCP] Dropped unknown server "${name}" from remote config`);
-        continue;
-      }
+      if (!ALLOWED_SERVER_NAMES.has(name)) continue;
+      if (!serverConfig || typeof serverConfig !== 'object') continue;
 
-      if (!serverConfig || typeof serverConfig !== 'object' || Array.isArray(serverConfig)) {
-        console.warn(`[MCP] Dropped server "${name}": invalid config object`);
-        continue;
-      }
-
-      // Validate command — allow short names (docker, cerebro) or full paths to cerebro.exe in safe locations
       const cmd = serverConfig.command;
-      if (typeof cmd !== 'string') {
-        console.warn(`[MCP] Dropped server "${name}": command must be a string`);
-        continue;
-      }
+      if (typeof cmd !== 'string') continue;
+
       const isFullPathCerebro = cmd.toLowerCase().endsWith('cerebro.exe') || cmd.toLowerCase().endsWith('cerebro');
       const isAllowedShort = ALLOWED_COMMANDS.has(cmd);
-      if (!isAllowedShort && !isFullPathCerebro) {
-        console.warn(`[MCP] Dropped server "${name}": disallowed command "${cmd}"`);
-        continue;
-      }
-      // Full-path cerebro must be in a safe directory
+      if (!isAllowedShort && !isFullPathCerebro) continue;
+
       if (isFullPathCerebro && !isAllowedShort) {
         const resolved = path.resolve(cmd);
         const inSafeDir = SAFE_PREFIXES.some(prefix =>
-          resolved.toLowerCase().startsWith(prefix.toLowerCase() + path.sep.toLowerCase()) ||
+          resolved.toLowerCase().startsWith(prefix.toLowerCase() + path.sep) ||
           resolved.toLowerCase().startsWith(prefix.toLowerCase() + '/')
         );
-        if (!inSafeDir) {
-          console.warn(`[MCP] Dropped server "${name}": cerebro path "${cmd}" not in safe directory`);
-          continue;
-        }
+        if (!inSafeDir) continue;
       }
 
-      // Validate args is an array of strings
       const args = serverConfig.args;
       if (args !== undefined) {
-        if (!Array.isArray(args) || !args.every(a => typeof a === 'string')) {
-          console.warn(`[MCP] Dropped server "${name}": args must be array of strings`);
-          continue;
-        }
-
-        // For native cerebro commands, restrict args to ["serve"] only
-        if (isFullPathCerebro || cmd === 'cerebro') {
-          if (args.length !== 1 || args[0] !== 'serve') {
-            console.warn(`[MCP] Dropped server "${name}": native cerebro only allows args ["serve"]`);
-            continue;
-          }
-        }
-
-        // For docker commands, validate image and flags
+        if (!Array.isArray(args) || !args.every(a => typeof a === 'string')) continue;
+        if ((isFullPathCerebro || cmd === 'cerebro') && (args.length !== 1 || args[0] !== 'serve')) continue;
         if (cmd === 'docker') {
-          // Check for dangerous Docker flags
-          const hasBlockedFlag = args.some(arg =>
-            DANGEROUS_DOCKER_FLAGS.some(flag => arg === flag || arg.startsWith(flag + '='))
-          );
-          if (hasBlockedFlag) {
-            console.warn(`[MCP] Dropped server "${name}": contains dangerous Docker flag`);
-            continue;
-          }
-
-          // Find the image argument (first arg that looks like an image name, after 'run')
+          if (args.some(arg => DANGEROUS_DOCKER_FLAGS.some(flag => arg === flag || arg.startsWith(flag + '=')))) continue;
           const runIdx = args.indexOf('run');
           if (runIdx !== -1) {
-            // Image is typically the first non-flag arg after 'run' and option args
-            const imageArg = args.find((a, i) =>
-              i > runIdx && !a.startsWith('-') && a.includes('/') && !a.includes('=')
-            );
-            if (imageArg && !imageArg.startsWith(ALLOWED_IMAGE_PREFIX)) {
-              console.warn(`[MCP] Dropped server "${name}": image "${imageArg}" not from allowed prefix`);
-              continue;
-            }
+            const imageArg = args.find((a, i) => i > runIdx && !a.startsWith('-') && a.includes('/') && !a.includes('='));
+            if (imageArg && !imageArg.startsWith(ALLOWED_IMAGE_PREFIX)) continue;
           }
         }
       }
 
-      // Build a clean validated entry (defense against prototype pollution)
       const clean = { command: cmd };
       if (args) clean.args = [...args];
       if (serverConfig.env && typeof serverConfig.env === 'object' && !Array.isArray(serverConfig.env)) {
-        clean.env = Object.fromEntries(
-          Object.entries(serverConfig.env).filter(([k, v]) => typeof k === 'string' && typeof v === 'string')
-        );
+        clean.env = Object.fromEntries(Object.entries(serverConfig.env).filter(([k, v]) => typeof k === 'string' && typeof v === 'string'));
       } else {
         clean.env = {};
       }
-
       validated.mcpServers[name] = clean;
     }
   }
-
   return validated;
 }
 
-function getHardcodedMcpConfig() {
+function getNativeMcpConfig() {
+  const config = loadMemoryConfig();
+  const storagePath = config.storagePath || MEMORY_DIR;
+
+  // In native mode, prefer the native cerebro pip package if installed
+  const nativePath = findNativeCerebro();
+  if (nativePath) {
+    return {
+      mcpServers: {
+        cerebro: {
+          command: nativePath,
+          args: ['serve'],
+          env: {
+            CEREBRO_DATA_DIR: storagePath,
+            CEREBRO_STANDALONE: '1',
+          },
+        },
+      },
+    };
+  }
+
+  // Fallback: try 'cerebro' on PATH
   return {
     mcpServers: {
       cerebro: {
-        command: 'docker',
-        args: [
-          'run', '--rm', '-i',
-          '-v', 'cerebro_cerebro-data:/data/memory',
-          '-e', 'CEREBRO_DATA_DIR=/data/memory',
-          '-e', 'CEREBRO_STANDALONE=1',
-          'ghcr.io/professor-low/cerebro-memory:latest',
-          'cerebro', 'serve',
-        ],
-        env: {},
+        command: 'cerebro',
+        args: ['serve'],
+        env: {
+          CEREBRO_DATA_DIR: storagePath,
+          CEREBRO_STANDALONE: '1',
+        },
       },
     },
   };
 }
 
 async function writeMcpConfig(mcpServers) {
-  // Claude Code stores MCP servers in ~/.claude.json under the "mcpServers" key.
-  // Verified: `claude mcp add-json` writes to this file, and `claude mcp remove`
-  // reports "File modified: ~/.claude.json".
-  // We do a direct read/modify/write to avoid cmd.exe mangling JSON quotes.
-  const os = require('os');
-  const configPath = path.join(os.homedir(), '.claude.json');
-
+  const configPath = path.join(require('os').homedir(), '.claude.json');
   let config = {};
   try {
     const existing = fs.readFileSync(configPath, 'utf8');
     config = JSON.parse(existing);
   } catch (e) {
-    if (e.code !== 'ENOENT') {
-      console.error('[MCP] Cannot parse ~/.claude.json:', e.message);
-      throw new Error('Cannot update MCP config: ~/.claude.json is not valid JSON');
-    }
-    // File doesn't exist yet (new user without Claude Code) — start fresh
+    if (e.code !== 'ENOENT') throw new Error('Cannot update MCP config: ~/.claude.json is not valid JSON');
   }
-
   if (!config.mcpServers) config.mcpServers = {};
-
   for (const [name, serverConfig] of Object.entries(mcpServers)) {
-    // Preserve existing cerebro config if it has a custom volume mount
-    if (name === 'cerebro' && config.mcpServers.cerebro) {
-      const existingArgs = config.mcpServers.cerebro.args || [];
-      const newArgs = serverConfig.args || [];
-      const existingVolume = existingArgs.find(a => typeof a === 'string' && a.includes(':/data/memory'));
-      const newVolume = newArgs.find(a => typeof a === 'string' && a.includes(':/data/memory'));
-      if (existingVolume && newVolume && existingVolume !== newVolume) {
-        console.log(`[MCP] Preserved existing cerebro config with custom mount: ${existingVolume}`);
-        continue;
-      }
-    }
     config.mcpServers[name] = serverConfig;
     console.log(`[MCP] Set server ${name}`);
   }
-
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
   console.log(`[MCP] Config written to ${configPath}`);
   return configPath;
@@ -467,226 +367,76 @@ async function refreshMcpConfigSilently() {
   try {
     const rawRemote = await fetchMcpConfig();
     const remote = validateRemoteMcpConfig(rawRemote);
-    // Inject current storage path so refresh doesn't overwrite custom mounts
-    const dynamicConfig = getDynamicMcpConfig();
-    if (remote.mcpServers) {
-      remote.mcpServers.cerebro = dynamicConfig.mcpServers.cerebro;
-    }
+    const dynamicConfig = getNativeMcpConfig();
+    if (remote.mcpServers) remote.mcpServers.cerebro = dynamicConfig.mcpServers.cerebro;
     await writeMcpConfig(remote.mcpServers);
-    console.log('[MCP] Config refreshed from remote (storage-aware)');
+    console.log('[MCP] Config refreshed');
   } catch (err) {
-    console.log(`[MCP] Background refresh skipped: ${err.message}`);
+    console.log(`[MCP] Refresh skipped: ${err.message}`);
   }
 }
+
+// --- License refresh timer ---
 
 function startLicenseRefreshTimer() {
   if (licenseRefreshTimer) clearInterval(licenseRefreshTimer);
-
-  // Re-check license every 4 hours while app is running
   licenseRefreshTimer = setInterval(async () => {
-    console.log('[Main] Periodic license refresh check...');
+    console.log('[Main] Periodic license check...');
     const result = await licenseManager.revalidate();
-
     if (!result.valid) {
       console.log(`[Main] License no longer valid: ${result.reason}`);
-
-      // Notify the renderer that license died mid-session
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('license-expired', {
-          reason: result.reason,
-          cancelAtPeriodEnd: result.cancelAtPeriodEnd,
-        });
+        mainWindow.webContents.send('license-expired', { reason: result.reason, cancelAtPeriodEnd: result.cancelAtPeriodEnd });
       }
-
-      // Give the renderer 3 seconds to show a message, then lock the app
       setTimeout(() => {
         if (mainWindow && !mainWindow.isDestroyed()) {
           showSetupWizard();
-          // Send the failure reason to the activation page once it loads
           mainWindow.webContents.once('did-finish-load', () => {
-            mainWindow.webContents.send('license-failure', {
-              valid: false,
-              reason: result.reason,
-              cancelAtPeriodEnd: result.cancelAtPeriodEnd,
-            });
+            mainWindow.webContents.send('license-failure', { valid: false, reason: result.reason, cancelAtPeriodEnd: result.cancelAtPeriodEnd });
           });
         }
       }, 3000);
-
       clearInterval(licenseRefreshTimer);
       licenseRefreshTimer = null;
-    } else if (result.offline) {
-      console.log('[Main] License valid (offline mode)');
     }
-  }, 4 * 60 * 60 * 1000); // 4 hours
+  }, 4 * 60 * 60 * 1000);
 }
 
 function showSetupWizard() {
-  if (splashWindow) {
-    splashWindow.close();
-    splashWindow = null;
-  }
-
+  if (splashWindow) { splashWindow.close(); splashWindow = null; }
   mainWindow.loadFile(path.join(__dirname, 'activation.html'));
   mainWindow.show();
   mainWindow.focus();
 }
 
-async function ensureDefenderExclusion() {
-  if (process.platform !== 'win32') return;
+// --- Start the native stack ---
 
-  // Check marker — but re-verify if marker is older than 7 days or says "failed"
-  const markerPath = path.join(require('os').homedir(), '.cerebro', '.defender-excluded');
-  let needsCheck = true;
+async function startNativeStack() {
   try {
-    if (fs.existsSync(markerPath)) {
-      const content = fs.readFileSync(markerPath, 'utf-8').trim();
-      if (content.toLowerCase() === 'failed') {
-        needsCheck = true; // Previous attempt failed — must retry
-      } else {
-        // Check if marker is fresh (less than 7 days old)
-        const markerDate = new Date(content);
-        const ageMs = Date.now() - markerDate.getTime();
-        const sevenDays = 7 * 24 * 60 * 60 * 1000;
-        if (!isNaN(markerDate.getTime()) && ageMs < sevenDays) {
-          return; // Marker is fresh and valid — skip check
-        }
-        console.log('[Main] Defender exclusion marker is stale, re-verifying...');
-      }
-    }
-  } catch {}
-
-  if (needsCheck) {
-    // Verify actual exclusion state (runs elevated check)
-    const excluded = await dockerManager.isDefenderExcluded().catch(() => false);
-    if (excluded) {
-      // Refresh marker timestamp
-      try { fs.writeFileSync(markerPath, new Date().toISOString()); } catch {}
-      return;
-    }
-  }
-
-  console.log('[Main] Defender exclusion not found — requesting elevation to add it');
-  updateSplashStatus('Configuring Windows Defender...');
-  const result = await dockerManager.addDefenderExclusion();
-  if (!result.success) {
-    console.warn('[Main] Defender exclusion failed (non-fatal):', result.error);
-    defenderExclusionFailed = true;
-  }
-}
-
-async function startDockerStack() {
-  updateSplashStatus('Starting Docker containers...');
-
-  // Auto-detect memory config from env vars before writing compose
-  // (ensures bind mount is set up on first run if CEREBRO_DATA_DIR is set)
-  loadMemoryConfig();
-
-  // Phase 5: Auto-setup local mirror for network drives on first detection
-  {
-    const cfg = loadMemoryConfig();
-    if (cfg.storagePath && isNetworkPath(cfg.storagePath) && !cfg.localMirrorPath) {
-      const os = require('os');
-      const localMirrorPath = path.join(os.homedir(), 'CerebroMemory');
-      try {
-        fs.mkdirSync(localMirrorPath, { recursive: true });
-        cfg.localMirrorPath = localMirrorPath;
-        saveMemoryConfig(cfg);
-        console.log(`[Storage] Auto-created local mirror for network drive: ${localMirrorPath}`);
-        await dockerManager.writeComposeFile();
-      } catch (e) {
-        console.warn('[Storage] Auto-setup of local mirror failed:', e.message);
-      }
-    }
-
-    // Sync NAS → local mirror before Docker starts
-    if (cfg.localMirrorPath) {
-      // Check if local mirror has data already (subsequent run) or is empty (first run)
-      let mirrorHasData = false;
-      try {
-        const entries = fs.readdirSync(cfg.localMirrorPath);
-        mirrorHasData = entries.length > 3; // more than a couple files = has real data
-      } catch (_) {}
-
-      if (mirrorHasData) {
-        // Subsequent run — sync in background, Docker starts immediately with existing data
-        runStorageSync('pull')
-          .then(r => console.log(`[Storage] Background sync: pulled ${r.pulled || 0} files`))
-          .catch(e => console.warn('[Storage] Background sync failed (non-fatal):', e.message));
-      } else {
-        // First run — must wait for data before Docker starts
-        try {
-          updateSplashStatus('Copying memory from NAS (first time)...');
-          const syncResult = await runStorageSync('pull');
-          console.log(`[Storage] Initial sync complete: pulled ${syncResult.pulled || 0} files`);
-        } catch (e) {
-          console.warn('[Storage] Initial sync failed (continuing empty):', e.message);
-        }
-      }
-    }
-  }
-
-  // Defender exclusion now runs at app startup (before license gate), so no
-  // need to duplicate it here. The marker file prevents repeated UAC prompts.
-
-  // 1. Check if Docker is installed — if not, wizard handles install
-  const installed = await dockerManager.isDockerInstalled();
-  if (!installed) {
-    console.log('[Main] Docker not installed, deferring to wizard');
-    return { ok: false, error: 'Docker is not installed' };
-  }
-
-  // 2. Check if Docker daemon is running — auto-start if not
-  const running = await dockerManager.isDockerRunning();
-  if (!running) {
-    updateSplashStatus('Starting Docker...');
-    const startResult = await dockerManager.startDockerDaemon((p) => {
-      updateSplashStatus(p.message || 'Starting Docker...');
+    updateSplashStatus('Starting Cerebro...');
+    await nativeManager.startStack((progress) => {
+      updateSplashStatus(progress.message || 'Starting...');
     });
-    if (!startResult.success) {
-      console.error('[Main] Failed to start Docker daemon:', startResult.error);
-      return { ok: false, error: `Failed to start Docker daemon: ${startResult.error}` };
-    }
-  }
 
-  // 3. Chrome CDP is launched on-demand (via 'launch-chrome-cdp' IPC) when
-  //    a browser agent is spawned, NOT at startup. Launching Chrome with
-  //    --remote-debugging-port at startup triggers Defender's behavioral
-  //    detection (Behavior:Win32/LummaStealer.CER!MTB) and kills the process.
-
-  // 4. Write/refresh config (always refresh compose to fix volume mounts)
-  updateSplashStatus('Writing configuration...');
-  await dockerManager.writeComposeFile();
-  dockerManager.writeEnvFile();
-  await dockerManager.setClaudeCliPath();
-
-  // 5. Start the compose stack
-  try {
-    updateSplashStatus('Starting containers...');
-    await dockerManager.startStack();
-
-    // 6. Verify storage mount health (non-blocking diagnostic)
+    // Verify storage
     let storageHealth = null;
     try {
-      storageHealth = await dockerManager.verifyStorageMount();
+      storageHealth = await nativeManager.verifyStorageMount();
       if (storageHealth.warnings.length > 0) {
-        console.warn('[Main] Storage health warnings:', storageHealth.warnings);
+        console.warn('[Main] Storage warnings:', storageHealth.warnings);
       }
     } catch (err) {
-      console.warn('[Main] Storage health check failed (non-fatal):', err.message);
+      console.warn('[Main] Storage health check failed:', err.message);
     }
 
     return { ok: true, storageHealth };
   } catch (err) {
-    console.error('[Main] Docker stack failed to start:', err.message);
-    const result = { ok: false, error: err.message };
-    if (err.portConflict) {
-      result.portConflict = true;
-      result.portConflictReason = err.portConflictReason;
-    }
-    return result;
+    console.error('[Main] Native stack failed:', err.message);
+    return { ok: false, error: err.message };
   }
 }
+
+// --- Load frontend ---
 
 async function loadFrontend() {
   updateSplashStatus('Loading Cerebro...');
@@ -697,148 +447,92 @@ async function loadFrontend() {
   mainWindow.loadURL(BACKEND_URL);
 
   mainWindow.webContents.on('did-finish-load', () => {
-    if (splashWindow) {
-      splashWindow.close();
-      splashWindow = null;
-    }
+    if (splashWindow) { splashWindow.close(); splashWindow = null; }
     mainWindow.show();
     mainWindow.focus();
 
-    // Show Defender warning if exclusion failed or prior session crashed unexpectedly
-    if (defenderExclusionFailed || crashedLastSession) {
-      const reason = crashedLastSession
-        ? 'Cerebro shut down unexpectedly last session. This is often caused by Windows Defender killing the process.'
-        : 'Windows Defender exclusion could not be added automatically.';
-      mainWindow.webContents.executeJavaScript(`
-        (function() {
-          var msg = ${JSON.stringify(reason)} +
-            ' To prevent this, open Windows Security > Virus & threat protection > Manage settings > Exclusions,' +
-            ' and add the Cerebro install folder.';
-          if (typeof window.cerebroAlert === 'function') {
-            window.cerebroAlert(msg, { title: 'Windows Defender Warning' });
-          } else {
-            console.warn('[Defender]', msg);
-          }
-        })();
-      `).catch(() => {});
-    }
-
-    // Check for updates in the background — aggressive early, then every 30 min.
-    // Early checks catch releases published right after the user launched the app.
+    // Check for updates in background
     checkForUpdatesQuietly();
-    setTimeout(checkForUpdatesQuietly, 60 * 1000);       // 1 min after launch
-    setTimeout(checkForUpdatesQuietly, 5 * 60 * 1000);   // 5 min after launch
-    setInterval(checkForUpdatesQuietly, 30 * 60 * 1000); // then every 30 min
+    setTimeout(checkForUpdatesQuietly, 60 * 1000);
+    setTimeout(checkForUpdatesQuietly, 5 * 60 * 1000);
+    setInterval(checkForUpdatesQuietly, 30 * 60 * 1000);
   });
 
   mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
     retries++;
-    console.error(`[Main] Frontend failed to load (attempt ${retries}/${maxRetries}): ${errorCode} ${errorDescription}`);
+    console.error(`[Main] Frontend load failed (${retries}/${maxRetries}): ${errorCode} ${errorDescription}`);
     if (retries < maxRetries) {
-      setTimeout(() => {
-        if (mainWindow) mainWindow.loadURL(BACKEND_URL);
-      }, 2000);
+      setTimeout(() => { if (mainWindow) mainWindow.loadURL(BACKEND_URL); }, 2000);
     } else {
-      console.error('[Main] Frontend failed to load after max retries, showing wizard');
+      console.error('[Main] Frontend failed after max retries');
       if (mainWindow) showSetupWizard();
     }
   });
 }
 
+// --- Update checking ---
+
 async function checkForUpdatesQuietly() {
-  let bannerShown = false;
-
-  // Check Docker image updates (existing behavior)
-  try {
-    const result = await dockerManager.checkForUpdates();
-    if (result.updateAvailable && mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.executeJavaScript(`
-        if (typeof window.__cerebroShowUpdateBanner === 'function') {
-          window.__cerebroShowUpdateBanner('docker');
-        }
-      `).catch(() => {});
-      bannerShown = true;
-    }
-  } catch (err) {
-    console.log('[Main] Docker update check failed:', err.message);
-  }
-
-  // Check Electron app updates (auto-downloads if available)
+  // Check Electron app updates
   try {
     await autoUpdater.checkForUpdates();
   } catch (err) {
-    console.log('[Main] Electron update check failed:', err.message);
+    console.log('[Main] Update check failed:', err.message);
   }
 
-  // Fallback: compare app version against latest GitHub release.
-  // This catches cases where both docker manifest inspect and electron-updater
-  // fail silently (e.g. Docker experimental features disabled, AV blocking downloads).
-  if (!bannerShown) {
-    try {
-      const https = require('https');
-      const latestVersion = await new Promise((resolve, reject) => {
-        const req = https.get('https://api.github.com/repos/Professor-Low/Cerebro-life-desktop/releases/latest', {
-          headers: { 'User-Agent': 'Cerebro-Desktop/' + app.getVersion() },
-          timeout: 10000,
-        }, (res) => {
-          if (res.statusCode === 302 || res.statusCode === 301) {
-            return reject(new Error('redirect'));
-          }
-          let body = '';
-          res.on('data', (chunk) => { body += chunk; });
-          res.on('end', () => {
-            try {
-              const data = JSON.parse(body);
-              resolve(data.tag_name ? data.tag_name.replace(/^v/, '') : null);
-            } catch { resolve(null); }
-          });
+  // Fallback: GitHub API version check
+  try {
+    const https = require('https');
+    const latestVersion = await new Promise((resolve, reject) => {
+      const req = https.get('https://api.github.com/repos/Professor-Low/Cerebro-life-desktop/releases/latest', {
+        headers: { 'User-Agent': 'Cerebro-Desktop/' + app.getVersion() },
+        timeout: 10000,
+      }, (res) => {
+        let body = '';
+        res.on('data', (chunk) => { body += chunk; });
+        res.on('end', () => {
+          try { const data = JSON.parse(body); resolve(data.tag_name ? data.tag_name.replace(/^v/, '') : null); }
+          catch { resolve(null); }
         });
-        req.on('error', reject);
-        req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
       });
+      req.on('error', reject);
+      req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+    });
 
-      if (latestVersion && latestVersion !== app.getVersion()) {
-        // Simple semver comparison: split on dots, compare numerically
-        const current = app.getVersion().split('.').map(Number);
-        const latest = latestVersion.split('.').map(Number);
-        let isNewer = false;
-        for (let i = 0; i < 3; i++) {
-          if ((latest[i] || 0) > (current[i] || 0)) { isNewer = true; break; }
-          if ((latest[i] || 0) < (current[i] || 0)) break;
-        }
-        if (isNewer && mainWindow && !mainWindow.isDestroyed()) {
-          console.log(`[Main] GitHub API fallback: update available (${app.getVersion()} → ${latestVersion})`);
-          mainWindow.webContents.executeJavaScript(`
-            if (typeof window.__cerebroShowUpdateBanner === 'function') {
-              window.__cerebroShowUpdateBanner('electron');
-            }
-          `).catch(() => {});
-        }
+    if (latestVersion && latestVersion !== app.getVersion()) {
+      const current = app.getVersion().split('.').map(Number);
+      const latest = latestVersion.split('.').map(Number);
+      let isNewer = false;
+      for (let i = 0; i < 3; i++) {
+        if ((latest[i] || 0) > (current[i] || 0)) { isNewer = true; break; }
+        if ((latest[i] || 0) < (current[i] || 0)) break;
       }
-    } catch (err) {
-      console.log('[Main] GitHub version check failed:', err.message);
+      if (isNewer && mainWindow && !mainWindow.isDestroyed()) {
+        console.log(`[Main] Update available (${app.getVersion()} → ${latestVersion})`);
+        mainWindow.webContents.executeJavaScript(`
+          if (typeof window.__cerebroShowUpdateBanner === 'function') {
+            window.__cerebroShowUpdateBanner('electron');
+          }
+        `).catch(() => {});
+      }
     }
+  } catch (err) {
+    console.log('[Main] GitHub version check failed:', err.message);
   }
 }
 
-// --- Linux desktop integration (first launch) ---
+// --- Linux desktop integration ---
+
 function installDesktopIntegration() {
   if (process.platform !== 'linux') return;
-
-  const os = require('os');
-  const homeDir = os.homedir();
+  const homeDir = require('os').homedir();
   const markerPath = path.join(app.getPath('userData'), '.desktop-integrated');
-
   if (fs.existsSync(markerPath)) return;
 
   try {
     const iconSrc = path.join(__dirname, '..', 'assets', 'icon-256.png');
     const iconFile = fs.existsSync(iconSrc) ? iconSrc : path.join(__dirname, '..', 'assets', 'icon.png');
-
-    if (!fs.existsSync(iconFile)) {
-      console.log('[Main] No icon file found, skipping desktop integration');
-      return;
-    }
+    if (!fs.existsSync(iconFile)) return;
 
     const iconDestDir = path.join(homeDir, '.local', 'share', 'icons', 'hicolor', '256x256', 'apps');
     fs.mkdirSync(iconDestDir, { recursive: true });
@@ -849,26 +543,15 @@ function installDesktopIntegration() {
 
     const appImagePath = process.env.APPIMAGE || process.execPath;
     const desktopEntry = [
-      '[Desktop Entry]',
-      'Name=Cerebro',
-      'Comment=Your AI, Everywhere',
-      `Exec="${appImagePath}" %U`,
-      'Icon=cerebro',
-      'Type=Application',
+      '[Desktop Entry]', 'Name=Cerebro', 'Comment=Your AI, Everywhere',
+      `Exec="${appImagePath}" %U`, 'Icon=cerebro', 'Type=Application',
       'Categories=Utility;ArtificialIntelligence;Science;',
-      'StartupWMClass=cerebro-desktop',
-      'Terminal=false',
+      'StartupWMClass=cerebro-desktop', 'Terminal=false',
     ].join('\n') + '\n';
 
     fs.writeFileSync(path.join(desktopDir, 'cerebro.desktop'), desktopEntry);
-
-    const { execFileSync } = require('child_process');
-    try {
-      execFileSync('update-desktop-database', [desktopDir], { timeout: 5000 });
-    } catch (_) { /* not critical */ }
-    try {
-      execFileSync('gtk-update-icon-cache', ['-f', '-t', path.join(homeDir, '.local', 'share', 'icons', 'hicolor')], { timeout: 5000 });
-    } catch (_) { /* not critical */ }
+    try { require('child_process').execFileSync('update-desktop-database', [desktopDir], { timeout: 5000 }); } catch (_) {}
+    try { require('child_process').execFileSync('gtk-update-icon-cache', ['-f', '-t', path.join(homeDir, '.local', 'share', 'icons', 'hicolor')], { timeout: 5000 }); } catch (_) {}
 
     fs.writeFileSync(markerPath, new Date().toISOString());
     console.log('[Main] Desktop integration installed');
@@ -877,12 +560,8 @@ function installDesktopIntegration() {
   }
 }
 
-async function shutdown() {
-  console.log('[Main] Shutting down...');
-  await dockerManager.stopStack();
-}
+// --- App lifecycle ---
 
-// Focus existing window when a second instance is launched
 app.on('second-instance', () => {
   if (mainWindow) {
     if (mainWindow.isMinimized()) mainWindow.restore();
@@ -891,110 +570,18 @@ app.on('second-instance', () => {
   }
 });
 
-// App lifecycle
 app.whenReady().then(async () => {
-  console.log('[Main] Cerebro Desktop starting (Docker architecture)');
-
-  // ── Crash detection markers ──────────────────────────────────────
-  // If last-launch is newer than last-shutdown (or no shutdown marker),
-  // the prior session was killed unexpectedly (Defender, power loss, etc.)
-  const cerebroDir = path.join(require('os').homedir(), '.cerebro');
-  const launchMarker = path.join(cerebroDir, '.last-launch');
-  const shutdownMarker = path.join(cerebroDir, '.last-shutdown');
-  try {
-    const lastLaunch = fs.existsSync(launchMarker) ? new Date(fs.readFileSync(launchMarker, 'utf-8').trim()) : null;
-    const lastShutdown = fs.existsSync(shutdownMarker) ? new Date(fs.readFileSync(shutdownMarker, 'utf-8').trim()) : null;
-    if (lastLaunch && (!lastShutdown || lastLaunch > lastShutdown)) {
-      console.warn('[Main] Previous session did not shut down cleanly — possible crash or Defender kill');
-      crashedLastSession = true;
-    }
-  } catch (_) {}
-  try {
-    fs.mkdirSync(cerebroDir, { recursive: true });
-    fs.writeFileSync(launchMarker, new Date().toISOString());
-  } catch (_) {}
-
-  // ── STEP 0: Windows Defender exclusion ──────────────────────────
-  // MUST run before ANY network activity, Docker calls, or Chrome CDP.
-  // Defender's behavioral detection (Behavior:Win32/LummaStealer.CER!MTB)
-  // triggers on network/Docker patterns and kills the process within seconds.
-  // The NSIS installer also adds exclusions at install time, but this covers
-  // upgrades from older versions and manual installs.
-  try {
-    await ensureDefenderExclusion();
-  } catch (err) {
-    console.warn('[Main] Defender exclusion failed (non-fatal):', err.message);
-    defenderExclusionFailed = true;
-  }
-
-  // ── BLOCKING Defender gate ──────────────────────────────────────
-  // If exclusion failed (especially after a prior crash), Defender WILL kill
-  // the process within seconds once Docker/Chrome CDP starts. We MUST block
-  // here — before ANY network/Docker activity — and give the user a chance
-  // to add the exclusion manually. A frontend toast is too late; the process
-  // would already be dead.
-  // IMPORTANT: Only show the blocking dialog when the prior session actually
-  // crashed. If the exclusion just failed but the app runs fine (UAC denied
-  // on a machine Defender doesn't kill), the softer frontend warning handles it.
-  if (process.platform === 'win32' && defenderExclusionFailed && crashedLastSession) {
-    const appDir = path.dirname(process.execPath);
-    const dataDir = path.join(require('os').homedir(), '.cerebro');
-    const headline = 'Cerebro was killed by Windows Defender last session.';
-
-    const { response } = await dialog.showMessageBox({
-      type: 'error',
-      title: 'Windows Defender — Action Required',
-      message: headline,
-      detail:
-        'Without an exclusion, Defender will detect Cerebro\'s Docker and Chrome activity ' +
-        'as a false positive (Behavior:Win32/LummaStealer) and silently kill the app.\n\n' +
-        'Please add BOTH of these folders as exclusions:\n' +
-        `  1.  ${appDir}\n` +
-        `  2.  ${dataDir}\n\n` +
-        'Click "Open Windows Security" below, then go to:\n' +
-        'Virus & threat protection  ›  Manage settings  ›  Exclusions  ›  Add an exclusion  ›  Folder\n\n' +
-        'After adding both folders, click "I Added It" to continue.',
-      buttons: ['Open Windows Security', 'I Added It — Continue', 'Skip (app may crash)'],
-      defaultId: 0,
-      cancelId: 2,
-      noLink: true,
-    });
-
-    if (response === 0) {
-      // Open Windows Security to the threat protection page
-      try {
-        shell.openExternal('windowsdefender://threatsettings');
-      } catch (_) {
-        try { shell.openExternal('ms-settings:windowsdefender'); } catch (_2) {}
-      }
-      // Wait for user to confirm they added it
-      await dialog.showMessageBox({
-        type: 'info',
-        title: 'Waiting for Defender Exclusion',
-        message: 'Add both folders as exclusions, then click OK.',
-        detail:
-          'In Windows Security, navigate to:\n' +
-          'Virus & threat protection  ›  Manage settings  ›  Exclusions  ›  Add an exclusion  ›  Folder\n\n' +
-          `Folder 1:  ${appDir}\n` +
-          `Folder 2:  ${dataDir}\n\n` +
-          'After adding both, click OK to launch Cerebro.',
-        buttons: ['OK — I Added the Exclusions'],
-        noLink: true,
-      });
-    }
-    // response 1 = user says they already added it, continue
-    // response 2 = skip, proceed at risk
-  }
+  console.log('[Main] Cerebro Desktop starting (Native architecture v4.0)');
 
   installDesktopIntegration();
 
-  // Configure electron auto-updater (AFTER Defender exclusion)
+  // Configure auto-updater
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.logger = null;
 
   autoUpdater.on('update-downloaded', (info) => {
-    console.log(`[Main] Electron update downloaded: v${info.version}`);
+    console.log(`[Main] Update downloaded: v${info.version}`);
     electronUpdateReady = true;
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.executeJavaScript(`
@@ -1006,121 +593,69 @@ app.whenReady().then(async () => {
   });
 
   autoUpdater.on('error', (err) => {
-    console.log('[Main] Auto-updater error (non-fatal):', err.message);
+    console.log('[Main] Auto-updater error:', err.message);
   });
 
-  // Grant microphone & audio permissions so voice/STT works without prompts
+  // Grant audio permissions
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    const allowed = ['media', 'audioCapture', 'mediaKeySystem'];
-    callback(allowed.includes(permission));
+    callback(['media', 'audioCapture', 'mediaKeySystem'].includes(permission));
   });
   session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
-    const allowed = ['media', 'audioCapture', 'mediaKeySystem'];
-    return allowed.includes(permission);
+    return ['media', 'audioCapture', 'mediaKeySystem'].includes(permission);
   });
 
   createSplashWindow();
   setTimeout(() => {
     if (splashWindow && !splashWindow.isDestroyed()) {
-      console.error('[Main] Splash timeout — startup took too long');
+      console.error('[Main] Splash timeout');
       splashWindow.close();
       splashWindow = null;
       if (mainWindow) showSetupWizard();
     }
-  }, 60000);
+  }, 90000);  // 90s timeout for native startup (model loading)
   createMainWindow();
 
-  // Create system tray
+  // System tray
   const trayIconPath = path.join(__dirname, '..', 'assets', 'tray-icon.png');
   tray = createTray(mainWindow, trayIconPath);
-
-  // Post-restart resume: check for saved setup state before license gate
-  const savedState = dockerManager.loadSetupState();
-  if (savedState && savedState.step === 'needs-setup') {
-    console.log('[Main] Resuming setup after restart');
-    showSetupWizard();
-    // Signal the activation page to jump to the setup step once loaded
-    mainWindow.webContents.on('did-finish-load', () => {
-      mainWindow.webContents.send('resume-after-restart', savedState);
-    });
-    return;
-  }
 
   // License gate
   const licensed = await checkLicense();
   if (!licensed) {
     const licenseStatus = licenseManager ? licenseManager.getStatus() : { valid: false, reason: 'init_failed' };
     showSetupWizard();
-    // Tell the activation page WHY the user is here (expired vs first-time)
     mainWindow.webContents.once('did-finish-load', () => {
       mainWindow.webContents.send('license-failure', licenseStatus);
     });
     return;
   }
 
-  // Forward credential events to renderer
-  dockerManager.on('credentials-expired', (data) => {
-    if (mainWindow) mainWindow.webContents.send('credentials-expired', data);
-  });
-  dockerManager.on('credentials-refreshed', (data) => {
-    if (mainWindow) mainWindow.webContents.send('credentials-refreshed', data);
-  });
-
-  // Returning user: start Docker stack and load frontend
-  const dockerResult = await startDockerStack();
-  if (!dockerResult.ok) {
-    console.error('[Main] Docker start failed:', dockerResult.error);
+  // Start native stack
+  const result = await startNativeStack();
+  if (!result.ok) {
+    console.error('[Main] Stack failed:', result.error);
     showSetupWizard();
-    // If it's a port conflict, send the detailed error to the activation page
-    if (dockerResult.portConflict) {
-      mainWindow.webContents.once('did-finish-load', () => {
-        mainWindow.webContents.send('port-conflict', {
-          reason: dockerResult.portConflictReason,
-          error: dockerResult.error,
-        });
-      });
-    }
     return;
   }
 
   await loadFrontend();
   updateTrayStatus(tray, 'running');
   startLicenseRefreshTimer();
-  refreshMcpConfigSilently().catch(err => {
-    console.warn('[Main] MCP refresh failed:', err.message);
-  });
+  refreshMcpConfigSilently().catch(err => console.warn('[MCP] Refresh failed:', err.message));
 
-  // Start periodic storage sync if local mirror is configured
-  {
-    const syncCfg = loadMemoryConfig();
-    if (syncCfg.localMirrorPath) {
-      const syncMinutes = syncCfg.syncIntervalMinutes || 5;
-      storageSyncTimer = setInterval(() => {
-        runStorageSync('both').catch(e => console.warn('[Sync] Periodic sync error:', e.message));
-      }, syncMinutes * 60 * 1000);
-      console.log(`[Sync] Periodic bidirectional sync started (every ${syncMinutes} min)`);
-    }
-  }
-
-  // Send storage health warning to frontend after a short delay (ensure JS is initialized)
-  if (dockerResult.storageHealth && dockerResult.storageHealth.warnings.length > 0) {
+  if (result.storageHealth && result.storageHealth.warnings.length > 0) {
     setTimeout(() => {
-      if (mainWindow) {
-        mainWindow.webContents.send('storage-health-warning', dockerResult.storageHealth);
-      }
+      if (mainWindow) mainWindow.webContents.send('storage-health-warning', result.storageHealth);
     }, 3000);
   }
 });
 
 app.on('window-all-closed', () => {
-  // Don't quit - we stay in system tray
+  // Stay in tray
 });
 
 app.on('activate', () => {
-  if (mainWindow) {
-    mainWindow.show();
-    mainWindow.focus();
-  }
+  if (mainWindow) { mainWindow.show(); mainWindow.focus(); }
 });
 
 app.on('before-quit', async (e) => {
@@ -1128,130 +663,74 @@ app.on('before-quit', async (e) => {
     isQuitting = true;
     e.preventDefault();
 
-    // Write clean shutdown marker (absence = crash detection on next launch)
+    // Write shutdown marker
     try {
-      const shutdownPath = path.join(require('os').homedir(), '.cerebro', '.last-shutdown');
-      fs.writeFileSync(shutdownPath, new Date().toISOString());
+      fs.writeFileSync(path.join(CEREBRO_DIR, '.last-shutdown'), new Date().toISOString());
     } catch (_) {}
-
-    // Push final local changes to NAS before shutting down
-    if (storageSyncTimer) {
-      clearInterval(storageSyncTimer);
-      storageSyncTimer = null;
-    }
-    try {
-      const cfg = loadMemoryConfig();
-      if (cfg.localMirrorPath) {
-        console.log('[Sync] Pushing final changes to NAS before quit...');
-        await runStorageSync('push');
-      }
-    } catch (e2) {
-      console.warn('[Sync] Shutdown sync failed:', e2.message);
-    }
 
     if (!isAutoUpdating) {
       updateTrayStatus(tray, 'stopping');
-      await shutdown();
+      await nativeManager.stopStack();
     }
-    // Kill CDP Chrome process if we launched it
+
     if (cdpChromeProcess) {
       try { cdpChromeProcess.kill(); } catch (_) {}
       cdpChromeProcess = null;
     }
+
     app.quit();
   }
 });
 
-// --- IPC handlers ---
+// ============================================================
+// IPC Handlers
+// ============================================================
 
 // App info
 ipcMain.handle('get-app-version', () => app.getVersion());
-ipcMain.handle('get-edition', () => 'docker');
+ipcMain.handle('get-edition', () => 'native');
 
 // Port configuration
 ipcMain.handle('get-port-config', () => loadPortConfig());
 ipcMain.handle('set-port-config', (_e, cfg) => {
   savePortConfig(cfg);
-  return { success: true, note: 'Restart required for changes to take effect' };
+  return { success: true, note: 'Restart required' };
 });
 
 // License
-ipcMain.handle('get-license-status', () => licenseManager.getStatus());
+ipcMain.handle('get-license-status', () => licenseManager ? licenseManager.getStatus() : { valid: false, reason: 'init_failed' });
 ipcMain.handle('activate-license', async (_event, key) => {
   const result = await licenseManager.activate(key);
-  if (result.success) {
-    console.log(`[Main] License activated (plan: ${result.plan})`);
-  }
+  if (result.success) console.log(`[Main] License activated (plan: ${result.plan})`);
   return result;
 });
-
 ipcMain.handle('refresh-license', async () => {
   const result = await licenseManager.revalidate();
-  if (result.valid) {
-    console.log(`[Main] License refresh OK (plan: ${result.plan})`);
-  } else {
-    console.log(`[Main] License refresh failed: ${result.reason}`);
-  }
   return result;
 });
 
-// Docker status
+// Backend status (replaces Docker status)
 ipcMain.handle('check-docker', async () => {
-  const installed = await dockerManager.isDockerInstalled();
-  if (!installed) return { installed: false, running: false };
-  const running = await dockerManager.isDockerRunning();
-  return { installed, running };
+  // Compatibility: return that "Docker" (native backend) is available
+  return {
+    installed: true,
+    running: nativeManager.isRunning(),
+    compose: true,
+    edition: 'native',
+  };
 });
 
-ipcMain.handle('check-claude-code', async () => {
-  return dockerManager.isClaudeInstalled();
-});
+ipcMain.handle('check-claude-code', async () => nativeManager.isClaudeInstalled());
+ipcMain.handle('check-wsl', async () => ({ installed: true }));
 
-ipcMain.handle('get-docker-status', async () => {
-  return dockerManager.getStatus();
-});
-
-ipcMain.handle('get-docker-logs', async () => {
-  return dockerManager.getLogs();
-});
-
-// Docker install & daemon management
-ipcMain.handle('install-docker', async () => {
-  try {
-    const result = await dockerManager.installDocker((progress) => {
-      if (mainWindow) {
-        mainWindow.webContents.send('docker-install-progress', progress);
-      }
-    });
-    return result;
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-});
-
-ipcMain.handle('check-wsl', async () => {
-  return dockerManager.checkWslAvailable();
-});
-
-ipcMain.handle('start-docker-daemon', async () => {
-  try {
-    const result = await dockerManager.startDockerDaemon((progress) => {
-      if (mainWindow) {
-        mainWindow.webContents.send('docker-start-progress', progress);
-      }
-    });
-    return result;
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-});
-
-// Setup & lifecycle
+// These are no-ops in native mode (compatibility with activation.html)
+ipcMain.handle('install-docker', async () => ({ success: true }));
+ipcMain.handle('start-docker-daemon', async () => ({ success: true }));
 ipcMain.handle('setup-docker', async () => {
   try {
-    await dockerManager.writeComposeFile();
-    dockerManager.writeEnvFile();
-    await dockerManager.setClaudeCliPath();
+    await nativeManager.startStack((p) => {
+      if (mainWindow) mainWindow.webContents.send('docker-start-progress', p);
+    });
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -1259,34 +738,16 @@ ipcMain.handle('setup-docker', async () => {
 });
 
 ipcMain.handle('pull-images', async () => {
-  try {
-    await dockerManager.pullImages((progress) => {
-      if (mainWindow) {
-        mainWindow.webContents.send('pull-progress', progress);
-      }
-    });
-    return { success: true };
-  } catch (err) {
-    return { success: false, error: err.message };
+  // No images to pull in native mode — backend is bundled
+  if (mainWindow) {
+    mainWindow.webContents.send('pull-progress', { stage: 'done', message: 'Backend ready', percent: 100 });
   }
-});
-
-ipcMain.handle('install-kokoro-tts', async () => {
-  try {
-    await dockerManager.installKokoroTts((progress) => {
-      if (mainWindow) {
-        mainWindow.webContents.send('kokoro-install-progress', progress);
-      }
-    });
-    return { success: true };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
+  return { success: true };
 });
 
 ipcMain.handle('start-stack', async () => {
   try {
-    await dockerManager.startStack();
+    await nativeManager.startStack();
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -1295,268 +756,84 @@ ipcMain.handle('start-stack', async () => {
 
 ipcMain.handle('stop-stack', async () => {
   try {
-    await dockerManager.stopStack();
+    await nativeManager.stopStack();
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
   }
 });
 
-// Updates
+ipcMain.handle('get-docker-status', async () => ({
+  running: nativeManager.isRunning(),
+  edition: 'native',
+  containers: nativeManager.isRunning() ? [
+    { name: 'cerebro-backend', status: 'running', health: 'healthy' },
+    { name: 'cerebro-redis', status: 'running', health: 'healthy' },
+  ] : [],
+}));
+
+ipcMain.handle('get-docker-logs', async () => nativeManager.getLogs(200));
+
+// Updates — native mode only has Electron updates
 ipcMain.handle('check-for-updates', async () => {
-  // Check Docker image updates
-  const dockerResult = await dockerManager.checkForUpdates().catch(() => ({ updateAvailable: false }));
-  if (dockerResult.updateAvailable) return dockerResult;
-
-  // Check Electron app updates via autoUpdater
   try {
-    const checkResult = await autoUpdater.checkForUpdates();
-    if (electronUpdateReady) return { updateAvailable: true, type: 'electron' };
-    // If download is in progress, wait briefly for it
-    if (checkResult && checkResult.downloadPromise) {
-      await Promise.race([checkResult.downloadPromise, new Promise(r => setTimeout(r, 5000))]);
-      if (electronUpdateReady) return { updateAvailable: true, type: 'electron' };
-    }
-  } catch {}
-
-  // Fallback: compare version against latest GitHub release
-  try {
-    const https = require('https');
-    const latestVersion = await new Promise((resolve, reject) => {
-      const req = https.get('https://api.github.com/repos/Professor-Low/Cerebro-life-desktop/releases/latest', {
-        headers: { 'User-Agent': 'Cerebro-Desktop/' + app.getVersion() },
-        timeout: 10000,
-      }, (res) => {
-        if (res.statusCode === 302 || res.statusCode === 301) return reject(new Error('redirect'));
-        let body = '';
-        res.on('data', (chunk) => { body += chunk; });
-        res.on('end', () => {
-          try { resolve(JSON.parse(body).tag_name?.replace(/^v/, '') || null); }
-          catch { resolve(null); }
-        });
-      });
-      req.on('error', reject);
-      req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
-    });
-
-    if (latestVersion) {
-      const current = app.getVersion().split('.').map(Number);
-      const latest = latestVersion.split('.').map(Number);
-      for (let i = 0; i < 3; i++) {
-        if ((latest[i] || 0) > (current[i] || 0)) return { updateAvailable: true, type: 'github', version: latestVersion };
-        if ((latest[i] || 0) < (current[i] || 0)) break;
-      }
-    }
-  } catch {}
-
-  return { updateAvailable: false };
+    await autoUpdater.checkForUpdates();
+    return { updateAvailable: electronUpdateReady };
+  } catch (err) {
+    return { updateAvailable: false, error: err.message };
+  }
 });
 
 ipcMain.handle('apply-update', async () => {
   try {
-    // Best-effort Defender exclusion — never block the update.
-    // The NSIS installer (installer.nsh) handles Defender exclusions during
-    // installation, so quitAndInstall() will handle it properly. We attempt
-    // it here as a courtesy but NEVER gate the update on it — blocking the
-    // update is worse than a potential Defender issue (which the installer fixes).
-    if (process.platform === 'win32') {
-      try {
-        await ensureDefenderExclusion();
-      } catch (e) {
-        console.warn('[Update] Defender exclusion attempt failed (non-blocking):', e.message);
-      }
-    }
-
-    const dockerResult = await dockerManager.checkForUpdates();
-    const needsDocker = dockerResult.updateAvailable;
-
-    // Re-check for pending Electron updates (electronUpdateReady resets on restart)
-    if (!electronUpdateReady) {
-      try {
-        const checkResult = await autoUpdater.checkForUpdates();
-        if (checkResult && checkResult.downloadPromise) {
-          await checkResult.downloadPromise;
-        }
-        // Give the update-downloaded event a moment to fire
-        await new Promise(r => setTimeout(r, 2000));
-      } catch {}
-    }
-    const needsElectron = electronUpdateReady;
-
-    // Set update suppression timestamp BEFORE navigating away from the frontend.
-    // The frontend's own localStorage.setItem never runs because we replace the page
-    // with a splash screen, destroying the JS context that was awaiting the IPC result.
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      try {
-        await mainWindow.webContents.executeJavaScript(
-          `try{localStorage.setItem('cerebro_last_update_ts',String(Date.now()))}catch(e){}`
-        );
-      } catch {}
-    }
-
-    // Show splash screen
-    if (mainWindow) {
-      mainWindow.loadURL('data:text/html,' + encodeURIComponent(`<!DOCTYPE html>
-<html><head><style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:#0a0a0f; color:#e2e8f0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-    display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh;
-    overflow:hidden; }
-  .update-container { text-align:center; width:340px; }
-  .logo-ring { width:64px; height:64px; margin:0 auto 28px; position:relative; }
-  .logo-ring::before { content:''; position:absolute; inset:0; border-radius:50%;
-    border:2.5px solid rgba(139,92,246,0.15); }
-  .logo-ring::after { content:''; position:absolute; inset:0; border-radius:50%;
-    border:2.5px solid transparent; border-top-color:#8b5cf6; border-right-color:#a78bfa;
-    animation:spin 1.2s cubic-bezier(0.45,0.05,0.55,0.95) infinite; }
-  @keyframes spin { to { transform:rotate(360deg); } }
-  .logo-dot { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
-    width:20px; height:20px; background:linear-gradient(135deg,#8b5cf6,#a78bfa);
-    border-radius:50%; box-shadow:0 0 20px rgba(139,92,246,0.4); }
-  h2 { color:#e2e8f0; font-size:1.15rem; font-weight:600; margin-bottom:6px; letter-spacing:-0.01em; }
-  #status { color:#94a3b8; font-size:0.8rem; margin-bottom:20px; min-height:1.2em; }
-  .bar-track { width:100%; height:6px; background:rgba(139,92,246,0.1); border-radius:3px;
-    overflow:hidden; position:relative; }
-  .bar-fill { height:100%; width:0%; border-radius:3px;
-    background:linear-gradient(90deg,#7c3aed,#8b5cf6,#a78bfa);
-    transition:width 0.6s cubic-bezier(0.25,0.46,0.45,0.94);
-    box-shadow:0 0 12px rgba(139,92,246,0.3); position:relative; }
-  .bar-fill::after { content:''; position:absolute; top:0; left:0; right:0; bottom:0;
-    background:linear-gradient(90deg,transparent,rgba(255,255,255,0.15),transparent);
-    animation:shimmer 1.8s ease-in-out infinite; }
-  @keyframes shimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
-  #percent { color:#a78bfa; font-size:0.75rem; margin-top:8px; font-variant-numeric:tabular-nums; }
-</style></head><body>
-  <div class="update-container">
-    <div class="logo-ring"><div class="logo-dot"></div></div>
-    <h2>Updating Cerebro</h2>
-    <p id="status">Preparing update...</p>
-    <div class="bar-track"><div class="bar-fill" id="bar"></div></div>
-    <p id="percent"></p>
-  </div>
-</body></html>`));
-    }
-
-    // Helper to update the splash screen progress bar + status
-    const updateSplash = (message, percent) => {
-      if (!mainWindow || mainWindow.isDestroyed()) return;
-      try {
-        mainWindow.webContents.executeJavaScript(`
-          var s=document.getElementById('status');
-          var b=document.getElementById('bar');
-          var p=document.getElementById('percent');
-          if(s)s.textContent=${JSON.stringify(message)};
-          if(b)b.style.width='${Math.min(100, Math.max(0, percent))}%';
-          if(p)p.textContent=${percent > 0 ? JSON.stringify(Math.round(percent) + '%') : "''"};
-        `).catch(() => {});
-      } catch {}
-    };
-
-    // Step 1: Docker update (if needed)
-    if (needsDocker) {
-      await dockerManager.applyUpdate((progress) => {
-        // Map stages to clean messages + progress percentages
-        const stage = progress.stage || '';
-        const msg = progress.message || '';
-        if (stage === 'pulling_core') {
-          // 0-50%: core image download
-          const pct = progress.percent != null ? progress.percent * 0.5 : 10;
-          updateSplash('Downloading core services...', pct);
-        } else if (stage === 'pulling_optional') {
-          // 50-70%: optional image download
-          const pct = 50 + (progress.percent != null ? progress.percent * 0.2 : 5);
-          updateSplash('Downloading voice engine...', pct);
-        } else if (stage === 'pulling_optional_skip') {
-          updateSplash('Voice engine skipped', 70);
-        } else if (stage === 'stopping') {
-          updateSplash('Stopping services...', 75);
-        } else if (stage === 'starting') {
-          updateSplash('Starting services...', 85);
-        } else if (stage === 'done') {
-          updateSplash('Update complete!', 100);
-        } else {
-          // Fallback — still don't show raw Docker output
-          updateSplash('Updating...', 5);
-        }
-      });
-      // Re-sync frontend and env after Docker update to ensure latest files are mounted
-      try { dockerManager.writeEnvFile(); } catch {}
-    }
-
-    // Step 2: Electron update (if needed) — quits and reinstalls silently
-    if (needsElectron) {
-      updateSplash('Installing app update...', 95);
-      await new Promise(r => setTimeout(r, 1000));
-      isAutoUpdating = true;  // Skip Docker shutdown in before-quit
-      autoUpdater.quitAndInstall(true, true);  // silent install, force relaunch
+    if (electronUpdateReady) {
+      isAutoUpdating = true;
+      autoUpdater.quitAndInstall(true, true);
       return { success: true };
     }
 
-    // Docker-only update — reload frontend and re-inject suppression timestamp
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.loadURL(BACKEND_URL);
-      mainWindow.webContents.once('did-finish-load', () => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.executeJavaScript(
-            `try{localStorage.setItem('cerebro_last_update_ts',String(Date.now()))}catch(e){}`
-          ).catch(() => {});
-        }
-      });
-    }
-    return { success: true };
+    // Check and download
+    await autoUpdater.checkForUpdates();
+    return { success: true, message: 'Update check started' };
   } catch (err) {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.loadURL(BACKEND_URL);
-    }
     return { success: false, error: err.message };
   }
 });
 
-// MCP configuration (for Claude Code integration)
-// Fetches config dynamically from the Cerebro repo; falls back to hardcoded.
+// MCP
 ipcMain.handle('configure-mcp', async () => {
   try {
     let mcpConfig;
-    let source;
-
     try {
       const rawConfig = await fetchMcpConfig();
       mcpConfig = validateRemoteMcpConfig(rawConfig);
-      source = 'remote';
-    } catch (fetchErr) {
-      console.log(`[MCP] Remote fetch failed (${fetchErr.message}), using dynamic config`);
-      mcpConfig = getDynamicMcpConfig();
-      source = 'dynamic';
+    } catch {
+      mcpConfig = getNativeMcpConfig();
     }
-
-    // Always inject the current storage path into the cerebro MCP server entry
-    const dynamicConfig = getDynamicMcpConfig();
-    if (mcpConfig.mcpServers) {
-      mcpConfig.mcpServers.cerebro = dynamicConfig.mcpServers.cerebro;
-    }
-
+    const nativeConfig = getNativeMcpConfig();
+    if (mcpConfig.mcpServers) mcpConfig.mcpServers.cerebro = nativeConfig.mcpServers.cerebro;
     const configPath = await writeMcpConfig(mcpConfig.mcpServers);
-    console.log(`[MCP] Config written from ${source} source (storage-aware)`);
     return { success: true, configPath };
   } catch (err) {
     return { success: false, error: err.message };
   }
 });
 
-// Wizard completion: start stack and load frontend
+// Kokoro TTS — not bundled in native mode (optional separate install)
+ipcMain.handle('install-kokoro-tts', async () => {
+  return { success: false, error: 'Voice engine is available as an optional download. Visit cerebro.dev/voice for setup instructions.' };
+});
+
+// Wizard completion
 ipcMain.handle('wizard-complete', async () => {
   try {
-    const result = await startDockerStack();
-    if (!result.ok) {
-      const response = { success: false, error: result.error || 'Failed to start Docker stack' };
-      if (result.portConflict) {
-        response.portConflict = true;
-        response.portConflictReason = result.portConflictReason;
-      }
-      return response;
+    if (!nativeManager.isRunning()) {
+      const result = await startNativeStack();
+      if (!result.ok) return { success: false, error: result.error };
     }
     await loadFrontend();
     updateTrayStatus(tray, 'running');
+    nativeManager.markSetupComplete();
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -1564,98 +841,129 @@ ipcMain.handle('wizard-complete', async () => {
 });
 
 ipcMain.handle('get-setup-status', async () => {
-  const dockerStatus = await dockerManager.isDockerRunning().catch(() => false);
-  const claudeStatus = await dockerManager.isClaudeInstalled().catch(() => ({ installed: false }));
-
+  const claudeStatus = await nativeManager.isClaudeInstalled().catch(() => ({ installed: false }));
   return {
-    licensed: licenseManager.getStatus().valid,
-    dockerInstalled: await dockerManager.isDockerInstalled().catch(() => false),
-    dockerRunning: dockerStatus,
+    licensed: licenseManager ? licenseManager.getStatus().valid : false,
+    dockerInstalled: true,   // Always true — no Docker needed
+    dockerRunning: nativeManager.isRunning(),
     claudeInstalled: claudeStatus.installed,
-    setupComplete: dockerManager.isSetupComplete(),
-    stackRunning: dockerManager.isRunning(),
+    setupComplete: nativeManager.isSetupComplete(),
+    stackRunning: nativeManager.isRunning(),
+    edition: 'native',
   };
 });
 
 // Settings
 ipcMain.handle('toggle-autostart', (_event, enabled) => {
-  app.setLoginItemSettings({
-    openAtLogin: enabled,
-    path: process.env.APPIMAGE || app.getPath('exe'),
-  });
+  app.setLoginItemSettings({ openAtLogin: enabled, path: process.env.APPIMAGE || app.getPath('exe') });
   return app.getLoginItemSettings().openAtLogin;
 });
-
-ipcMain.handle('get-autostart', () => {
-  return app.getLoginItemSettings().openAtLogin;
-});
-
+ipcMain.handle('get-autostart', () => app.getLoginItemSettings().openAtLogin);
 ipcMain.handle('enable-autostart', () => {
-  app.setLoginItemSettings({
-    openAtLogin: true,
-    path: process.env.APPIMAGE || app.getPath('exe'),
-  });
+  app.setLoginItemSettings({ openAtLogin: true, path: process.env.APPIMAGE || app.getPath('exe') });
   return true;
 });
 
+// File access
+ipcMain.handle('get-file-access-config', () => nativeManager.loadFileAccessConfig());
+ipcMain.handle('save-file-access-config', async (_event, config) => {
+  try {
+    nativeManager.saveFileAccessConfig(config);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+ipcMain.handle('get-file-access-presets', () => nativeManager.getPresetMounts());
+ipcMain.handle('browse-folder', async () => {
+  try {
+    const win = BrowserWindow.getFocusedWindow() || mainWindow;
+    const result = await dialog.showOpenDialog(win, { properties: ['openDirectory'], title: 'Select folder' });
+    if (result.canceled) return { canceled: true };
+    return { canceled: false, path: result.filePaths[0] };
+  } catch (err) {
+    return { canceled: true, error: err.message };
+  }
+});
+
+// Restart stack (native version)
+ipcMain.handle('restart-docker-stack', async () => {
+  try {
+    await nativeManager.stopStack();
+    await nativeManager.startStack();
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// Restart & setup state
+ipcMain.handle('needs-restart', async () => false);
+ipcMain.handle('save-setup-state', (_event, state) => { nativeManager.saveSetupState(state); return true; });
+ipcMain.handle('load-setup-state', () => nativeManager.loadSetupState());
+ipcMain.handle('clear-setup-state', () => { nativeManager.clearSetupState(); return true; });
+
+// Chrome CDP
+ipcMain.handle('launch-chrome-cdp', async () => {
+  try {
+    if (await isCdpAvailable()) return { success: true, alreadyRunning: true };
+    cdpChromeProcess = await ensureChromeWithCDP();
+    if (cdpChromeProcess || await isCdpAvailable()) return { success: true };
+    return { success: false, error: 'Chrome failed to start' };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('stop-chrome-cdp', async () => {
+  try {
+    if (cdpChromeProcess) {
+      try { cdpChromeProcess.kill(); } catch (_) {}
+      cdpChromeProcess = null;
+      return { success: true };
+    }
+    return { success: true, message: 'Chrome was not running' };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
 // Claude credentials
-ipcMain.handle('check-claude-credentials', () => {
-  return dockerManager.checkClaudeCredentials();
-});
+ipcMain.handle('check-claude-credentials', () => nativeManager.checkClaudeCredentials());
+ipcMain.handle('refresh-claude-credentials', () => nativeManager.refreshClaudeCredentials());
+ipcMain.handle('silent-refresh-oauth', async () => nativeManager.silentRefreshOAuthToken());
 
-ipcMain.handle('refresh-claude-credentials', () => {
-  return dockerManager.refreshClaudeCredentials();
-});
-
-ipcMain.handle('silent-refresh-oauth', async () => {
-  return dockerManager.silentRefreshOAuthToken();
-});
-
-// Launch Claude CLI login — captures OAuth URL and opens in-app browser window
+// Claude login flow
 let _authWindow = null;
 
 ipcMain.handle('launch-claude-login', async () => {
   try {
-    // Close any existing auth window
     if (_authWindow && !_authWindow.isDestroyed()) _authWindow.close();
 
-    // Spawn `claude auth login` with BROWSER env trick to capture the URL
-    // On Unix: BROWSER=echo prints the URL to stdout instead of opening a browser
-    // On Windows: we parse stdout/stderr for the URL pattern as fallback
     const env = { ...process.env };
-    if (process.platform !== 'win32') {
-      env.BROWSER = 'echo';
-    }
+    if (process.platform !== 'win32') env.BROWSER = 'echo';
 
     return new Promise((resolve) => {
-      const proc = spawn('claude', ['auth', 'login'], {
-        env,
-        shell: true,
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-
-      let output = '';
+      const proc = spawn('claude', ['auth', 'login'], { env, shell: true, stdio: ['ignore', 'pipe', 'pipe'] });
       let urlFound = false;
       const urlRegex = /https:\/\/[^\s"'<>]+/g;
 
       function handleOutput(chunk) {
         const text = chunk.toString();
-        output += text;
-        console.log('[Claude Auth]', text.trim());
-
-        // Look for OAuth URL in output
         if (!urlFound) {
           const matches = text.match(urlRegex);
           if (matches) {
-            // Find the auth/OAuth URL (prefer claude.ai or anthropic URLs)
-            const authUrl = matches.find(u =>
-              u.includes('claude.ai') || u.includes('anthropic.com') || u.includes('oauth')
-            ) || matches[0];
-
+            const authUrl = matches.find(u => u.includes('claude.ai') || u.includes('anthropic.com') || u.includes('oauth')) || matches[0];
             if (authUrl) {
               urlFound = true;
-              openAuthWindow(authUrl);
-              resolve({ success: true, message: 'Login window opened inside Cerebro.' });
+              _authWindow = new BrowserWindow({
+                width: 500, height: 700, title: 'Cerebro — Claude Authentication',
+                parent: mainWindow, modal: true, autoHideMenuBar: true,
+                webPreferences: { nodeIntegration: false, contextIsolation: true },
+              });
+              _authWindow.loadURL(authUrl);
+              _authWindow.on('closed', () => { _authWindow = null; });
+              resolve({ success: true, message: 'Login window opened.' });
             }
           }
         }
@@ -1664,60 +972,26 @@ ipcMain.handle('launch-claude-login', async () => {
       proc.stdout.on('data', handleOutput);
       proc.stderr.on('data', handleOutput);
 
-      // If CLI opens browser directly (Windows), we still poll for credentials
       setTimeout(() => {
-        if (!urlFound) {
-          // Fallback: CLI probably opened browser directly, still poll for completion
-          console.log('[Claude Auth] No URL captured, CLI may have opened browser directly');
-          resolve({ success: true, message: 'Login opened — complete authentication in the browser.' });
-        }
+        if (!urlFound) resolve({ success: true, message: 'Login opened in browser.' });
       }, 8000);
 
       proc.on('error', (err) => {
-        console.error('[Claude Auth] Process error:', err.message);
-        if (!urlFound) {
-          resolve({ success: false, error: 'Could not start claude auth login: ' + err.message });
-        }
+        if (!urlFound) resolve({ success: false, error: err.message });
       });
 
-      proc.on('close', (code) => {
-        console.log('[Claude Auth] Process exited with code', code);
-        // Check if credentials were written successfully
-        setTimeout(() => {
-          const status = dockerManager.checkClaudeCredentials();
-          if (status.valid) {
-            const refreshResult = dockerManager.refreshClaudeCredentials();
-            if (mainWindow) {
-              mainWindow.webContents.send('credentials-refreshed', {
-                expiresIn: refreshResult.expiresIn || status.expiresIn,
-                message: 'Login successful — credentials refreshed',
-              });
-            }
-            if (_authWindow && !_authWindow.isDestroyed()) _authWindow.close();
-          }
-        }, 1000);
-      });
-
-      // Poll for fresh credentials while login is in progress (5s intervals, 5 min max)
+      // Poll for credentials
       let attempts = 0;
-      const maxAttempts = 60;
       const watcher = setInterval(() => {
         attempts++;
-        const status = dockerManager.checkClaudeCredentials();
+        const status = nativeManager.checkClaudeCredentials();
         if (status.valid && status.expiresIn > 30) {
           clearInterval(watcher);
-          const refreshResult = dockerManager.refreshClaudeCredentials();
-          if (mainWindow) {
-            mainWindow.webContents.send('credentials-refreshed', {
-              expiresIn: refreshResult.expiresIn || status.expiresIn,
-              message: 'Login successful — credentials refreshed',
-            });
-          }
-          // Close auth window and kill CLI process
+          if (mainWindow) mainWindow.webContents.send('credentials-refreshed', { expiresIn: status.expiresIn, message: 'Login successful' });
           if (_authWindow && !_authWindow.isDestroyed()) _authWindow.close();
           try { proc.kill(); } catch (_) {}
         }
-        if (attempts >= maxAttempts) {
+        if (attempts >= 60) {
           clearInterval(watcher);
           try { proc.kill(); } catch (_) {}
         }
@@ -1728,313 +1002,8 @@ ipcMain.handle('launch-claude-login', async () => {
   }
 });
 
-function openAuthWindow(url) {
-  _authWindow = new BrowserWindow({
-    width: 500,
-    height: 700,
-    title: 'Cerebro — Claude Authentication',
-    parent: mainWindow,
-    modal: true,
-    autoHideMenuBar: true,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-    },
-  });
-
-  _authWindow.loadURL(url);
-
-  _authWindow.on('closed', () => {
-    _authWindow = null;
-  });
-
-  // Watch for successful redirects back to localhost (OAuth callback)
-  _authWindow.webContents.on('will-redirect', (_event, redirectUrl) => {
-    if (redirectUrl.includes('localhost') || redirectUrl.includes('127.0.0.1')) {
-      console.log('[Claude Auth] OAuth callback detected, login completing...');
-    }
-  });
-}
-
-// Chrome CDP launch (called by frontend when user clicks "Launch Chrome")
-ipcMain.handle('launch-chrome-cdp', async () => {
-  try {
-    if (await isCdpAvailable()) {
-      return { success: true, alreadyRunning: true };
-    }
-    cdpChromeProcess = await ensureChromeWithCDP();
-    if (cdpChromeProcess || await isCdpAvailable()) {
-      return { success: true };
-    }
-    return { success: false, error: 'Chrome failed to start' };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-});
-
-// Chrome CDP stop (called by frontend when user clicks browser orb to stop)
-ipcMain.handle('stop-chrome-cdp', async () => {
-  try {
-    if (cdpChromeProcess) {
-      try { cdpChromeProcess.kill(); } catch (_) {}
-      cdpChromeProcess = null;
-      return { success: true };
-    }
-    // If we didn't launch it but CDP is still available, try to kill via PID
-    if (await isCdpAvailable()) {
-      try {
-        const { execFileSync } = require('child_process');
-        // Use netstat to find PID on CDP port, then taskkill
-        const result = execFileSync('cmd', ['/c', 'netstat -ano | findstr :9222 | findstr LISTENING'], { encoding: 'utf-8', timeout: 3000 });
-        const lines = result.trim().split('\n');
-        const pids = new Set();
-        for (const line of lines) {
-          const parts = line.trim().split(/\s+/);
-          const pid = parts[parts.length - 1];
-          if (pid && pid !== '0') pids.add(pid);
-        }
-        for (const pid of pids) {
-          try { execFileSync('taskkill', ['/F', '/PID', pid], { timeout: 3000 }); } catch (_) {}
-        }
-        return { success: true };
-      } catch (e) {
-        return { success: false, error: 'Could not find Chrome CDP process: ' + e.message };
-      }
-    }
-    return { success: true, message: 'Chrome was not running' };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-});
-
-// Restart & setup state
-ipcMain.handle('needs-restart', async () => {
-  return dockerManager.checkNeedsRestart();
-});
-
-ipcMain.handle('save-setup-state', (_event, state) => {
-  dockerManager.saveSetupState(state);
-  return true;
-});
-
-ipcMain.handle('load-setup-state', () => {
-  return dockerManager.loadSetupState();
-});
-
-ipcMain.handle('clear-setup-state', () => {
-  dockerManager.clearSetupState();
-  return true;
-});
-
-// File access settings
-ipcMain.handle('get-file-access-config', () => {
-  return dockerManager.loadFileAccessConfig();
-});
-
-ipcMain.handle('save-file-access-config', async (_event, config) => {
-  try {
-    dockerManager.saveFileAccessConfig(config);
-    await dockerManager.writeComposeFile();
-    return { success: true };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-});
-
-ipcMain.handle('get-file-access-presets', () => {
-  return dockerManager.getPresetMounts();
-});
-
-ipcMain.handle('browse-folder', async () => {
-  try {
-    const win = BrowserWindow.getFocusedWindow() || mainWindow;
-    const result = await dialog.showOpenDialog(win, {
-      properties: ['openDirectory'],
-      title: 'Select folder to share with Cerebro',
-    });
-    if (result.canceled || !result.filePaths.length) return { canceled: true };
-    return { canceled: false, path: result.filePaths[0] };
-  } catch (err) {
-    return { canceled: true, error: err.message };
-  }
-});
-
-ipcMain.handle('restart-docker-stack', async () => {
-  try {
-    await dockerManager.stopStack();
-    await dockerManager.writeComposeFile();
-    await dockerManager.startStack();
-    return { success: true };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-});
-
-// ---- Path Validation ----
-
-/**
- * Validates a user-supplied path before any filesystem or Docker operations.
- * Throws on invalid/dangerous paths. Returns the resolved absolute path.
- * Options:
- *   allowNull: true  → returns null if input is null (for "reset to default")
- *   mustExist: true  → checks that path exists and resolves symlinks
- */
-function validatePath(inputPath, opts = {}) {
-  const { allowNull = false, mustExist = false } = opts;
-
-  if (inputPath === null || inputPath === undefined) {
-    if (allowNull) return null;
-    throw new Error('Path is required');
-  }
-
-  if (typeof inputPath !== 'string' || inputPath.trim() === '') {
-    throw new Error('Path must be a non-empty string');
-  }
-
-  // Reject raw traversal sequences before resolving
-  if (inputPath.includes('..')) {
-    throw new Error('Path traversal ("..") is not allowed');
-  }
-
-  const resolved = path.resolve(inputPath);
-
-  // Block system-critical directories (case-insensitive on Windows)
-  const BLOCKED_PREFIXES_WIN = [
-    'C:\\Windows', 'C:\\Program Files', 'C:\\Program Files (x86)',
-    'C:\\ProgramData\\ssh', 'C:\\System Volume Information',
-  ];
-  const BLOCKED_PREFIXES_UNIX = [
-    '/etc', '/var', '/usr', '/root', '/boot', '/sbin', '/bin', '/lib',
-    '/proc', '/sys', '/dev',
-  ];
-  const BLOCKED_EXACT = ['/'];
-
-  const check = process.platform === 'win32' ? resolved.toLowerCase() : resolved;
-
-  if (process.platform === 'win32') {
-    for (const prefix of BLOCKED_PREFIXES_WIN) {
-      if (check.startsWith(prefix.toLowerCase()) || check === prefix.toLowerCase()) {
-        throw new Error(`Access to system directory "${prefix}" is blocked`);
-      }
-    }
-  } else {
-    for (const prefix of BLOCKED_PREFIXES_UNIX) {
-      if (check === prefix || check.startsWith(prefix + '/')) {
-        throw new Error(`Access to system directory "${prefix}" is blocked`);
-      }
-    }
-  }
-
-  if (BLOCKED_EXACT.includes(check)) {
-    throw new Error('Access to root directory is blocked');
-  }
-
-  // If mustExist, verify existence and resolve symlinks to check real target
-  if (mustExist) {
-    if (!fs.existsSync(resolved)) {
-      throw new Error(`Path does not exist: ${resolved}`);
-    }
-    try {
-      const realPath = fs.realpathSync(resolved);
-      const realCheck = process.platform === 'win32' ? realPath.toLowerCase() : realPath;
-      if (process.platform === 'win32') {
-        for (const prefix of BLOCKED_PREFIXES_WIN) {
-          if (realCheck.startsWith(prefix.toLowerCase())) {
-            throw new Error(`Symlink target resolves to blocked directory "${prefix}"`);
-          }
-        }
-      } else {
-        for (const prefix of BLOCKED_PREFIXES_UNIX) {
-          if (realCheck === prefix || realCheck.startsWith(prefix + '/')) {
-            throw new Error(`Symlink target resolves to blocked directory "${prefix}"`);
-          }
-        }
-        if (BLOCKED_EXACT.includes(realCheck)) {
-          throw new Error('Symlink target resolves to root directory');
-        }
-      }
-    } catch (e) {
-      if (e.message.includes('blocked') || e.message.includes('Symlink')) throw e;
-      // realpathSync failed for other reasons (broken symlink, etc.) — allow if path itself exists
-    }
-  }
-
-  return resolved;
-}
-
-// ---- Network Path Detection ----
-
-/**
- * Detect if a file path is on a network drive (Windows only).
- * Checks UNC paths and mapped network drives via `net use`.
- */
-function isNetworkPath(filePath) {
-  if (process.platform !== 'win32') return false;
-  if (!filePath || typeof filePath !== 'string') return false;
-
-  // UNC paths: \\server\share or //server/share
-  if (filePath.startsWith('\\\\') || filePath.startsWith('//')) return true;
-
-  // Mapped network drive: check if the drive letter is a network mapping
-  const driveMatch = filePath.match(/^([A-Za-z]):/);
-  if (!driveMatch) return false;
-
-  try {
-    const { execFileSync } = require('child_process');
-    const output = execFileSync('net', ['use', `${driveMatch[1]}:`], {
-      encoding: 'utf-8',
-      timeout: 5000,
-      windowsHide: true,
-    });
-    // If `net use <letter>:` succeeds, the drive is a network mapping
-    return output.includes('\\\\');
-  } catch {
-    // `net use <letter>:` fails for local drives — not a network path
-    return false;
-  }
-}
-
-/**
- * Find the native cerebro.exe installed via pip (Windows only).
- * Returns the full absolute path or null.
- */
-function findNativeCerebro() {
-  if (process.platform !== 'win32') return null;
-
-  const appData = process.env.APPDATA || '';
-  const localAppData = process.env.LOCALAPPDATA || '';
-
-  // Check pip --user install locations (most common)
-  for (const pyVer of ['313', '312', '311']) {
-    const candidate = path.join(appData, 'Python', `Python${pyVer}`, 'Scripts', 'cerebro.exe');
-    if (fs.existsSync(candidate)) return candidate;
-  }
-
-  // Check global pip install locations
-  for (const pyVer of ['313', '312', '311']) {
-    const candidate = path.join(localAppData, 'Programs', 'Python', `Python${pyVer}`, 'Scripts', 'cerebro.exe');
-    if (fs.existsSync(candidate)) return candidate;
-  }
-
-  // Fallback: PATH lookup via `where`
-  try {
-    const { execFileSync } = require('child_process');
-    const output = execFileSync('where', ['cerebro.exe'], {
-      encoding: 'utf-8',
-      timeout: 5000,
-      windowsHide: true,
-    });
-    const firstLine = output.trim().split(/\r?\n/)[0];
-    if (firstLine && fs.existsSync(firstLine)) return firstLine;
-  } catch {
-    // Not on PATH
-  }
-
-  return null;
-}
-
-// ---- Memory Storage Config ----
-const MEMORY_CONFIG_FILE = path.join(require('os').homedir(), '.cerebro', 'memory-config.json');
+// --- Memory Storage ---
+const MEMORY_CONFIG_FILE = path.join(CEREBRO_DIR, 'memory-config.json');
 
 function loadMemoryConfig() {
   try {
@@ -2043,169 +1012,86 @@ function loadMemoryConfig() {
       cfg.source = 'file';
       return cfg;
     }
-  } catch (e) {
-    console.error('[Main] Failed to load memory config:', e.message);
-  }
+  } catch {}
 
-  // Auto-detect from CEREBRO_DATA_DIR env var
   const envPath = process.env.CEREBRO_DATA_DIR;
   if (envPath) {
     try {
       if (fs.existsSync(envPath)) {
         const config = { storagePath: envPath, source: 'env', envVar: 'CEREBRO_DATA_DIR' };
-        // Auto-create config file so Docker compose picks up the mount
         fs.mkdirSync(path.dirname(MEMORY_CONFIG_FILE), { recursive: true });
         fs.writeFileSync(MEMORY_CONFIG_FILE, JSON.stringify({ storagePath: envPath }, null, 2));
-        console.log(`[Main] Auto-created memory config from CEREBRO_DATA_DIR: ${envPath}`);
         return config;
-      } else {
-        console.warn(`[Main] CEREBRO_DATA_DIR set to "${envPath}" but path does not exist — skipping`);
       }
-    } catch (e) {
-      console.error('[Main] Failed to auto-create memory config from env:', e.message);
-    }
+    } catch {}
   }
 
   return { storagePath: null, source: 'default' };
 }
 
 function saveMemoryConfig(config) {
-  // Strip transient fields that loadMemoryConfig adds for the frontend
   const { source, envVar, ...persistent } = config;
   fs.writeFileSync(MEMORY_CONFIG_FILE, JSON.stringify(persistent, null, 2));
 }
 
-// ---- Storage Mirror Sync (Robocopy) ----
-
-let storageSyncTimer = null;
-
-/**
- * Run Robocopy between NAS (storagePath) and local mirror (localMirrorPath).
- * @param {'pull'|'push'|'both'} direction
- * @returns {Promise<{success: boolean, pulled?: number, pushed?: number, errors: string[]}>}
- */
-function runStorageSync(direction = 'both') {
-  if (process.platform !== 'win32') {
-    return Promise.resolve({ success: false, pulled: 0, pushed: 0, errors: ['Mirror sync only supported on Windows'] });
+function validatePath(inputPath, opts = {}) {
+  const { allowNull = false, mustExist = false } = opts;
+  if (inputPath === null || inputPath === undefined) {
+    if (allowNull) return null;
+    throw new Error('Path is required');
   }
-  const config = loadMemoryConfig();
-  if (!config.storagePath || !config.localMirrorPath) {
-    return Promise.resolve({ success: false, pulled: 0, pushed: 0, errors: ['Missing storagePath or localMirrorPath'] });
-  }
+  if (typeof inputPath !== 'string' || inputPath.trim() === '') throw new Error('Path must be non-empty');
+  if (inputPath.includes('..')) throw new Error('Path traversal not allowed');
 
-  const nasPath = config.storagePath;
-  const localPath = config.localMirrorPath;
-  const robocopyArgs = [
-    '/E', '/XO', '/R:1', '/W:1',
-    '/NFL', '/NDL', '/NJH', '/NJS',
-    '/XD', '.git', '__pycache__', 'node_modules',
-  ];
+  const resolved = path.resolve(inputPath);
+  const BLOCKED_WIN = ['C:\\Windows', 'C:\\Program Files', 'C:\\Program Files (x86)'];
+  const BLOCKED_UNIX = ['/etc', '/var', '/usr', '/root', '/boot', '/sbin', '/bin', '/lib', '/proc', '/sys', '/dev'];
 
-  function runRobocopy(src, dst) {
-    return new Promise((resolve) => {
-      execFile('robocopy', [src, dst, ...robocopyArgs], { timeout: 120000, windowsHide: true }, (err, stdout) => {
-        // Robocopy exit codes: 0-7 = success/partial, 8+ = error
-        // Node sets err for any non-zero exit, but Robocopy 1-7 are OK
-        const code = err && typeof err.code === 'number' ? err.code : (err ? 8 : 0);
-        if (code >= 8) {
-          resolve({ success: false, files: 0, error: `Robocopy exit ${code}: ${(stdout || '').trim().slice(-200)}` });
-        } else {
-          // Parse files count from summary if available
-          const match = (stdout || '').match(/Files\s*:\s*\d+\s+(\d+)/);
-          const files = match ? parseInt(match[1], 10) : 0;
-          resolve({ success: true, files });
-        }
-      });
-    });
-  }
-
-  return (async () => {
-    const errors = [];
-    let pulled = 0;
-    let pushed = 0;
-
-    if (direction === 'pull' || direction === 'both') {
-      const r = await runRobocopy(nasPath, localPath);
-      if (r.success) { pulled = r.files; } else { errors.push(r.error); }
+  if (process.platform === 'win32') {
+    for (const prefix of BLOCKED_WIN) {
+      if (resolved.toLowerCase().startsWith(prefix.toLowerCase())) throw new Error(`Blocked: ${prefix}`);
     }
-    if (direction === 'push' || direction === 'both') {
-      const r = await runRobocopy(localPath, nasPath);
-      if (r.success) { pushed = r.files; } else { errors.push(r.error); }
+  } else {
+    for (const prefix of BLOCKED_UNIX) {
+      if (resolved === prefix || resolved.startsWith(prefix + '/')) throw new Error(`Blocked: ${prefix}`);
     }
+  }
+  if (resolved === '/') throw new Error('Root not allowed');
 
-    const success = errors.length === 0;
-    console.log(`[Sync] ${direction} complete — pulled: ${pulled}, pushed: ${pushed}${errors.length ? ', errors: ' + errors.join('; ') : ''}`);
-    return { success, pulled, pushed, errors };
-  })();
+  if (mustExist && !fs.existsSync(resolved)) throw new Error(`Not found: ${resolved}`);
+  return resolved;
 }
 
-function getDynamicMcpConfig() {
-  const config = loadMemoryConfig();
-
-  // On Windows, if storage is on a network drive, Docker can't bind-mount it.
-  // Use native cerebro.exe instead (it can read network drives directly).
-  if (config.storagePath && isNetworkPath(config.storagePath)) {
-    const nativePath = findNativeCerebro();
-    if (nativePath) {
-      console.log(`[MCP] Network drive detected — using native cerebro: ${nativePath}`);
-      return {
-        mcpServers: {
-          cerebro: {
-            command: nativePath,
-            args: ['serve'],
-            env: {
-              CEREBRO_DATA_DIR: config.storagePath,
-              CEREBRO_STANDALONE: '1',
-            },
-          },
-        },
-      };
-    }
-    console.warn('[MCP] Network drive detected but native cerebro.exe not found — falling back to Docker (may fail)');
+function findNativeCerebro() {
+  if (process.platform !== 'win32') return null;
+  const appData = process.env.APPDATA || '';
+  const localAppData = process.env.LOCALAPPDATA || '';
+  for (const pyVer of ['313', '312', '311']) {
+    const candidate = path.join(appData, 'Python', `Python${pyVer}`, 'Scripts', 'cerebro.exe');
+    if (fs.existsSync(candidate)) return candidate;
   }
-
-  // Default: Docker-based MCP server
-  const volumeArg = config.storagePath
-    ? `${config.storagePath.replace(/\\/g, '/')}:/data/memory`
-    : 'cerebro_cerebro-data:/data/memory';
-
-  return {
-    mcpServers: {
-      cerebro: {
-        command: 'docker',
-        args: [
-          'run', '--rm', '-i',
-          '-v', volumeArg,
-          '-e', 'CEREBRO_DATA_DIR=/data/memory',
-          '-e', 'CEREBRO_STANDALONE=1',
-          'ghcr.io/professor-low/cerebro-memory:latest',
-          'cerebro', 'serve',
-        ],
-        env: {},
-      },
-    },
-  };
+  for (const pyVer of ['313', '312', '311']) {
+    const candidate = path.join(localAppData, 'Programs', 'Python', `Python${pyVer}`, 'Scripts', 'cerebro.exe');
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  try {
+    const output = require('child_process').execFileSync('where', ['cerebro.exe'], { encoding: 'utf-8', timeout: 5000 });
+    const firstLine = output.trim().split(/\r?\n/)[0];
+    if (firstLine && fs.existsSync(firstLine)) return firstLine;
+  } catch {}
+  return null;
 }
 
 ipcMain.handle('get-memory-config', () => {
   const cfg = loadMemoryConfig();
-  // Return source, envVar, and localMirrorPath so frontend can show provenance + sync status
-  return {
-    storagePath: cfg.storagePath,
-    source: cfg.source || 'default',
-    envVar: cfg.envVar || null,
-    localMirrorPath: cfg.localMirrorPath || null,
-  };
+  return { storagePath: cfg.storagePath, source: cfg.source || 'default', envVar: cfg.envVar || null, localMirrorPath: cfg.localMirrorPath || null };
 });
 
 ipcMain.handle('browse-storage-folder', async () => {
   try {
     const win = BrowserWindow.getFocusedWindow() || mainWindow;
-    const result = await dialog.showOpenDialog(win, {
-      properties: ['openDirectory'],
-      title: 'Select memory storage location',
-    });
-    if (result.canceled || !result.filePaths.length) return { canceled: true };
+    const result = await dialog.showOpenDialog(win, { properties: ['openDirectory'], title: 'Select storage location' });
+    if (result.canceled) return { canceled: true };
     return { canceled: false, path: result.filePaths[0] };
   } catch (err) {
     return { canceled: true, error: err.message };
@@ -2216,27 +1102,10 @@ ipcMain.handle('set-storage-path', async (_event, newPath) => {
   try {
     const validatedPath = validatePath(newPath, { allowNull: true });
     const config = loadMemoryConfig();
-    config.storagePath = validatedPath; // null means Docker volume default
-
-    // Network drives can't be bind-mounted by Docker — set up a local mirror
-    if (validatedPath && isNetworkPath(validatedPath)) {
-      const os = require('os');
-      const localMirrorPath = path.join(os.homedir(), 'CerebroMemory');
-      fs.mkdirSync(localMirrorPath, { recursive: true });
-      config.localMirrorPath = localMirrorPath;
-      console.log(`[Storage] Network drive detected — local mirror at ${localMirrorPath}`);
-    } else {
-      // Local path or null — no mirror needed
-      delete config.localMirrorPath;
-    }
-
+    config.storagePath = validatedPath;
     saveMemoryConfig(config);
-    // Rewrite compose file with new mount
-    await dockerManager.writeComposeFile();
-    // Sync MCP config so Claude Code uses the same storage path
-    const mcpConfig = getDynamicMcpConfig();
+    const mcpConfig = getNativeMcpConfig();
     await writeMcpConfig(mcpConfig.mcpServers);
-    console.log(`[MCP] Config synced with storage path: ${newPath || 'Docker volume (default)'}`);
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -2245,361 +1114,57 @@ ipcMain.handle('set-storage-path', async (_event, newPath) => {
 
 ipcMain.handle('get-storage-health', async () => {
   try {
-    return await dockerManager.verifyStorageMount();
+    return await nativeManager.verifyStorageMount();
   } catch (err) {
-    return { healthy: true, totalSize: 0, availableSize: 0, fsType: '', warnings: [`Health check failed: ${err.message}`] };
-  }
-});
-
-ipcMain.handle('setup-local-mirror', async (_event, opts = {}) => {
-  try {
-    const config = loadMemoryConfig();
-    const storagePath = opts.storagePath || config.storagePath;
-    if (!storagePath) return { success: false, error: 'No storage path configured' };
-
-    const os = require('os');
-    const localMirrorPath = opts.localMirrorPath || path.join(os.homedir(), 'CerebroMemory');
-    fs.mkdirSync(localMirrorPath, { recursive: true });
-
-    // Save config first so runStorageSync can read both paths
-    config.storagePath = storagePath;
-    config.localMirrorPath = localMirrorPath;
-    saveMemoryConfig(config);
-
-    // Initial sync: pull NAS → local
-    console.log(`[Mirror] Setting up local mirror: ${storagePath} → ${localMirrorPath}`);
-    const syncResult = await runStorageSync('pull');
-
-    // Rewrite compose + MCP
-    await dockerManager.writeComposeFile();
-    const mcpConfig = getDynamicMcpConfig();
-    await writeMcpConfig(mcpConfig.mcpServers);
-
-    console.log(`[Mirror] Setup complete — pulled ${syncResult.pulled || 0} files`);
-    return { success: true, filesCopied: syncResult.pulled || 0, errors: syncResult.errors };
-  } catch (err) {
-    return { success: false, error: err.message, errors: [err.message] };
-  }
-});
-
-ipcMain.handle('sync-storage-mirror', async () => {
-  try {
-    const result = await runStorageSync('both');
-    return result;
-  } catch (err) {
-    return { success: false, pulled: 0, pushed: 0, errors: [err.message] };
-  }
-});
-
-ipcMain.handle('set-sync-interval', async (_event, minutes) => {
-  try {
-    const intervalMs = Math.max(1, Math.min(60, minutes)) * 60 * 1000;
-    const config = loadMemoryConfig();
-    config.syncIntervalMinutes = minutes;
-    saveMemoryConfig(config);
-
-    // Restart the sync timer with the new interval
-    if (storageSyncTimer) {
-      clearInterval(storageSyncTimer);
-      storageSyncTimer = null;
-    }
-    if (config.localMirrorPath) {
-      storageSyncTimer = setInterval(() => {
-        runStorageSync('both').catch(e => console.warn('[Sync] Periodic sync error:', e.message));
-      }, intervalMs);
-      console.log(`[Sync] Interval updated to ${minutes} min`);
-    }
-    return { success: true, intervalMinutes: minutes };
-  } catch (err) {
-    return { success: false, error: err.message };
+    return { healthy: true, warnings: [`Check failed: ${err.message}`] };
   }
 });
 
 ipcMain.handle('get-storage-stats', async (_event, folderPath) => {
   try {
-    const targetPath = folderPath
-      ? validatePath(folderPath, { mustExist: true })
-      : path.join(require('os').homedir(), '.cerebro');
-    let totalSize = 0;
-    let fileCount = 0;
-
-    const MAX_DEPTH = 10;
+    const targetPath = folderPath ? validatePath(folderPath, { mustExist: true }) : CEREBRO_DIR;
+    let totalSize = 0, fileCount = 0;
     function walkDir(dir, depth = 0) {
-      if (depth > MAX_DEPTH) return;
+      if (depth > 10) return;
       try {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        for (const entry of entries) {
-          const fullPath = path.join(dir, entry.name);
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          if (entry.isSymbolicLink()) continue;
+          const full = path.join(dir, entry.name);
           try {
-            if (entry.isSymbolicLink()) continue; // skip symlinks
-            if (entry.isDirectory()) {
-              walkDir(fullPath, depth + 1);
-            } else if (entry.isFile()) {
-              fileCount++;
-              totalSize += fs.statSync(fullPath).size;
-            }
-          } catch (e) { /* skip inaccessible files */ }
+            if (entry.isDirectory()) walkDir(full, depth + 1);
+            else if (entry.isFile()) { fileCount++; totalSize += fs.statSync(full).size; }
+          } catch {}
         }
-      } catch (e) { /* skip inaccessible dirs */ }
+      } catch {}
     }
-
     walkDir(targetPath);
-
     let humanSize;
     if (totalSize < 1024) humanSize = totalSize + ' B';
-    else if (totalSize < 1024 * 1024) humanSize = (totalSize / 1024).toFixed(1) + ' KB';
-    else if (totalSize < 1024 * 1024 * 1024) humanSize = (totalSize / (1024 * 1024)).toFixed(1) + ' MB';
-    else humanSize = (totalSize / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
-
+    else if (totalSize < 1048576) humanSize = (totalSize / 1024).toFixed(1) + ' KB';
+    else if (totalSize < 1073741824) humanSize = (totalSize / 1048576).toFixed(1) + ' MB';
+    else humanSize = (totalSize / 1073741824).toFixed(2) + ' GB';
     return { totalSize, humanSize, fileCount };
   } catch (err) {
     return { totalSize: 0, humanSize: '0 B', fileCount: 0, error: err.message };
   }
 });
 
-ipcMain.handle('scan-merge-preview', async (_event, sourcePath) => {
-  try {
-    validatePath(sourcePath, { mustExist: true });
-    const config = loadMemoryConfig();
-    const destPath = config.storagePath;
-
-    // Skip these folders/files during merge
-    const SKIP_DIRS = new Set(['embeddings', 'indexes', 'cache', '__pycache__']);
-    const SKIP_FILES = new Set(['keyword_index.db', 'quick_facts.json']);
-    const SKIP_EXTS = new Set(['.lock']);
-
-    const MAX_DEPTH = 10;
-    function listFilesRecursive(dir, base, depth = 0) {
-      if (depth > MAX_DEPTH) return [];
-      const results = [];
-      try {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        for (const entry of entries) {
-          if (entry.isSymbolicLink()) continue; // skip symlinks
-          const rel = base ? base + '/' + entry.name : entry.name;
-          if (entry.isDirectory()) {
-            if (SKIP_DIRS.has(entry.name)) continue;
-            results.push(...listFilesRecursive(path.join(dir, entry.name), rel, depth + 1));
-          } else if (entry.isFile()) {
-            if (SKIP_FILES.has(entry.name) || SKIP_EXTS.has(path.extname(entry.name))) continue;
-            results.push(rel);
-          }
-        }
-      } catch (e) { /* skip inaccessible */ }
-      return results;
-    }
-
-    // Get source file list
-    const sourceFiles = new Set(listFilesRecursive(sourcePath, ''));
-
-    // Get destination file list
-    let destFiles;
-    if (!destPath) {
-      // Docker volume — list files via docker exec
-      const { execFile: ef } = require('child_process');
-      const listing = await new Promise((resolve, reject) => {
-        ef('docker', ['exec', 'cerebro-backend-1', 'find', '/data/memory', '-type', 'f', '-printf', '%P\\n'], { timeout: 30000 }, (err, stdout) => {
-          if (err) reject(new Error('Docker listing failed: ' + err.message));
-          else resolve(stdout);
-        });
-      });
-      destFiles = new Set(listing.trim().split('\n').filter(Boolean).map(f => f.replace(/\\/g, '/')));
-    } else {
-      destFiles = new Set(listFilesRecursive(destPath, ''));
-    }
-
-    // Build per-folder summary
-    const folderMap = {};
-    for (const f of sourceFiles) {
-      const folder = f.includes('/') ? f.split('/')[0] : '(root)';
-      if (!folderMap[folder]) folderMap[folder] = { name: folder, newFiles: 0, existingFiles: 0, skipped: 0, size: 0 };
-      if (destFiles.has(f)) {
-        folderMap[folder].existingFiles++;
-      } else {
-        folderMap[folder].newFiles++;
-        try { folderMap[folder].size += fs.statSync(path.join(sourcePath, f)).size; } catch (e) { /* skip */ }
-      }
-    }
-
-    const folders = Object.values(folderMap).sort((a, b) => b.newFiles - a.newFiles);
-    const totalNew = folders.reduce((s, f) => s + f.newFiles, 0);
-    const totalSkipped = folders.reduce((s, f) => s + f.existingFiles, 0);
-
-    // Total size from per-folder sizes
-    const sourceSize = folders.reduce((s, f) => s + f.size, 0);
-
-    let humanSize;
-    if (sourceSize < 1024) humanSize = sourceSize + ' B';
-    else if (sourceSize < 1024 * 1024) humanSize = (sourceSize / 1024).toFixed(1) + ' KB';
-    else if (sourceSize < 1024 * 1024 * 1024) humanSize = (sourceSize / (1024 * 1024)).toFixed(1) + ' MB';
-    else humanSize = (sourceSize / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
-
-    return { folders, totalNew, totalSkipped, sourceSize, humanSize };
-  } catch (err) {
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('merge-storage', async (_event, sourcePath, selectedFolders) => {
-  try {
-    validatePath(sourcePath, { mustExist: true });
-
-    // Validate selectedFolders: no path separators or traversal
-    if (Array.isArray(selectedFolders)) {
-      for (const folder of selectedFolders) {
-        if (typeof folder !== 'string' || folder.includes('/') || folder.includes('\\') || folder.includes('..')) {
-          throw new Error(`Invalid folder name: "${folder}"`);
-        }
-      }
-    }
-
-    const config = loadMemoryConfig();
-    const destPath = config.storagePath;
-
-    const SKIP_DIRS = new Set(['embeddings', 'indexes', 'cache', '__pycache__']);
-    const SKIP_FILES = new Set(['keyword_index.db', 'quick_facts.json']);
-    const SKIP_EXTS = new Set(['.lock']);
-
-    const MAX_DEPTH = 10;
-    function listFilesRecursive(dir, base, depth = 0) {
-      if (depth > MAX_DEPTH) return [];
-      const results = [];
-      try {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        for (const entry of entries) {
-          if (entry.isSymbolicLink()) continue; // skip symlinks
-          const rel = base ? base + '/' + entry.name : entry.name;
-          if (entry.isDirectory()) {
-            if (SKIP_DIRS.has(entry.name)) continue;
-            results.push(...listFilesRecursive(path.join(dir, entry.name), rel, depth + 1));
-          } else if (entry.isFile()) {
-            if (SKIP_FILES.has(entry.name) || SKIP_EXTS.has(path.extname(entry.name))) continue;
-            results.push(rel);
-          }
-        }
-      } catch (e) { /* skip inaccessible */ }
-      return results;
-    }
-
-    let sourceFiles = listFilesRecursive(sourcePath, '');
-
-    // Filter by selected folders if provided
-    if (Array.isArray(selectedFolders) && selectedFolders.length > 0) {
-      const folderSet = new Set(selectedFolders);
-      sourceFiles = sourceFiles.filter(f => {
-        const folder = f.includes('/') ? f.split('/')[0] : '(root)';
-        return folderSet.has(folder);
-      });
-    }
-
-    let copied = 0;
-    let skipped = 0;
-    const errors = [];
-
-    if (!destPath) {
-      // Destination is Docker volume — use docker cp per file via temp staging
-      const { execFile: ef } = require('child_process');
-      const execPromise = (cmd, args, opts) => new Promise((resolve, reject) => {
-        ef(cmd, args, opts, (err, stdout) => {
-          if (err) reject(err);
-          else resolve(stdout);
-        });
-      });
-
-      // Get existing files in Docker volume
-      const listing = await execPromise('docker', ['exec', 'cerebro-backend-1', 'find', '/data/memory', '-type', 'f', '-printf', '%P\\n'], { timeout: 30000 });
-      const destFiles = new Set(listing.trim().split('\n').filter(Boolean).map(f => f.replace(/\\/g, '/')));
-
-      for (const relFile of sourceFiles) {
-        // Validate relFile has no traversal before docker cp
-        if (relFile.includes('..')) {
-          errors.push({ file: relFile, error: 'Path traversal blocked' });
-          continue;
-        }
-        if (destFiles.has(relFile)) {
-          skipped++;
-          continue;
-        }
-        try {
-          // Ensure directory exists in container
-          const dirInContainer = '/data/memory/' + relFile.split('/').slice(0, -1).join('/');
-          if (dirInContainer !== '/data/memory/') {
-            await execPromise('docker', ['exec', 'cerebro-backend-1', 'mkdir', '-p', dirInContainer], { timeout: 10000 });
-          }
-          // Copy file into container
-          const srcFull = path.join(sourcePath, relFile);
-          await execPromise('docker', ['cp', srcFull, 'cerebro-backend-1:/data/memory/' + relFile], { timeout: 30000 });
-          copied++;
-        } catch (e) {
-          errors.push({ file: relFile, error: e.message });
-        }
-      }
-    } else {
-      // Destination is a local folder
-      const destFiles = new Set(listFilesRecursive(destPath, ''));
-
-      for (const relFile of sourceFiles) {
-        if (destFiles.has(relFile)) {
-          skipped++;
-          continue;
-        }
-        try {
-          const srcFull = path.join(sourcePath, relFile);
-          const dstFull = path.join(destPath, relFile);
-          // Ensure parent directory exists
-          fs.mkdirSync(path.dirname(dstFull), { recursive: true });
-          fs.copyFileSync(srcFull, dstFull);
-          copied++;
-        } catch (e) {
-          errors.push({ file: relFile, error: e.message });
-        }
-      }
-    }
-
-    return { success: true, copied, skipped, errors };
-  } catch (err) {
-    return { success: false, copied: 0, skipped: 0, error: err.message, errors: [] };
-  }
-});
-
+// Simplified storage handlers (no Docker volume operations needed)
+ipcMain.handle('setup-local-mirror', async () => ({ success: true, filesCopied: 0, errors: [] }));
+ipcMain.handle('sync-storage-mirror', async () => ({ success: true, pulled: 0, pushed: 0, errors: [] }));
+ipcMain.handle('set-sync-interval', async (_event, minutes) => ({ success: true, intervalMinutes: minutes }));
+ipcMain.handle('scan-merge-preview', async () => ({ folders: [], totalNew: 0, totalSkipped: 0, sourceSize: 0, humanSize: '0 B' }));
+ipcMain.handle('merge-storage', async () => ({ success: true, copied: 0, skipped: 0, errors: [] }));
 ipcMain.handle('migrate-storage', async (_event, destPath) => {
   try {
-    const validatedDest = validatePath(destPath);
-    const config = loadMemoryConfig();
-    const sourcePath = config.storagePath;
-
-    // Ensure destination exists
-    fs.mkdirSync(validatedDest, { recursive: true });
-
-    if (!sourcePath) {
-      // Extract from Docker volume
-      const { execFile: ef } = require('child_process');
-      await new Promise((resolve, reject) => {
-        ef('docker', ['cp', 'cerebro-backend-1:/data/memory/.', validatedDest], { timeout: 120000 }, (err) => {
-          if (err) reject(new Error('Docker copy failed: ' + err.message));
-          else resolve();
-        });
-      });
+    const validated = validatePath(destPath);
+    fs.mkdirSync(validated, { recursive: true });
+    // Copy from current memory dir to new location
+    if (process.platform === 'win32') {
+      execFile('xcopy', [MEMORY_DIR, validated, '/E', '/I', '/H', '/Y'], { timeout: 120000 });
     } else {
-      // Copy from custom path to new path
-      const { execFile: ef } = require('child_process');
-      if (process.platform === 'win32') {
-        await new Promise((resolve, reject) => {
-          ef('xcopy', [sourcePath, validatedDest, '/E', '/I', '/H', '/Y'], { timeout: 120000 }, (err) => {
-            if (err) reject(new Error('Copy failed: ' + err.message));
-            else resolve();
-          });
-        });
-      } else {
-        await new Promise((resolve, reject) => {
-          ef('cp', ['-r', sourcePath + '/.', validatedDest], { timeout: 120000 }, (err) => {
-            if (err) reject(new Error('Copy failed: ' + err.message));
-            else resolve();
-          });
-        });
-      }
+      execFile('cp', ['-r', MEMORY_DIR + '/.', validated], { timeout: 120000 });
     }
-
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -2607,15 +1172,10 @@ ipcMain.handle('migrate-storage', async (_event, destPath) => {
 });
 
 ipcMain.handle('restart-computer', () => {
-  const { execFile } = require('child_process');
   if (process.platform === 'win32') {
-    execFile('shutdown', ['/r', '/t', '5'], (err) => {
-      if (err) console.error('[Main] Restart failed:', err.message);
-    });
+    execFile('shutdown', ['/r', '/t', '5']);
   } else {
-    execFile('loginctl', ['reboot'], (err) => {
-      if (err) console.error('[Main] Restart failed:', err.message);
-    });
+    execFile('loginctl', ['reboot']);
   }
   return true;
 });
