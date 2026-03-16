@@ -29167,6 +29167,11 @@
                 <input type="password" class="login-input" id="password-input" placeholder="Enter password" autocomplete="current-password">
                 <button class="login-btn" onclick="login()">Sign In</button>
                 <div class="login-error" id="login-error">Invalid password</div>
+                <a href="#" onclick="showForgotPassword();return false;" style="display:block;margin-top:12px;font-size:0.82rem;color:var(--text-secondary);text-decoration:none;opacity:0.7;transition:opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">Forgot password?</a>
+                <div class="login-status" id="login-status" style="margin-top:16px;font-size:0.8rem;color:var(--text-secondary);display:none;">
+                    <span id="login-status-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;"></span>
+                    <span id="login-status-text"></span>
+                </div>
             </div>
         </div>
 
@@ -32777,10 +32782,83 @@
         let _chatSplitMode = false;
 
         // ==================== AUTH ====================
+        // ==================== FORGOT PASSWORD ====================
+        let _resetStep = 0;
+        function showForgotPassword() {
+            const card = document.querySelector('.login-card');
+            if (!card) return;
+            // Create reset UI
+            let resetDiv = document.getElementById('reset-container');
+            if (!resetDiv) {
+                resetDiv = document.createElement('div');
+                resetDiv.id = 'reset-container';
+                resetDiv.style.cssText = 'margin-top:20px;padding-top:20px;border-top:1px solid var(--border);text-align:left;';
+                card.appendChild(resetDiv);
+            }
+            _resetStep = 1;
+            resetDiv.innerHTML = `
+                <div style="font-size:0.9rem;font-weight:600;color:var(--text-primary);margin-bottom:8px;">Reset Password</div>
+                <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:12px;">Step 1: Click below to generate a reset code. You\'ll need to find it in your Cerebro data folder.</div>
+                <button onclick="requestResetCode()" class="login-btn" style="padding:10px;font-size:0.85rem;">Generate Reset Code</button>
+                <div id="reset-msg" style="font-size:0.8rem;margin-top:8px;color:var(--text-secondary);"></div>
+            `;
+        }
+
+        async function requestResetCode() {
+            const msgEl = document.getElementById('reset-msg');
+            try {
+                const r = await fetch(API_URL + '/auth/reset-request', { method: 'POST' });
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.detail || 'Failed');
+                document.getElementById('reset-container').innerHTML = `
+                    <div style="font-size:0.9rem;font-weight:600;color:var(--text-primary);margin-bottom:8px;">Reset Password</div>
+                    <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:12px;">Step 2: Find the reset code in <code style="background:var(--bg-elevated);padding:2px 6px;border-radius:4px;">.password_reset_code</code> in your Cerebro data folder, then enter it below.</div>
+                    <input type="text" id="reset-code-input" placeholder="Enter reset code" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text-primary);font-size:0.9rem;margin-bottom:8px;font-family:monospace;">
+                    <input type="password" id="reset-new-password" placeholder="New password" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text-primary);font-size:0.9rem;margin-bottom:8px;">
+                    <button onclick="confirmReset()" class="login-btn" style="padding:10px;font-size:0.85rem;">Reset Password</button>
+                    <div id="reset-msg" style="font-size:0.8rem;margin-top:8px;color:var(--text-secondary);"></div>
+                `;
+            } catch (e) {
+                if (msgEl) { msgEl.textContent = e.message; msgEl.style.color = 'var(--red)'; }
+            }
+        }
+
+        async function confirmReset() {
+            const code = document.getElementById('reset-code-input').value.trim();
+            const newPw = document.getElementById('reset-new-password').value;
+            const msgEl = document.getElementById('reset-msg');
+            if (!code || !newPw) { msgEl.textContent = 'Enter both fields'; msgEl.style.color = 'var(--red)'; return; }
+            try {
+                const r = await fetch(API_URL + '/auth/reset-confirm', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reset_code: code, new_password: newPw })
+                });
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.detail || 'Reset failed');
+                token = data.token;
+                if (data.user) CEREBRO_USERNAME = data.user;
+                localStorage.setItem('cerebro_token', token);
+                showApp();
+            } catch (e) {
+                if (msgEl) { msgEl.textContent = e.message; msgEl.style.color = 'var(--red)'; }
+            }
+        }
+
         async function login() {
             const password = document.getElementById('password-input').value;
             const errorEl = document.getElementById('login-error');
+            const loginBtn = document.querySelector('.login-btn');
             errorEl.style.display = 'none';
+
+            if (!password) {
+                errorEl.textContent = 'Please enter your password';
+                errorEl.style.display = 'block';
+                return;
+            }
+
+            loginBtn.disabled = true;
+            loginBtn.textContent = 'Signing in...';
 
             try {
                 const response = await fetch(`${API_URL}/auth/login`, {
@@ -32790,7 +32868,14 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error('Invalid password');
+                    const data = await response.json().catch(() => ({}));
+                    if (response.status === 401 && data.detail === 'Setup required') {
+                        // Profile was lost — redirect to onboarding
+                        document.getElementById('login-view').classList.add('hidden');
+                        showOnboarding();
+                        return;
+                    }
+                    throw new Error(data.detail || 'Invalid password');
                 }
 
                 const data = await response.json();
@@ -32799,8 +32884,15 @@
                 localStorage.setItem('cerebro_token', token);
                 showApp();
             } catch (e) {
-                errorEl.textContent = e.message || 'Login failed';
+                if (e instanceof TypeError && e.message.includes('fetch')) {
+                    errorEl.textContent = 'Cannot reach Cerebro backend — is Docker running?';
+                } else {
+                    errorEl.textContent = e.message || 'Login failed';
+                }
                 errorEl.style.display = 'block';
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'Sign In';
             }
         }
 
@@ -61298,6 +61390,30 @@ Please proceed with implementing this recommendation. You have full permissions.
             document.getElementById('password-input').addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') login();
             });
+
+            // Check backend health and show status on login screen
+            async function checkLoginHealth() {
+                const statusEl = document.getElementById('login-status');
+                const dotEl = document.getElementById('login-status-dot');
+                const textEl = document.getElementById('login-status-text');
+                if (!statusEl || document.getElementById('login-view').classList.contains('hidden')) return;
+                statusEl.style.display = 'block';
+                try {
+                    const r = await fetch(`${API_URL}/health`, { signal: AbortSignal.timeout(5000) });
+                    if (r.ok) {
+                        dotEl.style.background = '#22c55e';
+                        textEl.textContent = 'Backend connected';
+                    } else {
+                        dotEl.style.background = '#f59e0b';
+                        textEl.textContent = 'Backend error (' + r.status + ')';
+                    }
+                } catch {
+                    dotEl.style.background = '#ef4444';
+                    textEl.textContent = 'Backend unreachable — check Docker';
+                }
+            }
+            checkLoginHealth();
+            setInterval(checkLoginHealth, 10000);
 
             // Onboarding Enter key support
             ['onboard-name', 'onboard-password', 'onboard-password-confirm'].forEach(id => {
