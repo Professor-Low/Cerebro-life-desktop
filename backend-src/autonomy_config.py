@@ -21,12 +21,6 @@ class AutonomyConfig:
     ENABLE_LEARNING_INJECTION = os.environ.get("CEREBRO_LEARNING", "true").lower() == "true"
     ENABLE_SELF_MODIFICATION = os.environ.get("CEREBRO_SELF_MOD", "true").lower() == "true"
     ENABLE_SIMULATION = os.environ.get("CEREBRO_SIMULATION", "true").lower() == "true"
-    ENABLE_TRADING = os.environ.get("CEREBRO_TRADING", "true").lower() == "true"
-
-    # Alpaca Trading settings
-    ALPACA_API_KEY = os.environ.get("ALPACA_API_KEY", "")
-    ALPACA_SECRET_KEY = os.environ.get("ALPACA_SECRET_KEY", "")
-    ALPACA_PAPER = os.environ.get("ALPACA_PAPER", "true").lower() == "true"
 
     # SimEngine settings
     SIMENGINE_URL = os.environ.get("CEREBRO_SIMENGINE_URL", "http://localhost:8000")
@@ -56,7 +50,6 @@ class AutonomyConfig:
                 "learning_injection": cls.ENABLE_LEARNING_INJECTION,
                 "self_modification": cls.ENABLE_SELF_MODIFICATION,
                 "simulation": cls.ENABLE_SIMULATION,
-                "trading": cls.ENABLE_TRADING
             },
             "settings": {
                 "proactive_check_interval": cls.PROACTIVE_CHECK_INTERVAL,
@@ -67,8 +60,6 @@ class AutonomyConfig:
                 "simengine_url": cls.SIMENGINE_URL,
                 "simengine_path": cls.SIMENGINE_PATH,
                 "simengine_auto_start": cls.SIMENGINE_AUTO_START,
-                "alpaca_paper": cls.ALPACA_PAPER,
-                "alpaca_configured": bool(cls.ALPACA_API_KEY and cls.ALPACA_SECRET_KEY)
             }
         }
 
