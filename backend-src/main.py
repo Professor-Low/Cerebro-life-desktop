@@ -1415,7 +1415,7 @@ curl -s -X POST http://localhost:59000/internal/chat-spawn-agent \\
   -H "Content-Type: application/json" \\
   -d '{{"task": "Your task here", "agent_type": "researcher", "model": "sonnet"}}'
 ```
-Agent types: worker, researcher, coder, analyst, browser, specops_worker, specops_researcher
+Agent types: worker, researcher, coder, analyst, browser, specops_worker, specops_researcher, specops_trader, specops_analyst
 
 **SpecOps Agent (timed cycling mission):**
 ```bash
@@ -1540,6 +1540,58 @@ _CEREBRO_CHAT_ENV_STANDALONE = """## Environment
 You are running in a standalone Docker container with bash access.
 Use endpoints described in your active capability packs."""
 
+
+_CEREBRO_PACK_SPECOPS = """## SpecOps Operations
+
+### Agent Lifecycle States
+`QUEUED` → `RUNNING` → `CYCLING` → `STANDBY` → `COMPLETED` / `FAILED` / `STOPPED`
+- **RUNNING**: Agent is actively executing within a cycle
+- **CYCLING**: Agent finished a cycle, output saved, waiting for next cycle_interval
+- **STANDBY**: Paused (auto_continue=false) — will not start next cycle until resumed
+- **COMPLETED**: All cycles finished or mission_duration expired
+- **FAILED**: Agent crashed or exceeded error threshold
+- **STOPPED**: Manually killed via DELETE
+
+### Directives
+Inject new instructions into a running SpecOps agent:
+- **Override mode:** Replaces the agent's current directive entirely
+- **Prepend mode:** Adds new instructions as top priority, original directive stays
+- **force_cycle: true** — immediately ends the current cycle and starts a new one with the updated directive
+
+```bash
+curl -s -X PUT http://localhost:59000/internal/agent/AGENT_ID/directive \\
+  -H "Content-Type: application/json" \\
+  -d '{"directive": "New focus: ...", "mode": "override", "force_cycle": true}'
+```
+
+### Force Cycle & Pause/Resume
+- **Force cycle:** `curl -s -X POST http://localhost:59000/agents/AGENT_ID/specops/force-cycle -H "Authorization: Bearer $TOKEN"`
+- **Pause (enter STANDBY):** `curl -s -X PATCH http://localhost:59000/agents/AGENT_ID/specops -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"auto_continue": false}'`
+- **Resume (exit STANDBY):** `curl -s -X PATCH http://localhost:59000/agents/AGENT_ID/specops -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"auto_continue": true}'`
+
+### Schedule Windows
+Configure active hours so the agent only cycles during specific times:
+```bash
+curl -s -X PATCH http://localhost:59000/agents/AGENT_ID/specops \\
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \\
+  -d '{"schedule_windows": [{"label": "Market Hours", "start": "09:00", "end": "17:00", "cycle_interval": 900}]}'
+```
+Outside the window the agent enters STANDBY automatically.
+
+### Reading Mission State
+- **Agent status:** `curl -s http://localhost:59000/agents/AGENT_ID -H "Authorization: Bearer $TOKEN"` — returns full agent dict including specops state, cycle count, schedule_windows, etc.
+- **Mission journal:** `curl -s http://localhost:59000/agents/AGENT_ID/journal -H "Authorization: Bearer $TOKEN"` — returns journal entries, cycle count, mission elapsed time
+- **Cycle output files:** Each cycle writes to `{AI_MEMORY_PATH}/agent_contexts/AGENT_ID_cycle_N.json`
+
+### Multi-Agent Coordination
+SpecOps agents coordinate through shared files, NOT direct communication:
+- Shared workspace: Use the memory system to share data between agents
+- Each agent reads/writes to shared workspace between cycles
+- Use directives to point agents at each other's output files
+
+RULES: Always check agent state before issuing commands. Use force_cycle sparingly — let agents finish naturally when possible.
+"""
+
 # ============================================================================
 # Pack Registry + Loader (Step 3)
 # ============================================================================
@@ -1549,8 +1601,11 @@ _CAPABILITY_PACKS = {
                     "keywords": ["browser","chrome","tab","navigate","screenshot","click","scroll","page","website","web","browse","open site","close tab"],
                     "content": _CEREBRO_PACK_BROWSER, "builtin": True, "token_estimate": 400},
     "agents":      {"id": "agents",      "name": "Agent Management", "icon": "users",  "description": "Spawn agents, directives, SpecOps, pause/resume/stop",
-                    "keywords": ["agent","spawn","deploy","specops","mission","worker","researcher","coder","analyst","directive","kill agent"],
+                    "keywords": ["agent","spawn","deploy","specops","mission","worker","researcher","coder","analyst","trader","directive","kill agent"],
                     "content": _CEREBRO_PACK_AGENTS, "builtin": True, "token_estimate": 400},
+    "specops":     {"id": "specops",    "name": "SpecOps Operations", "icon": "target", "description": "SpecOps mission lifecycle, cycling, directives, schedule windows",
+                    "keywords": ["specops","mission","cycle","cycling","standby","directive","force cycle","schedule window","mission state","mission journal","pause agent","resume agent","agent lifecycle"],
+                    "content": _CEREBRO_PACK_SPECOPS, "builtin": True, "token_estimate": 550},
     "automations": {"id": "automations", "name": "Automations",      "icon": "clock",  "description": "Create/run scheduled automations",
                     "keywords": ["automation","schedule","cron","recurring","daily","weekly","automate"],
                     "content": _CEREBRO_PACK_AUTOMATIONS, "builtin": True, "token_estimate": 300},
