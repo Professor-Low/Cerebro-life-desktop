@@ -4053,6 +4053,10 @@ class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
 
+class ResetPasswordRequest(BaseModel):
+    reset_code: str
+    new_password: str
+
 class SetupRequest(BaseModel):
     name: str
     password: str
@@ -5462,6 +5466,60 @@ async def change_password(request: ChangePasswordRequest, user: str = Depends(ve
     # Return fresh token
     token = create_token(user)
     return {"token": token, "message": "Password changed successfully"}
+
+@app.post("/auth/reset-request")
+async def request_password_reset():
+    """Generate a reset code and write it to a file. User must read the file to prove local access."""
+    import secrets as _secrets
+    code = _secrets.token_hex(4).upper()  # 8-char hex code
+    reset_path = Path(config.AI_MEMORY_PATH) / ".password_reset_code"
+    reset_path.write_text(json.dumps({
+        "code": code,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
+    }))
+    # In Docker, the file is at /data/memory/.password_reset_code
+    # On the host, it's in the cerebro-data volume
+    return {
+        "message": "Reset code generated. Check the file in your Cerebro data directory.",
+        "hint": "Look for .password_reset_code in your Cerebro data folder (e.g. ~/.cerebro/data/ or Docker volume cerebro-data)",
+        "expires_in": "10 minutes"
+    }
+
+@app.post("/auth/reset-confirm")
+async def confirm_password_reset(request: ResetPasswordRequest):
+    """Verify the reset code and set a new password."""
+    reset_path = Path(config.AI_MEMORY_PATH) / ".password_reset_code"
+    if not reset_path.exists():
+        raise HTTPException(status_code=400, detail="No reset request found. Request a reset first.")
+
+    try:
+        reset_data = json.loads(reset_path.read_text())
+    except:
+        raise HTTPException(status_code=400, detail="Reset file corrupted. Request a new reset.")
+
+    # Check expiry
+    expires_at = datetime.fromisoformat(reset_data["expires_at"].replace("Z", "+00:00"))
+    if datetime.now(timezone.utc) > expires_at:
+        reset_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="Reset code expired. Request a new one.")
+
+    # Verify code
+    if request.reset_code.upper() != reset_data["code"]:
+        raise HTTPException(status_code=401, detail="Invalid reset code")
+
+    # Reset the password
+    profile = _load_user_profile()
+    profile["password"] = bcrypt.hashpw(request.new_password.encode(), bcrypt.gensalt()).decode()
+    _save_user_profile(profile)
+
+    # Clean up
+    reset_path.unlink(missing_ok=True)
+
+    # Return fresh token
+    username = profile.get("name", "User")
+    token = create_token(username)
+    return {"token": token, "user": username, "message": "Password reset successful"}
 
 @app.get("/auth/token-info")
 async def token_info(credentials: HTTPAuthorizationCredentials = Depends(security)):
