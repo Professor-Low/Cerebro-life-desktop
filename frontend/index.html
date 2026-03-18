@@ -45395,9 +45395,14 @@
                 if (window.cerebroDesktop) {
                     var result = await window.cerebroDesktop.checkForUpdates();
                     if (result && result.updateAvailable) {
-                        showToast('Update available! Check the banner at the top.', 'success');
-                        var bar = document.getElementById('update-available-bar');
-                        if (bar) bar.style.display = '';
+                        if (result.source === 'github-api') {
+                            showToast('v' + result.latestVersion + ' is available! Download from GitHub releases.', 'success');
+                            window.open('https://github.com/Professor-Low/cerebro-life-desktop/releases/latest', '_blank');
+                        } else {
+                            showToast('Update available! Check the banner at the top.', 'success');
+                            var bar = document.getElementById('update-available-bar');
+                            if (bar) bar.style.display = '';
+                        }
                     } else {
                         showToast('You are on the latest version', 'success');
                     }
