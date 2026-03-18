@@ -192,7 +192,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p frontend
-          cp cerebro-private/frontend/* frontend/ 2>/dev/null || true
+          cp -r cerebro-private/frontend/* frontend/ 2>/dev/null || true
 
       - name: Verify bin structure
         shell: bash
@@ -215,6 +215,7 @@ jobs:
             dist/Cerebro-Installer.*
             dist/*.AppImage
             dist/*.deb
+            dist/latest*.yml
           retention-days: 30
 
   # ============================================================
