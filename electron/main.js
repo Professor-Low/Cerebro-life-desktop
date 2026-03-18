@@ -767,9 +767,48 @@ ipcMain.handle('get-docker-logs', async () => nativeManager.getLogs(200));
 
 // Updates — native mode only has Electron updates
 ipcMain.handle('check-for-updates', async () => {
+  // Try electron-updater first
   try {
     await autoUpdater.checkForUpdates();
-    return { updateAvailable: electronUpdateReady };
+    if (electronUpdateReady) {
+      return { updateAvailable: true };
+    }
+  } catch (err) {
+    console.log('[Main] autoUpdater check failed:', err.message);
+  }
+
+  // Fallback: GitHub API version check
+  try {
+    const https = require('https');
+    const latestVersion = await new Promise((resolve, reject) => {
+      const req = https.get('https://api.github.com/repos/Professor-Low/Cerebro-life-desktop/releases/latest', {
+        headers: { 'User-Agent': 'Cerebro-Desktop/' + app.getVersion() },
+        timeout: 10000,
+      }, (res) => {
+        let body = '';
+        res.on('data', (chunk) => { body += chunk; });
+        res.on('end', () => {
+          try { const data = JSON.parse(body); resolve(data.tag_name ? data.tag_name.replace(/^v/, '') : null); }
+          catch { resolve(null); }
+        });
+      });
+      req.on('error', reject);
+      req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+    });
+
+    if (latestVersion && latestVersion !== app.getVersion()) {
+      const current = app.getVersion().split('.').map(Number);
+      const latest = latestVersion.split('.').map(Number);
+      let isNewer = false;
+      for (let i = 0; i < 3; i++) {
+        if ((latest[i] || 0) > (current[i] || 0)) { isNewer = true; break; }
+        if ((latest[i] || 0) < (current[i] || 0)) break;
+      }
+      if (isNewer) {
+        return { updateAvailable: true, latestVersion };
+      }
+    }
+    return { updateAvailable: false };
   } catch (err) {
     return { updateAvailable: false, error: err.message };
   }
