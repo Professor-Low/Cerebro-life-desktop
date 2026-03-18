@@ -71,6 +71,8 @@ for f in cognitive_loop_files:
 
 # ----- Hidden imports -----
 hiddenimports = [
+    # System monitoring
+    'psutil',
     # Socket.IO / Engine.IO
     'socketio',
     'engineio',
