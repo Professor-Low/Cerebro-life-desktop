@@ -75,6 +75,12 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
   clearSetupState: () => ipcRenderer.invoke('clear-setup-state'),
   restartComputer: () => ipcRenderer.invoke('restart-computer'),
 
+
+  // Docker data migration
+  detectDockerData: () => ipcRenderer.invoke('detect-docker-data'),
+  migrateFromDocker: () => ipcRenderer.invoke('migrate-from-docker'),
+  isDockerMigrationDone: () => ipcRenderer.invoke('is-docker-migration-done'),
+
   // Chrome CDP
   launchChromeCDP: () => ipcRenderer.invoke('launch-chrome-cdp'),
   stopChromeCDP: () => ipcRenderer.invoke('stop-chrome-cdp'),

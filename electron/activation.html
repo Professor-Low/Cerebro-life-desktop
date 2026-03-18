@@ -491,25 +491,34 @@
         <div class="dot"></div>
       </div>
       <h2>Prerequisites</h2>
-      <div class="subtitle">Cerebro needs Docker to run</div>
+      <div class="subtitle">Checking system requirements</div>
       <div class="prereq-list">
-        <!-- Docker row -->
-        <div class="prereq-item" id="prereq-docker">
+        <!-- System check row -->
+        <div class="prereq-item" id="prereq-system">
           <div class="prereq-icon"><div class="spinner"></div></div>
           <div class="prereq-info">
-            <div class="prereq-name">Docker Desktop</div>
-            <div class="prereq-detail" id="prereq-docker-detail">Checking...</div>
+            <div class="prereq-name">System Ready</div>
+            <div class="prereq-detail" id="prereq-system-detail">Checking bundled components...</div>
           </div>
-          <div class="prereq-action" id="prereq-docker-action"></div>
         </div>
-        <!-- Docker install progress (hidden by default) -->
-        <div class="prereq-item" id="prereq-docker-progress" style="display:none;">
+        <!-- Docker migration row (shown only if old Docker data detected) -->
+        <div class="prereq-item" id="prereq-migration" style="display:none;">
+          <div class="prereq-icon">📦</div>
+          <div class="prereq-info">
+            <div class="prereq-name">Previous Data Found</div>
+            <div class="prereq-detail" id="prereq-migration-detail">Docker data from a previous installation was detected.</div>
+          </div>
+          <div class="prereq-action" id="prereq-migration-action">
+            <button class="btn btn-primary" style="font-size:12px;padding:6px 12px;" onclick="migrateDockerData()">Migrate Data</button>
+          </div>
+        </div>
+        <div class="prereq-item" id="prereq-migration-progress" style="display:none;">
           <div class="prereq-info" style="width:100%;">
-            <div class="prereq-name" id="docker-progress-title">Installing Docker...</div>
+            <div class="prereq-name" id="migration-progress-title">Migrating data...</div>
             <div class="progress-bar-track" style="margin-top:8px;">
-              <div class="progress-bar-fill" id="docker-progress-fill" style="width:0%;"></div>
+              <div class="progress-bar-fill" id="migration-progress-fill" style="width:50%;"></div>
             </div>
-            <div class="prereq-detail" id="docker-progress-detail" style="margin-top:6px;">Preparing...</div>
+            <div class="prereq-detail" id="migration-progress-detail" style="margin-top:6px;">Copying memories and settings...</div>
           </div>
         </div>
         <!-- Claude Code row (informational, not blocking) -->
@@ -768,159 +777,113 @@
     }
 
     function checkPrerequisites() {
-      var dockerEl = document.getElementById('prereq-docker');
+      var systemEl = document.getElementById('prereq-system');
       var claudeEl = document.getElementById('prereq-claude');
-      var actionEl = document.getElementById('prereq-docker-action');
-      var progressEl = document.getElementById('prereq-docker-progress');
+      var migrationEl = document.getElementById('prereq-migration');
       var continueBtn = document.getElementById('prereq-continue-btn');
 
       // Reset to checking state
-      dockerEl.className = 'prereq-item checking';
+      systemEl.className = 'prereq-item checking';
       claudeEl.className = 'prereq-item checking';
-      dockerEl.querySelector('.prereq-icon').textContent = '';
+      systemEl.querySelector('.prereq-icon').textContent = '';
       claudeEl.querySelector('.prereq-icon').textContent = '';
-      while (actionEl.firstChild) actionEl.removeChild(actionEl.firstChild);
-      progressEl.style.display = 'none';
 
       var spinnerA = document.createElement('div');
       spinnerA.className = 'spinner';
-      dockerEl.querySelector('.prereq-icon').appendChild(spinnerA);
+      systemEl.querySelector('.prereq-icon').appendChild(spinnerA);
 
       var spinnerB = document.createElement('div');
       spinnerB.className = 'spinner';
       claudeEl.querySelector('.prereq-icon').appendChild(spinnerB);
 
-      document.getElementById('prereq-docker-detail').textContent = 'Checking...';
+      document.getElementById('prereq-system-detail').textContent = 'Checking bundled components...';
       document.getElementById('prereq-claude-detail').textContent = 'Checking...';
       continueBtn.disabled = true;
       showStatus('prereq-status', '', '');
 
-      var dockerReady = false;
+      // Native mode — all components are bundled, system is always ready
+      setTimeout(function() {
+        setPrereqResult('prereq-system', 'prereq-system-detail', 'pass', 'All components bundled — no external dependencies');
+      }, 500);
 
-      // Check Docker
-      window.cerebroDesktop.checkDocker().then(function(docker) {
-        if (docker.installed && docker.running) {
-          // Docker installed + running = green check
-          setPrereqResult('prereq-docker', 'prereq-docker-detail', 'pass', 'Installed and running');
-          dockerReady = true;
-        } else if (docker.installed) {
-          // Docker installed but not running = show Start button
-          setPrereqResult('prereq-docker', 'prereq-docker-detail', 'fail', 'Installed but not running');
-          var btn = document.createElement('button');
-          btn.className = 'btn-sm btn-start';
-          btn.textContent = 'Start';
-          btn.addEventListener('click', startDockerFromWizard);
-          actionEl.appendChild(btn);
-        } else {
-          // Docker not installed = show Install button
-          setPrereqResult('prereq-docker', 'prereq-docker-detail', 'fail', 'Not installed');
-          var btn = document.createElement('button');
-          btn.className = 'btn-sm btn-install';
-          btn.textContent = 'Install';
-          btn.addEventListener('click', installDockerFromWizard);
-          actionEl.appendChild(btn);
-        }
-      }).catch(function() {
-        setPrereqResult('prereq-docker', 'prereq-docker-detail', 'fail', 'Check failed');
-        var btn = document.createElement('button');
-        btn.className = 'btn-sm btn-install';
-        btn.textContent = 'Install';
-        btn.addEventListener('click', installDockerFromWizard);
-        actionEl.appendChild(btn);
-      }).then(function() {
-        // Check Claude Code (non-blocking)
-        return window.cerebroDesktop.checkClaudeCode();
-      }).then(function(claude) {
-        if (claude.installed) {
-          setPrereqResult('prereq-claude', 'prereq-claude-detail', 'pass', claude.version || 'Installed');
-        } else {
-          // Yellow info state, NOT red fail — not a blocker
+      // Check for Docker data migration opportunity
+      if (window.cerebroDesktop && window.cerebroDesktop.detectDockerData) {
+        window.cerebroDesktop.detectDockerData().then(function(migration) {
+          if (migration && migration.found) {
+            migrationEl.style.display = 'flex';
+            document.getElementById('prereq-migration-detail').textContent =
+              'Found data from a previous Docker installation (' + migration.volumes.length + ' volumes). Migrate to keep your memories and settings.';
+          }
+        }).catch(function() {
+          // Docker not available, no migration needed
+        });
+      }
+
+      // Check Claude Code (non-blocking)
+      var claudePromise = Promise.resolve();
+      if (window.cerebroDesktop && window.cerebroDesktop.checkClaudeCode) {
+        claudePromise = window.cerebroDesktop.checkClaudeCode().then(function(claude) {
+          if (claude.installed) {
+            setPrereqResult('prereq-claude', 'prereq-claude-detail', 'pass', claude.version || 'Installed');
+          } else {
+            claudeEl.className = 'prereq-item info';
+            claudeEl.querySelector('.prereq-icon').textContent = '\u24D8';
+            var detail = document.getElementById('prereq-claude-detail');
+            while (detail.firstChild) detail.removeChild(detail.firstChild);
+            detail.appendChild(document.createTextNode('Not found (recommended) '));
+            var a = document.createElement('a');
+            a.className = 'prereq-link';
+            a.textContent = 'Install Claude Code';
+            a.addEventListener('click', function() { window.open('https://docs.anthropic.com/en/docs/claude-code/overview', '_blank'); });
+            detail.appendChild(a);
+          }
+        }).catch(function() {
           claudeEl.className = 'prereq-item info';
           claudeEl.querySelector('.prereq-icon').textContent = '\u24D8';
-          var detail = document.getElementById('prereq-claude-detail');
-          while (detail.firstChild) detail.removeChild(detail.firstChild);
-          detail.appendChild(document.createTextNode('Not found (recommended) '));
-          var a = document.createElement('a');
-          a.className = 'prereq-link';
-          a.textContent = 'Install Claude Code';
-          a.addEventListener('click', function() { window.open('https://docs.anthropic.com/en/docs/claude-code/overview', '_blank'); });
-          detail.appendChild(a);
-        }
-      }).catch(function() {
-        claudeEl.className = 'prereq-item info';
-        claudeEl.querySelector('.prereq-icon').textContent = '\u24D8';
-        document.getElementById('prereq-claude-detail').textContent = 'Check failed (not required)';
-      }).then(function() {
-        // Only Docker is a hard prerequisite — Claude Code is not
-        continueBtn.disabled = !dockerReady;
-        if (!dockerReady) {
-          showStatus('prereq-status', 'Docker is required to continue', 'error');
-        }
+          document.getElementById('prereq-claude-detail').textContent = 'Check failed (not required)';
+        });
+      }
+
+      claudePromise.then(function() {
+        // Native mode — no hard prerequisites, always allow continue
+        continueBtn.disabled = false;
       });
     }
 
-    function installDockerFromWizard() {
-      var actionEl = document.getElementById('prereq-docker-action');
-      var progressEl = document.getElementById('prereq-docker-progress');
-      while (actionEl.firstChild) actionEl.removeChild(actionEl.firstChild);
-      progressEl.style.display = 'block';
-      document.getElementById('docker-progress-fill').style.width = '0%';
-      document.getElementById('docker-progress-title').textContent = 'Downloading Docker...';
-      document.getElementById('docker-progress-detail').textContent = 'Starting download...';
-      showStatus('prereq-status', '', '');
+    function migrateDockerData() {
+      var migrationEl = document.getElementById('prereq-migration');
+      var progressEl = document.getElementById('prereq-migration-progress');
+      migrationEl.style.display = 'none';
+      progressEl.style.display = 'flex';
 
-      window.cerebroDesktop.installDocker().then(function(result) {
+      window.cerebroDesktop.migrateFromDocker().then(function(result) {
+        progressEl.style.display = 'none';
         if (result.success) {
-          if (result.needsRestart) {
-            document.getElementById('docker-progress-title').textContent = 'Restart Required';
-            document.getElementById('docker-progress-detail').textContent = 'Docker installed! Please restart your PC for WSL2, then reopen Cerebro.';
-            document.getElementById('docker-progress-fill').style.width = '100%';
-          } else {
-            // Install succeeded, no restart needed — auto-start Docker
-            document.getElementById('docker-progress-title').textContent = 'Starting Docker...';
-            document.getElementById('docker-progress-detail').textContent = 'Docker installed, now starting daemon...';
-            document.getElementById('docker-progress-fill').style.width = '100%';
-            startDockerFromWizard();
-          }
+          migrationEl.style.display = 'flex';
+          migrationEl.querySelector('.prereq-icon').textContent = '\u2705';
+          document.getElementById('prereq-migration-detail').textContent =
+            'Data migrated successfully! Your memories and settings have been restored.';
+          var actionEl = document.getElementById('prereq-migration-action');
+          while (actionEl.firstChild) actionEl.removeChild(actionEl.firstChild);
         } else {
-          document.getElementById('docker-progress-title').textContent = 'Installation Failed';
-          document.getElementById('docker-progress-detail').textContent = result.error || 'Unknown error';
-          showStatus('prereq-status', 'Docker installation failed. Try installing manually.', 'error');
+          migrationEl.style.display = 'flex';
+          migrationEl.querySelector('.prereq-icon').textContent = '\u26A0\uFE0F';
+          document.getElementById('prereq-migration-detail').textContent =
+            'Migration failed. You can manually copy data from Docker volumes to ~/.cerebro/';
+          var actionEl = document.getElementById('prereq-migration-action');
+          while (actionEl.firstChild) actionEl.removeChild(actionEl.firstChild);
         }
       }).catch(function(err) {
-        document.getElementById('docker-progress-title').textContent = 'Installation Failed';
-        document.getElementById('docker-progress-detail').textContent = err.message || 'Unknown error';
-        showStatus('prereq-status', 'Docker installation failed. Try installing manually.', 'error');
+        progressEl.style.display = 'none';
+        migrationEl.style.display = 'flex';
+        migrationEl.querySelector('.prereq-icon').textContent = '\u26A0\uFE0F';
+        document.getElementById('prereq-migration-detail').textContent = 'Migration error: ' + (err.message || err);
       });
     }
 
-    function startDockerFromWizard() {
-      var actionEl = document.getElementById('prereq-docker-action');
-      var progressEl = document.getElementById('prereq-docker-progress');
-      while (actionEl.firstChild) actionEl.removeChild(actionEl.firstChild);
-      progressEl.style.display = 'block';
-      document.getElementById('docker-progress-title').textContent = 'Starting Docker...';
-      document.getElementById('docker-progress-detail').textContent = 'Waiting for Docker daemon...';
-      document.getElementById('docker-progress-fill').style.width = '50%';
-      showStatus('prereq-status', '', '');
-
-      window.cerebroDesktop.startDockerDaemon().then(function(result) {
-        if (result.success) {
-          progressEl.style.display = 'none';
-          setPrereqResult('prereq-docker', 'prereq-docker-detail', 'pass', 'Installed and running');
-          document.getElementById('prereq-continue-btn').disabled = false;
-          showStatus('prereq-status', '', '');
-        } else {
-          document.getElementById('docker-progress-title').textContent = 'Failed to Start';
-          document.getElementById('docker-progress-detail').textContent = result.error || 'Docker daemon did not respond in time';
-          showStatus('prereq-status', 'Could not start Docker. Try starting Docker Desktop manually.', 'error');
-        }
-      }).catch(function(err) {
-        document.getElementById('docker-progress-title').textContent = 'Failed to Start';
-        document.getElementById('docker-progress-detail').textContent = err.message || 'Unknown error';
-        showStatus('prereq-status', 'Could not start Docker. Try starting Docker Desktop manually.', 'error');
-      });
-    }
+    // Legacy Docker functions — no-ops in native architecture (v4.0+)
+    function installDockerFromWizard() { console.log('[Wizard] Docker install not needed in native mode'); }
+    function startDockerFromWizard() { console.log('[Wizard] Docker start not needed in native mode'); }
 
     function runSetup() {
       var fill = document.getElementById('setup-progress-fill');

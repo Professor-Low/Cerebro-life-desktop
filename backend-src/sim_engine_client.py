@@ -81,7 +81,7 @@ class SimEngineClient:
         try:
             creation_flags = 0
             if sys.platform == "win32":
-                creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP
+                creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
 
             self._process = subprocess.Popen(
                 [sys.executable, "-m", "backend.main"],

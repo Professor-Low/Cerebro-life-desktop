@@ -894,6 +894,12 @@ ipcMain.handle('save-setup-state', (_event, state) => { nativeManager.saveSetupS
 ipcMain.handle('load-setup-state', () => nativeManager.loadSetupState());
 ipcMain.handle('clear-setup-state', () => { nativeManager.clearSetupState(); return true; });
 
+
+// Docker data migration
+ipcMain.handle('detect-docker-data', () => nativeManager.detectDockerData());
+ipcMain.handle('migrate-from-docker', async () => nativeManager.migrateFromDocker());
+ipcMain.handle('is-docker-migration-done', () => nativeManager.isDockerMigrationDone());
+
 // Chrome CDP
 ipcMain.handle('launch-chrome-cdp', async () => {
   try {

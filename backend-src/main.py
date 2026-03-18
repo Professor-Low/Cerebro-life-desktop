@@ -25,6 +25,7 @@ except ImportError:
 import json
 import base64
 import re
+import sys
 import time
 import uuid
 import subprocess
@@ -33,7 +34,6 @@ import subprocess
 _SUBPROCESS_FLAGS = {}
 if sys.platform == "win32":
     _SUBPROCESS_FLAGS["creationflags"] = subprocess.CREATE_NO_WINDOW
-import sys
 from datetime import datetime, timezone
 from typing import Optional, AsyncGenerator, Dict
 from pathlib import Path
@@ -3666,6 +3666,7 @@ async def run_agent(
                     stderr=sp.PIPE,
                     cwd=config.AI_MEMORY_PATH,
                     env=agent_env,
+                    **_SUBPROCESS_FLAGS,
                 )
                 process.stdin.write(full_prompt.encode('utf-8'))
                 process.stdin.close()
@@ -3678,6 +3679,7 @@ async def run_agent(
                 stderr=sp.PIPE,
                 cwd=config.AI_MEMORY_PATH,
                 env=agent_env,
+                **_SUBPROCESS_FLAGS,
             )
 
         # Store process PID for emergency stop capability
@@ -7341,6 +7343,7 @@ async def run_agent_continuation(agent_id: str, call_sign: str, task: str, agent
             stderr=sp.PIPE,
             cwd=config.AI_MEMORY_PATH,
             env=agent_env,
+            **_SUBPROCESS_FLAGS,
         )
 
         # Store process PID for emergency stop capability

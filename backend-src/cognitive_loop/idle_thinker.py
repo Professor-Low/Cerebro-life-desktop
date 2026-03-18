@@ -19,6 +19,12 @@ import logging
 import os
 import re
 import subprocess
+import sys
+
+# Windows: prevent console window flash
+_SUBPROCESS_FLAGS = {}
+if sys.platform == "win32":
+    _SUBPROCESS_FLAGS["creationflags"] = subprocess.CREATE_NO_WINDOW
 import time
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
@@ -247,6 +253,7 @@ def capture_screen() -> Optional[Dict]:
             result = subprocess.run(
                 ["xdotool", "getactivewindow", "getwindowname"],
                 capture_output=True, text=True, timeout=3,
+                **_SUBPROCESS_FLAGS,
             )
             window_title = result.stdout.strip() or "Unknown"
         except Exception:
@@ -476,14 +483,17 @@ class HeartbeatEngine:
                 status = subprocess.run(
                     ["git", "status", "--porcelain"],
                     cwd=str(repo), capture_output=True, text=True, timeout=10,
+                    **_SUBPROCESS_FLAGS,
                 )
                 branch = subprocess.run(
                     ["git", "rev-parse", "--abbrev-ref", "HEAD"],
                     cwd=str(repo), capture_output=True, text=True, timeout=5,
+                    **_SUBPROCESS_FLAGS,
                 )
                 log = subprocess.run(
                     ["git", "log", "--oneline", "-3"],
                     cwd=str(repo), capture_output=True, text=True, timeout=5,
+                    **_SUBPROCESS_FLAGS,
                 )
                 branch_name = branch.stdout.strip() or "unknown"
                 changed_files = [l for l in status.stdout.strip().splitlines() if l.strip()]

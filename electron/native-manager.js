@@ -514,6 +514,143 @@ class NativeManager extends EventEmitter {
     }
   }
 
+
+  // --- Docker Data Migration ---
+
+  /**
+   * Detect if Docker volumes from a previous Cerebro Docker installation exist.
+   * Returns migration info if old data is found, null otherwise.
+   */
+  detectDockerData() {
+    const { execFileSync } = require('child_process');
+    const result = { found: false, volumes: [], estimatedSize: 0 };
+
+    // Only check if native data dir is empty (fresh install)
+    const memoryFiles = fs.readdirSync(MEMORY_DIR, { recursive: false });
+    const hasExistingData = memoryFiles.some(f => !f.startsWith('.'));
+    if (hasExistingData) {
+      // User already has native data — don't offer migration
+      return result;
+    }
+
+    try {
+      // Check for Docker CLI
+      const dockerPath = process.platform === 'win32' ? 'docker.exe' : 'docker';
+      const volumeList = execFileSync(dockerPath, ['volume', 'ls', '--format', '{{.Name}}'], {
+        timeout: 5000,
+        windowsHide: true,
+      }).toString().trim();
+
+      const volumeNames = volumeList.split('\n').filter(Boolean);
+      const cerebroVolumes = volumeNames.filter(v =>
+        v.includes('cerebro') && (v.includes('data') || v.includes('redis'))
+      );
+
+      if (cerebroVolumes.length > 0) {
+        result.found = true;
+        result.volumes = cerebroVolumes;
+
+        // Try to estimate size
+        for (const vol of cerebroVolumes) {
+          try {
+            const inspect = execFileSync(dockerPath, ['volume', 'inspect', vol, '--format', '{{.Mountpoint}}'], {
+              timeout: 5000,
+              windowsHide: true,
+            }).toString().trim();
+            result.volumes.push({ name: vol, mountpoint: inspect });
+          } catch {}
+        }
+      }
+    } catch {
+      // Docker not installed or not running — no migration needed
+    }
+
+    return result;
+  }
+
+  /**
+   * Migrate data from Docker volumes to native ~/.cerebro/ directory.
+   * Returns { success, migratedFiles, errors }.
+   */
+  async migrateFromDocker() {
+    const { execFile } = require('child_process');
+    const result = { success: false, migratedFiles: 0, errors: [] };
+
+    try {
+      const dockerPath = process.platform === 'win32' ? 'docker.exe' : 'docker';
+
+      // Copy memory data from cerebro_cerebro-data volume
+      const dataVolumes = ['cerebro_cerebro-data', 'cerebro-cerebro-data', 'cerebro_data'];
+      for (const vol of dataVolumes) {
+        try {
+          // Use a temporary container to copy data out of the volume
+          const tempContainer = `cerebro-migrate-${Date.now()}`;
+          require('child_process').execFileSync(dockerPath, [
+            'run', '--rm', '-d', '--name', tempContainer,
+            '-v', `${vol}:/source:ro`,
+            '-v', `${MEMORY_DIR}:/dest`,
+            'alpine', 'sh', '-c', 'cp -a /source/. /dest/ && sleep 1'
+          ], { timeout: 30000, windowsHide: true });
+
+          // Wait for copy to complete
+          await new Promise(r => setTimeout(r, 5000));
+          try {
+            require('child_process').execFileSync(dockerPath, ['rm', '-f', tempContainer], {
+              timeout: 5000, windowsHide: true
+            });
+          } catch {}
+
+          result.migratedFiles++;
+          console.log(`[Migration] Copied data from volume: ${vol}`);
+          break; // Only need one data volume
+        } catch {}
+      }
+
+      // Copy Redis data
+      const redisVolumes = ['cerebro_cerebro-redis', 'cerebro-cerebro-redis', 'cerebro_redis'];
+      for (const vol of redisVolumes) {
+        try {
+          const tempContainer = `cerebro-migrate-redis-${Date.now()}`;
+          require('child_process').execFileSync(dockerPath, [
+            'run', '--rm', '-d', '--name', tempContainer,
+            '-v', `${vol}:/source:ro`,
+            '-v', `${REDIS_DATA_DIR}:/dest`,
+            'alpine', 'sh', '-c', 'cp -a /source/. /dest/ && sleep 1'
+          ], { timeout: 30000, windowsHide: true });
+
+          await new Promise(r => setTimeout(r, 5000));
+          try {
+            require('child_process').execFileSync(dockerPath, ['rm', '-f', tempContainer], {
+              timeout: 5000, windowsHide: true
+            });
+          } catch {}
+
+          result.migratedFiles++;
+          console.log(`[Migration] Copied Redis data from volume: ${vol}`);
+          break;
+        } catch {}
+      }
+
+      result.success = result.migratedFiles > 0;
+      if (result.success) {
+        // Mark migration as complete so we don't offer again
+        fs.writeFileSync(path.join(CEREBRO_DIR, '.docker-migrated'), new Date().toISOString());
+      }
+    } catch (err) {
+      result.errors.push(err.message);
+    }
+
+    return result;
+  }
+
+  /**
+   * Check if Docker migration was already performed.
+   */
+  isDockerMigrationDone() {
+    return fs.existsSync(path.join(CEREBRO_DIR, '.docker-migrated'));
+  }
+
+
   // --- Setup state management ---
   isSetupComplete() {
     return fs.existsSync(path.join(CEREBRO_DIR, '.setup-complete'));
