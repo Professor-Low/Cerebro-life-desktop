@@ -1,0 +1,56 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install system dependencies + Node.js (for Claude CLI)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl gosu gnupg && \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Claude CLI globally
+RUN npm install -g @anthropic-ai/claude-code
+
+# Install Python dependencies (CPU-only torch first to avoid pulling CUDA ~2.5GB)
+COPY backend-src/requirements.txt .
+RUN pip install --no-cache-dir torch --extra-index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Install Playwright system deps (for CDP connection to host Chrome — no browser download needed)
+RUN playwright install-deps chromium
+
+# Copy backend source
+COPY backend-src/ .
+
+# Copy MCP modules (bundled for standalone - goals, causal, predict, learning)
+COPY backend-src/mcp_modules/ /app/mcp_modules/
+
+# Copy frontend (served as static files by FastAPI)
+COPY frontend/ /app/frontend/
+
+# Copy standalone CLAUDE.md for agent instructions
+COPY docker/standalone-claude.md /app/standalone-claude.md
+
+# Copy and set entrypoint (creates data directories before app starts)
+COPY docker/entrypoint-backend.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Create non-root user for Claude Code (--dangerously-skip-permissions requires non-root)
+# UID 1000 matches typical Linux host user so bind-mounted credentials are accessible
+RUN groupadd -g 1000 cerebro && useradd -u 1000 -g 1000 -m -d /home/cerebro cerebro && \
+    mkdir -p /data/memory && chown -R cerebro:cerebro /data/memory /app
+
+# Set standalone environment defaults
+ENV CEREBRO_STANDALONE=1
+ENV CEREBRO_MCP_SRC=/app/mcp_modules
+ENV ENABLE_EMBEDDINGS=1
+
+# Entrypoint runs as root to fix volume permissions, then drops to cerebro user
+EXPOSE 59000
+
+HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:59000/health || exit 1
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["uvicorn", "main:socket_app", "--host", "0.0.0.0", "--port", "59000", "--ws-ping-interval", "0", "--ws-ping-timeout", "0", "--timeout-keep-alive", "120"]

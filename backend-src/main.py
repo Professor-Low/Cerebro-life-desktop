@@ -25,15 +25,10 @@ except ImportError:
 import json
 import base64
 import re
-import sys
 import time
 import uuid
 import subprocess
-
-# Windows: prevent console window flash when spawning CLI tools
-_SUBPROCESS_FLAGS = {}
-if sys.platform == "win32":
-    _SUBPROCESS_FLAGS["creationflags"] = subprocess.CREATE_NO_WINDOW
+import sys
 from datetime import datetime, timezone
 from typing import Optional, AsyncGenerator, Dict
 from pathlib import Path
@@ -333,7 +328,6 @@ Return ONLY valid JSON in this exact format:
                 text=True,
                 timeout=60,  # 60 second timeout
                 cwd=str(self.memory_path)
-                **_SUBPROCESS_FLAGS,
             )
 
             output = result.stdout.strip()
@@ -483,20 +477,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Frontend path resolution:
-#   1. CEREBRO_FRONTEND_DIR env var (set by Electron/NativeManager for desktop builds)
-#   2. Sibling of backend-src (/app/frontend/ in Docker, ../frontend/ in dev)
-#   3. Inside backend dir (fallback)
-_env_frontend = Path(os.environ["CEREBRO_FRONTEND_DIR"]) if os.environ.get("CEREBRO_FRONTEND_DIR") else None
+# Frontend path — check both Docker layout (/app/frontend/) and dev layout (../frontend/)
 _app_frontend = Path(__file__).parent / "frontend"
 _dev_frontend = Path(__file__).parent.parent / "frontend"
-
-if _env_frontend and _env_frontend.exists():
-    FRONTEND_DIR = _env_frontend
-elif _app_frontend.exists():
-    FRONTEND_DIR = _app_frontend
-else:
-    FRONTEND_DIR = _dev_frontend
+FRONTEND_DIR = _app_frontend if _app_frontend.exists() else _dev_frontend
 
 # Serve static files (socket.io, etc.) from frontend/static/
 STATIC_DIR = FRONTEND_DIR / "static"
@@ -1431,7 +1415,7 @@ curl -s -X POST http://localhost:59000/internal/chat-spawn-agent \\
   -H "Content-Type: application/json" \\
   -d '{{"task": "Your task here", "agent_type": "researcher", "model": "sonnet"}}'
 ```
-Agent types: worker, researcher, coder, analyst, browser, specops_worker, specops_researcher, specops_analyst
+Agent types: worker, researcher, coder, analyst, browser, specops_worker, specops_researcher
 
 **SpecOps Agent (timed cycling mission):**
 ```bash
@@ -1556,58 +1540,6 @@ _CEREBRO_CHAT_ENV_STANDALONE = """## Environment
 You are running in a standalone Docker container with bash access.
 Use endpoints described in your active capability packs."""
 
-
-_CEREBRO_PACK_SPECOPS = """## SpecOps Operations
-
-### Agent Lifecycle States
-`QUEUED` → `RUNNING` → `CYCLING` → `STANDBY` → `COMPLETED` / `FAILED` / `STOPPED`
-- **RUNNING**: Agent is actively executing within a cycle
-- **CYCLING**: Agent finished a cycle, output saved, waiting for next cycle_interval
-- **STANDBY**: Paused (auto_continue=false) — will not start next cycle until resumed
-- **COMPLETED**: All cycles finished or mission_duration expired
-- **FAILED**: Agent crashed or exceeded error threshold
-- **STOPPED**: Manually killed via DELETE
-
-### Directives
-Inject new instructions into a running SpecOps agent:
-- **Override mode:** Replaces the agent's current directive entirely
-- **Prepend mode:** Adds new instructions as top priority, original directive stays
-- **force_cycle: true** — immediately ends the current cycle and starts a new one with the updated directive
-
-```bash
-curl -s -X PUT http://localhost:59000/internal/agent/AGENT_ID/directive \\
-  -H "Content-Type: application/json" \\
-  -d '{"directive": "New focus: ...", "mode": "override", "force_cycle": true}'
-```
-
-### Force Cycle & Pause/Resume
-- **Force cycle:** `curl -s -X POST http://localhost:59000/agents/AGENT_ID/specops/force-cycle -H "Authorization: Bearer $TOKEN"`
-- **Pause (enter STANDBY):** `curl -s -X PATCH http://localhost:59000/agents/AGENT_ID/specops -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"auto_continue": false}'`
-- **Resume (exit STANDBY):** `curl -s -X PATCH http://localhost:59000/agents/AGENT_ID/specops -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"auto_continue": true}'`
-
-### Schedule Windows
-Configure active hours so the agent only cycles during specific times:
-```bash
-curl -s -X PATCH http://localhost:59000/agents/AGENT_ID/specops \\
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \\
-  -d '{"schedule_windows": [{"label": "Market Hours", "start": "09:00", "end": "17:00", "cycle_interval": 900}]}'
-```
-Outside the window the agent enters STANDBY automatically.
-
-### Reading Mission State
-- **Agent status:** `curl -s http://localhost:59000/agents/AGENT_ID -H "Authorization: Bearer $TOKEN"` — returns full agent dict including specops state, cycle count, schedule_windows, etc.
-- **Mission journal:** `curl -s http://localhost:59000/agents/AGENT_ID/journal -H "Authorization: Bearer $TOKEN"` — returns journal entries, cycle count, mission elapsed time
-- **Cycle output files:** Each cycle writes to `{AI_MEMORY_PATH}/agent_contexts/AGENT_ID_cycle_N.json`
-
-### Multi-Agent Coordination
-SpecOps agents coordinate through shared files, NOT direct communication:
-- Shared workspace: Use the memory system to share data between agents
-- Each agent reads/writes to shared workspace between cycles
-- Use directives to point agents at each other's output files
-
-RULES: Always check agent state before issuing commands. Use force_cycle sparingly — let agents finish naturally when possible.
-"""
-
 # ============================================================================
 # Pack Registry + Loader (Step 3)
 # ============================================================================
@@ -1619,9 +1551,6 @@ _CAPABILITY_PACKS = {
     "agents":      {"id": "agents",      "name": "Agent Management", "icon": "users",  "description": "Spawn agents, directives, SpecOps, pause/resume/stop",
                     "keywords": ["agent","spawn","deploy","specops","mission","worker","researcher","coder","analyst","directive","kill agent"],
                     "content": _CEREBRO_PACK_AGENTS, "builtin": True, "token_estimate": 400},
-    "specops":     {"id": "specops",    "name": "SpecOps Operations", "icon": "target", "description": "SpecOps mission lifecycle, cycling, directives, schedule windows",
-                    "keywords": ["specops","mission","cycle","cycling","standby","directive","force cycle","schedule window","mission state","mission journal","pause agent","resume agent","agent lifecycle"],
-                    "content": _CEREBRO_PACK_SPECOPS, "builtin": True, "token_estimate": 550},
     "automations": {"id": "automations", "name": "Automations",      "icon": "clock",  "description": "Create/run scheduled automations",
                     "keywords": ["automation","schedule","cron","recurring","daily","weekly","automate"],
                     "content": _CEREBRO_PACK_AUTOMATIONS, "builtin": True, "token_estimate": 300},
@@ -1643,14 +1572,10 @@ def _load_all_packs():
     packs = dict(_CAPABILITY_PACKS)
     try:
         _CUSTOM_PACKS_DIR.mkdir(parents=True, exist_ok=True)
-        # Block pack IDs that belong to private/internal builds
-        _BLOCKED_PACK_IDS = {"trading", "trader", "self-improve", "self-modification", "ibkr", "ib-gateway"}
         for f in _CUSTOM_PACKS_DIR.glob("*.json"):
             try:
                 data = json.loads(f.read_text())
                 data["id"] = data.get("id", f.stem)
-                if data["id"].lower() in _BLOCKED_PACK_IDS:
-                    continue  # Skip private/internal packs
                 data["builtin"] = False
                 packs[data["id"]] = data
             except Exception:
@@ -3666,7 +3591,6 @@ async def run_agent(
                     stderr=sp.PIPE,
                     cwd=config.AI_MEMORY_PATH,
                     env=agent_env,
-                    **_SUBPROCESS_FLAGS,
                 )
                 process.stdin.write(full_prompt.encode('utf-8'))
                 process.stdin.close()
@@ -3679,7 +3603,6 @@ async def run_agent(
                 stderr=sp.PIPE,
                 cwd=config.AI_MEMORY_PATH,
                 env=agent_env,
-                **_SUBPROCESS_FLAGS,
             )
 
         # Store process PID for emergency stop capability
@@ -4187,14 +4110,9 @@ async def startup():
 
     global redis, proactive_manager, predictive_service, learning_injector
 
-    # Initialize Redis (optional — gracefully degrade if unavailable)
-    try:
-        redis = await aioredis.from_url(config.REDIS_URL, decode_responses=True)
-        await redis.ping()
-        print("Cerebro started - Redis connected")
-    except Exception as e:
-        redis = None
-        print(f"[WARN] Redis unavailable ({e}) — running in degraded mode (no task queue, no pubsub)")
+    # Initialize Redis
+    redis = await aioredis.from_url(config.REDIS_URL, decode_responses=True)
+    print("Cerebro started - Redis connected")
 
     # Reload persisted agents into memory
     reload_agents_from_persistence()
@@ -4202,9 +4120,8 @@ async def startup():
     # Resume any specops missions that were cycling when server restarted
     asyncio.create_task(_resume_specops_missions())
 
-    # Start background task listener (only if Redis is available)
-    if redis:
-        asyncio.create_task(redis_task_listener())
+    # Start background task listener
+    asyncio.create_task(redis_task_listener())
 
     # Initialize Autonomy Services (non-blocking)
     async def _init_autonomy():
@@ -4286,8 +4203,6 @@ async def shutdown():
 
 async def redis_task_listener():
     """Listen to task updates and broadcast via Socket.IO."""
-    if not redis:
-        return
     pubsub = redis.pubsub()
     await pubsub.psubscribe("task:*")
 
@@ -5140,7 +5055,6 @@ async def process_with_claude_code(content: str, session_id: str = "default", mo
             stderr=subprocess.PIPE,
             cwd=chat_cwd,
             env=agent_env,
-            **_SUBPROCESS_FLAGS,
         )
 
         # Read stdout in a background thread, push lines to an async queue
@@ -5300,13 +5214,13 @@ async def _process_chat_offloaded(content: str, session_id: str, model: str, dev
             if _ssh_key:
                 _mkdir_args2.extend(["-i", _ssh_key])
             _mkdir_args2.extend([_ssh_target, "mkdir -p ~/.claude"])
-            await asyncio.to_thread(lambda: subprocess.run(_mkdir_args2, capture_output=True, timeout=15, **_SUBPROCESS_FLAGS))
+            await asyncio.to_thread(lambda: subprocess.run(_mkdir_args2, capture_output=True, timeout=15))
             _scp_args2 = ["scp", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new",
                           "-o", "ConnectTimeout=10", "-o", "IdentitiesOnly=yes", "-P", _ssh_port]
             if _ssh_key:
                 _scp_args2.extend(["-i", _ssh_key])
             _scp_args2.extend([str(_creds_path), f"{_ssh_target}:~/.claude/.credentials.json"])
-            _scp_res2 = await asyncio.to_thread(lambda: subprocess.run(_scp_args2, capture_output=True, timeout=15, **_SUBPROCESS_FLAGS))
+            _scp_res2 = await asyncio.to_thread(lambda: subprocess.run(_scp_args2, capture_output=True, timeout=15))
             if _scp_res2.returncode == 0:
                 print(f"[Chat Offload] Synced Claude credentials to {_device_name}")
             else:
@@ -5342,7 +5256,6 @@ async def _process_chat_offloaded(content: str, session_id: str, model: str, dev
             stderr=subprocess.PIPE,
             cwd=config.AI_MEMORY_PATH,
             env=agent_env,
-            **_SUBPROCESS_FLAGS,
         )
 
         # Pipe user message via stdin
@@ -5881,7 +5794,6 @@ async def warmup_chat(user: str = Depends(verify_token)):
              "--output-format", "text", "--dangerously-skip-permissions", "--max-turns", "1"],
             capture_output=True, text=True, timeout=30, env=agent_env,
             cwd=config.AI_MEMORY_PATH,
-            **_SUBPROCESS_FLAGS,
         )
         return {"success": True, "model": effective_model, "output": result.stdout.strip()[:100]}
     except subprocess.TimeoutExpired:
@@ -6009,21 +5921,17 @@ async def create_task(request: TaskRequest, user: str = Depends(verify_token)):
         "progress": 0
     }
 
-    if redis:
-        await redis.set(f"task_data:{task_id}", json.dumps(task_data))
-        if request.background:
-            await redis.lpush("task_queue", json.dumps(task_data))
-    else:
-        # In-memory fallback — task won't persist across restarts
-        pass
+    await redis.set(f"task_data:{task_id}", json.dumps(task_data))
+
+    if request.background:
+        # Queue for background processing
+        await redis.lpush("task_queue", json.dumps(task_data))
 
     return {"task_id": task_id, "status": "queued"}
 
 @app.get("/task/{task_id}")
 async def get_task(task_id: str, user: str = Depends(verify_token)):
     """Get task status."""
-    if not redis:
-        raise HTTPException(status_code=503, detail="Task queue unavailable (Redis not connected)")
     data = await redis.get(f"task_data:{task_id}")
     if not data:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -6035,42 +5943,15 @@ async def health():
     """Health check endpoint."""
     redis_ok = False
     try:
-        if redis:
-            await redis.ping()
-            redis_ok = True
-    except Exception:
+        await redis.ping()
+        redis_ok = True
+    except:
         pass
 
     return {
-        "status": "healthy",
+        "status": "healthy" if redis_ok else "degraded",
         "redis": redis_ok,
         "timestamp": datetime.now(timezone.utc).isoformat()
-    }
-
-
-def _is_trading_available() -> bool:
-    """Check if IBKR trading is configured and available."""
-    ibkr_host = os.environ.get("IBKR_HOST", "")
-    ibkr_port = os.environ.get("IBKR_PORT", "")
-    standalone = os.environ.get("CEREBRO_STANDALONE", "")
-    # On standalone desktop installs, only enable trading if explicitly configured
-    if standalone == "1" and not ibkr_host:
-        return False
-    # If IBKR_HOST is explicitly set, trading is available
-    if ibkr_host or ibkr_port:
-        return True
-    # Default: available on the server (non-standalone)
-    return not standalone
-
-
-@app.get("/api/features")
-async def get_features():
-    """Return which features are available on this Cerebro instance.
-    Used by the frontend to show/hide UI elements."""
-    return {
-        "trading": _is_trading_available(),
-        "redis": redis is not None,
-        "platform": sys.platform,
     }
 
 
@@ -7382,7 +7263,6 @@ async def run_agent_continuation(agent_id: str, call_sign: str, task: str, agent
             stderr=sp.PIPE,
             cwd=config.AI_MEMORY_PATH,
             env=agent_env,
-            **_SUBPROCESS_FLAGS,
         )
 
         # Store process PID for emergency stop capability
@@ -7970,7 +7850,6 @@ Keep it concise and actionable. Use military-style brevity."""
             ["claude", "-p", "--model", "haiku", prompt],
             capture_output=True, text=True, timeout=30,
             env={**os.environ, "CLAUDE_NO_TELEMETRY": "1"}
-            **_SUBPROCESS_FLAGS,
         )
         if result.returncode == 0 and result.stdout.strip():
             agent["mission_debrief"] = result.stdout.strip()
@@ -8111,7 +7990,6 @@ Keep it concise and actionable. Use military-style brevity."""
             ["claude", "-p", "--model", "haiku", prompt],
             capture_output=True, text=True, timeout=30,
             env={**os.environ, "CLAUDE_NO_TELEMETRY": "1"}
-            **_SUBPROCESS_FLAGS,
         )
         if result.returncode == 0 and result.stdout.strip():
             agent["mission_debrief"] = result.stdout.strip()
@@ -9211,10 +9089,9 @@ async def get_agent_roles(user: str = Depends(verify_token)):
 async def get_agent_templates(user: str = Depends(verify_token)):
     """Get saved agent prompt templates from Redis."""
     try:
-        if redis:
-            data = await redis.get("agent_templates")
-            if data:
-                return json.loads(data)
+        data = await redis.get("agent_templates")
+        if data:
+            return json.loads(data)
         return {"templates": []}
     except Exception:
         return {"templates": []}
@@ -9223,8 +9100,6 @@ async def get_agent_templates(user: str = Depends(verify_token)):
 async def save_agent_templates(body: dict, user: str = Depends(verify_token)):
     """Save agent prompt templates to Redis."""
     try:
-        if not redis:
-            return {"status": "error", "message": "Redis not available"}
         await redis.set("agent_templates", json.dumps(body))
         return {"status": "ok"}
     except Exception as e:
@@ -9992,7 +9867,6 @@ async def analyze_and_suggest(user: str = Depends(verify_token)):
                     capture_output=True,
                     text=True,
                     timeout=5
-                    **_SUBPROCESS_FLAGS,
                 )
                 if result.returncode == 0 and result.stdout.strip():
                     changed_files = len(result.stdout.strip().split('\n'))
@@ -12386,7 +12260,6 @@ async def look_toggle(request: Request, user: str = Depends(verify_token)):
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             start_new_session=True,
-            **_SUBPROCESS_FLAGS,
         )
         print(f"[Look] Daemon started (PID {_look_daemon_process.pid})")
         return {"success": True, "running": True, "pid": _look_daemon_process.pid}

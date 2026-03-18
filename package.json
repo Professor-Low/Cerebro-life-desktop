@@ -1,6 +1,6 @@
 {
   "name": "cerebro-desktop",
-  "version": "5.2.1",
+  "version": "5.3.0",
   "description": "Cerebro - Your AI, Everywhere",
   "author": "Professor (Michael Anthony Lopez) <lopez.michael19007@gmail.com>",
   "license": "SEE LICENSE IN LICENSE",
@@ -10,6 +10,9 @@
     "start:dev": "cross-env CEREBRO_DEV=1 electron .",
     "build:win": "electron-builder --win -c build/electron-builder-fullstack.yml",
     "build:linux": "electron-builder --linux -c build/electron-builder-fullstack.yml",
+    "build:fullstack:win": "electron-builder --win -c build/electron-builder-fullstack.yml",
+    "build:fullstack:linux": "electron-builder --linux -c build/electron-builder-fullstack.yml",
+    "build:docker": "docker compose -f docker/docker-compose.yml build",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {

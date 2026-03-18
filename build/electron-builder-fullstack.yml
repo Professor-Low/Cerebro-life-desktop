@@ -10,19 +10,9 @@ directories:
 files:
   - electron/**/*
   - frontend/**/*
+  - docker/**/*
   - assets/**/*
   - package.json
-
-# Bundle backend + redis binaries as extraResources (outside ASAR)
-extraResources:
-  - from: bin/
-    to: bin/
-    filter:
-      - "**/*"
-  - from: frontend/
-    to: frontend/
-    filter:
-      - "**/*"
 
 asar: true
 asarUnpack:
@@ -46,6 +36,7 @@ nsis:
   installerIcon: assets/icon.ico
   uninstallerIcon: assets/icon.ico
   installerHeaderIcon: assets/icon.ico
+  include: build/installer.nsh
   runAfterFinish: true
 
 linux:

@@ -3,7 +3,6 @@
 
 import os
 import sys
-import glob
 from PyInstaller.utils.hooks import collect_submodules
 
 block_cipher = None
@@ -17,45 +16,61 @@ BACKEND_DIR = os.path.join(PROJECT_DIR, 'backend-src')
 # Entry point (copied into backend dir before build)
 entry_point = os.path.join(BACKEND_DIR, 'cerebro-entry.py')
 
-# ----- Data files: auto-discover all .py modules from backend/ -----
-# Instead of a hardcoded list, glob all .py files so new modules are always included.
+# ----- Data files: include all .py modules from backend/ and cognitive_loop/ -----
+backend_py_files = [
+    'alpaca_client.py',
+    'audit_logger.py',
+    'autonomy_config.py',
+    'git_manager.py',
+    'health_monitor.py',
+    'improvement_engine.py',
+    'learning_injector.py',
+    'main.py',
+    'mcp_bridge.py',
+    'predictive_interrupt.py',
+    'proactive_agent.py',
+    'rollback_engine.py',
+    'safe_restart.py',
+    'self_modification.py',
+    'sim_engine_client.py',
+    'staging_manager.py',
+    'tools.py',
+]
+
+cognitive_loop_files = [
+    'cognitive_loop/__init__.py',
+    'cognitive_loop/action_recorder.py',
+    'cognitive_loop/adaptive_explorer.py',
+    'cognitive_loop/browser_manager.py',
+    'cognitive_loop/cognitive_tools.py',
+    'cognitive_loop/element_fingerprint.py',
+    'cognitive_loop/goal_decomposer.py',
+    'cognitive_loop/goal_pursuit.py',
+    'cognitive_loop/idle_thinker.py',
+    'cognitive_loop/loop_manager.py',
+    'cognitive_loop/narration_engine.py',
+    'cognitive_loop/ollama_client.py',
+    'cognitive_loop/ooda_engine.py',
+    'cognitive_loop/page_understanding.py',
+    'cognitive_loop/progress_tracker.py',
+    'cognitive_loop/recovery_recipes.py',
+    'cognitive_loop/reflexion_engine.py',
+    'cognitive_loop/safety_layer.py',
+    'cognitive_loop/skill_executor.py',
+    'cognitive_loop/skill_generator.py',
+    'cognitive_loop/skill_loader.py',
+    'cognitive_loop/skill_verifier.py',
+    'cognitive_loop/thought_journal.py',
+]
 
 datas = []
-
-# 1. All top-level .py files in backend-src/
-for py_file in glob.glob(os.path.join(BACKEND_DIR, '*.py')):
-    datas.append((py_file, '.'))
-
-# 2. cognitive_loop/ package
-cognitive_dir = os.path.join(BACKEND_DIR, 'cognitive_loop')
-if os.path.isdir(cognitive_dir):
-    for py_file in glob.glob(os.path.join(cognitive_dir, '*.py')):
-        datas.append((py_file, 'cognitive_loop'))
-
-# 3. routers/ package (Phase 1 modular refactor)
-routers_dir = os.path.join(BACKEND_DIR, 'routers')
-if os.path.isdir(routers_dir):
-    for py_file in glob.glob(os.path.join(routers_dir, '*.py')):
-        datas.append((py_file, 'routers'))
-
-# 4. core/ package (shared config, auth, state)
-core_dir = os.path.join(BACKEND_DIR, 'core')
-if os.path.isdir(core_dir):
-    for py_file in glob.glob(os.path.join(core_dir, '*.py')):
-        datas.append((py_file, 'core'))
-
-# 5. mcp_modules/ package (memory/AI modules)
-mcp_dir = os.path.join(BACKEND_DIR, 'mcp_modules')
-if os.path.isdir(mcp_dir):
-    for py_file in glob.glob(os.path.join(mcp_dir, '*.py')):
-        datas.append((py_file, 'mcp_modules'))
-
-print(f"[cerebro-spec] Collected {len(datas)} data files from backend-src/")
+for f in backend_py_files:
+    datas.append((os.path.join(BACKEND_DIR, f), '.'))
+for f in cognitive_loop_files:
+    datas.append((os.path.join(BACKEND_DIR, f), 'cognitive_loop'))
 
 # ----- Hidden imports -----
 hiddenimports = [
-    # System monitoring
-    'psutil',
     # Socket.IO / Engine.IO
     'socketio',
     'engineio',
@@ -101,8 +116,6 @@ hiddenimports = [
     'dotenv',
     # Task queue
     'arq',
-    # Bcrypt (used by auth)
-    'bcrypt',
     # Collect all submodules for key packages
     *collect_submodules('socketio'),
     *collect_submodules('engineio'),

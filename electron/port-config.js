@@ -5,9 +5,8 @@ const os = require('os');
 const CEREBRO_DIR = path.join(os.homedir(), '.cerebro');
 const PORT_CONFIG_FILE = path.join(CEREBRO_DIR, 'ports.json');
 
-// Native mode: backend runs directly on 59000 (no Docker port mapping)
 const DEFAULTS = {
-  backendPort: 59000,
+  backendPort: 61000,
   redisPort: 16379,
   ttsPort: 8880,
 };
