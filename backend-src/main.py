@@ -4187,9 +4187,14 @@ async def startup():
 
     global redis, proactive_manager, predictive_service, learning_injector
 
-    # Initialize Redis
-    redis = await aioredis.from_url(config.REDIS_URL, decode_responses=True)
-    print("Cerebro started - Redis connected")
+    # Initialize Redis (optional — gracefully degrade if unavailable)
+    try:
+        redis = await aioredis.from_url(config.REDIS_URL, decode_responses=True)
+        await redis.ping()
+        print("Cerebro started - Redis connected")
+    except Exception as e:
+        redis = None
+        print(f"[WARN] Redis unavailable ({e}) — running in degraded mode (no task queue, no pubsub)")
 
     # Reload persisted agents into memory
     reload_agents_from_persistence()
@@ -4197,8 +4202,9 @@ async def startup():
     # Resume any specops missions that were cycling when server restarted
     asyncio.create_task(_resume_specops_missions())
 
-    # Start background task listener
-    asyncio.create_task(redis_task_listener())
+    # Start background task listener (only if Redis is available)
+    if redis:
+        asyncio.create_task(redis_task_listener())
 
     # Initialize Autonomy Services (non-blocking)
     async def _init_autonomy():
@@ -4280,6 +4286,8 @@ async def shutdown():
 
 async def redis_task_listener():
     """Listen to task updates and broadcast via Socket.IO."""
+    if not redis:
+        return
     pubsub = redis.pubsub()
     await pubsub.psubscribe("task:*")
 
@@ -6001,17 +6009,21 @@ async def create_task(request: TaskRequest, user: str = Depends(verify_token)):
         "progress": 0
     }
 
-    await redis.set(f"task_data:{task_id}", json.dumps(task_data))
-
-    if request.background:
-        # Queue for background processing
-        await redis.lpush("task_queue", json.dumps(task_data))
+    if redis:
+        await redis.set(f"task_data:{task_id}", json.dumps(task_data))
+        if request.background:
+            await redis.lpush("task_queue", json.dumps(task_data))
+    else:
+        # In-memory fallback — task won't persist across restarts
+        pass
 
     return {"task_id": task_id, "status": "queued"}
 
 @app.get("/task/{task_id}")
 async def get_task(task_id: str, user: str = Depends(verify_token)):
     """Get task status."""
+    if not redis:
+        raise HTTPException(status_code=503, detail="Task queue unavailable (Redis not connected)")
     data = await redis.get(f"task_data:{task_id}")
     if not data:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -6023,15 +6035,42 @@ async def health():
     """Health check endpoint."""
     redis_ok = False
     try:
-        await redis.ping()
-        redis_ok = True
-    except:
+        if redis:
+            await redis.ping()
+            redis_ok = True
+    except Exception:
         pass
 
     return {
-        "status": "healthy" if redis_ok else "degraded",
+        "status": "healthy",
         "redis": redis_ok,
         "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+
+def _is_trading_available() -> bool:
+    """Check if IBKR trading is configured and available."""
+    ibkr_host = os.environ.get("IBKR_HOST", "")
+    ibkr_port = os.environ.get("IBKR_PORT", "")
+    standalone = os.environ.get("CEREBRO_STANDALONE", "")
+    # On standalone desktop installs, only enable trading if explicitly configured
+    if standalone == "1" and not ibkr_host:
+        return False
+    # If IBKR_HOST is explicitly set, trading is available
+    if ibkr_host or ibkr_port:
+        return True
+    # Default: available on the server (non-standalone)
+    return not standalone
+
+
+@app.get("/api/features")
+async def get_features():
+    """Return which features are available on this Cerebro instance.
+    Used by the frontend to show/hide UI elements."""
+    return {
+        "trading": _is_trading_available(),
+        "redis": redis is not None,
+        "platform": sys.platform,
     }
 
 
@@ -9172,9 +9211,10 @@ async def get_agent_roles(user: str = Depends(verify_token)):
 async def get_agent_templates(user: str = Depends(verify_token)):
     """Get saved agent prompt templates from Redis."""
     try:
-        data = await redis.get("agent_templates")
-        if data:
-            return json.loads(data)
+        if redis:
+            data = await redis.get("agent_templates")
+            if data:
+                return json.loads(data)
         return {"templates": []}
     except Exception:
         return {"templates": []}
@@ -9183,6 +9223,8 @@ async def get_agent_templates(user: str = Depends(verify_token)):
 async def save_agent_templates(body: dict, user: str = Depends(verify_token)):
     """Save agent prompt templates to Redis."""
     try:
+        if not redis:
+            return {"status": "error", "message": "Redis not available"}
         await redis.set("agent_templates", json.dumps(body))
         return {"status": "ok"}
     except Exception as e:
