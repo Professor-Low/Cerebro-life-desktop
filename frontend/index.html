@@ -31300,11 +31300,6 @@
                                             <div class="role-name">Analyst</div>
                                             <div class="role-desc">Data & strategic insights</div>
                                         </div>
-                                        <div class="role-option" data-role="trader" onclick="selectRole(this)">
-                                            <div class="role-icon">💰</div>
-                                            <div class="role-name">Trader</div>
-                                            <div class="role-desc">Execute trades & positions</div>
-                                        </div>
                                     </div>
                                 </div>
 
@@ -31498,10 +31493,6 @@
                                         <div class="specops-role-btn" data-role="analyst" onclick="selectSpecopsRole(this)">
                                             <span class="role-icon">&#x1F4CA;</span>
                                             <span>Analyst</span>
-                                        </div>
-                                        <div class="specops-role-btn" data-role="trader" onclick="selectSpecopsRole(this)">
-                                            <span class="role-icon">&#x1F4B0;</span>
-                                            <span>Trader</span>
                                         </div>
                                     </div>
                                     <div class="form-group" style="margin-top:12px;">
@@ -31769,11 +31760,6 @@
                                     <div class="role-name">Analyst</div>
                                     <div class="role-desc">Data & strategic insights</div>
                                 </div>
-                                <div class="role-option" data-role="trader" onclick="selectRole(this)">
-                                    <div class="role-icon">💰</div>
-                                    <div class="role-name">Trader</div>
-                                    <div class="role-desc">Execute trades & positions</div>
-                                </div>
                             </div>
                         </div>
 
@@ -31907,14 +31893,6 @@
                                         <button type="button" class="qty-btn qty-plus" onclick="adjustAgentQty('analyst', 1)">+</button>
                                     </div>
                                 </div>
-                                <div class="team-member-qty">
-                                    <span class="agent-label">Trader</span>
-                                    <div class="qty-controls">
-                                        <button type="button" class="qty-btn qty-minus" onclick="adjustAgentQty('trader', -1)">−</button>
-                                        <input type="number" id="qty-trader" class="qty-input" value="0" min="0" max="5" data-agent="trader" onchange="updateTeamPreview()">
-                                        <button type="button" class="qty-btn qty-plus" onclick="adjustAgentQty('trader', 1)">+</button>
-                                    </div>
-                                </div>
                             </div>
                         </div>
 
@@ -31977,11 +31955,6 @@
                                 <div class="role-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
                                 <div class="role-name">Analyst</div>
                                 <div class="role-desc">Data & strategic insights</div>
-                            </div>
-                            <div class="role-option" data-role="trader" onclick="selectMergeRole(this)">
-                                <div class="role-icon">💰</div>
-                                <div class="role-name">Trader</div>
-                                <div class="role-desc">Execute trades & positions</div>
                             </div>
                         </div>
                     </div>
@@ -32215,10 +32188,6 @@
                             <div class="role-option" data-role="analyst" onclick="selectAutomationAgent('analyst')">
                                 <span class="role-icon">📊</span>
                                 <span class="role-name">Analyst</span>
-                            </div>
-                            <div class="role-option" data-role="trader" onclick="selectAutomationAgent('trader')">
-                                <span class="role-icon">💰</span>
-                                <span class="role-name">Trader</span>
                             </div>
                         </div>
                     </div>
@@ -44466,7 +44435,7 @@
         let _ngLogo = null;
         let _ngPrevIds = new Set();
         const NG_COLORS = {
-            'Traders': '#39ff14', 'Workers': '#22d3ee',
+            'Workers': '#22d3ee',
             'Analysts': '#f59e0b', 'Coders': '#8b5cf6', 'Researchers': '#06b6d4'
         };
         // Dynamic color palette for new/unknown agent categories
@@ -44484,7 +44453,7 @@
             if (r === 'analyst' || r === 'analysis') return 'Analysts';
             if (r === 'coder' || r === 'coding') return 'Coders';
             if (r === 'researcher' || r === 'research') return 'Researchers';
-            if (r === 'worker') return 'Workers';
+            if (r === 'worker' || r === 'trader') return 'Workers';
             // Unknown type → capitalize and create dynamic category
             return r.charAt(0).toUpperCase() + r.slice(1);
         }
@@ -44506,7 +44475,6 @@
         // Spider-leg positions: fixed x,y for each hub, spread horizontally
         const NG_HUB_POS = {
             'Researchers': { x: -220, y: -70 },  // upper-left
-            'Traders':     { x:  220, y: -70 },  // upper-right
             'Analysts':    { x: -270, y:   0 },  // far left
             'Workers':     { x:  270, y:   0 },  // far right
             'Coders':      { x:    0, y:  90 },  // bottom-center
@@ -45415,7 +45383,7 @@
                         }
                         populateLeftDetailPanel(agentId);
                         document.getElementById('panel-running-task').textContent = agent.task.slice(0, 120) + (agent.task.length > 120 ? '...' : '');
-                        var typeEmoji = (agent.type || 'worker') === 'researcher' ? '\uD83D\uDD0D' : (agent.type || 'worker') === 'coder' ? '\uD83D\uDCBB' : (agent.type || 'worker') === 'analyst' ? '\uD83D\uDCCA' : (agent.type || 'worker') === 'trader' ? '\uD83D\uDCB0' : '\u26A1';
+                        var typeEmoji = (agent.type || 'worker') === 'researcher' ? '\uD83D\uDD0D' : (agent.type || 'worker') === 'coder' ? '\uD83D\uDCBB' : (agent.type || 'worker') === 'analyst' ? '\uD83D\uDCCA' : '\u26A1';
                         var parentSuffix = '';
                         if (agent.parent_agent_id && agents[agent.parent_agent_id]) {
                             parentSuffix = ' (\u21B3 from ' + (agents[agent.parent_agent_id].call_sign || agent.parent_agent_id) + ')';
@@ -45466,7 +45434,7 @@
                         statusBadge.style.display = '';
                         statusBadge.textContent = statusText;
                         statusBadge.className = 'agent-status-badge ' + statusCls;
-                        var typeEmoji = (agent.type || 'worker') === 'researcher' ? '\uD83D\uDD0D' : (agent.type || 'worker') === 'coder' ? '\uD83D\uDCBB' : (agent.type || 'worker') === 'analyst' ? '\uD83D\uDCCA' : (agent.type || 'worker') === 'trader' ? '\uD83D\uDCB0' : '\u26A1';
+                        var typeEmoji = (agent.type || 'worker') === 'researcher' ? '\uD83D\uDD0D' : (agent.type || 'worker') === 'coder' ? '\uD83D\uDCBB' : (agent.type || 'worker') === 'analyst' ? '\uD83D\uDCCA' : '\u26A1';
                         var parentSuffix = '';
                         if (agent.parent_agent_id && agents[agent.parent_agent_id]) {
                             parentSuffix = ' (\u21B3 from ' + (agents[agent.parent_agent_id].call_sign || agent.parent_agent_id) + ')';
@@ -48316,11 +48284,10 @@
                 'coder': 'Coder',
                 'worker': 'Worker',
                 'analyst': 'Analyst',
-                'trader': 'Trader'
             };
 
             let html = '';
-            ['researcher', 'coder', 'worker', 'analyst', 'trader'].forEach(agent => {
+            ['researcher', 'coder', 'worker', 'analyst'].forEach(agent => {
                 const qty = parseInt(document.getElementById('qty-' + agent)?.value || 0);
                 for (let i = 0; i < qty; i++) {
                     const suffix = qty > 1 ? ` #${i + 1}` : '';
@@ -48333,7 +48300,7 @@
 
         function getTeamComposition() {
             const team = [];
-            ['researcher', 'coder', 'worker', 'analyst', 'trader'].forEach(agent => {
+            ['researcher', 'coder', 'worker', 'analyst'].forEach(agent => {
                 const qty = parseInt(document.getElementById('qty-' + agent)?.value || 0);
                 for (let i = 0; i < qty; i++) {
                     team.push(agent);
