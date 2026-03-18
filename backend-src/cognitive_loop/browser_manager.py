@@ -14,6 +14,11 @@ import base64
 import os
 import subprocess
 import sys
+
+# Windows: prevent console window flash
+_SUBPROCESS_FLAGS = {}
+if sys.platform == "win32":
+    _SUBPROCESS_FLAGS["creationflags"] = subprocess.CREATE_NO_WINDOW
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Dict, Any, List
@@ -212,6 +217,7 @@ class BrowserManager:
             args,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            **_SUBPROCESS_FLAGS,
         )
         self._chrome_pid = self._chrome_process.pid
         print(f"[BrowserManager] Chrome started (PID {self._chrome_pid})")
@@ -712,6 +718,7 @@ class BrowserManager:
                     subprocess.run(
                         ["taskkill", "/F", "/PID", str(self._chrome_pid)],
                         capture_output=True, timeout=5
+                        **_SUBPROCESS_FLAGS,
                     )
                 except Exception:
                     pass

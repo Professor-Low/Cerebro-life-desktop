@@ -305,6 +305,11 @@ class SkillGenerator:
         import subprocess
         import sys
 
+        # Windows: prevent console window flash
+        _sp_flags = {}
+        if sys.platform == "win32":
+            _sp_flags["creationflags"] = subprocess.CREATE_NO_WINDOW
+
         # Get path to executor script
         executor_path = Path(__file__).parent / "skill_executor.py"
 
@@ -318,7 +323,8 @@ class SkillGenerator:
                 [sys.executable, str(executor_path), skill_json, params_json],
                 capture_output=True,
                 text=True,
-                timeout=120  # 2 minute timeout
+                timeout=120,  # 2 minute timeout
+                **_sp_flags,
             )
 
             if result.returncode == 0 and result.stdout.strip():
