@@ -39,7 +39,7 @@ jobs:
       - name: Checkout backend source (private)
         uses: actions/checkout@v4
         with:
-          repository: Professor-Low/Cerebro
+          repository: Professor-Low/MY-Cracked-Cerebro
           token: ${{ secrets.CEREBRO_PRIVATE_TOKEN }}
           path: cerebro-private
           sparse-checkout: |
@@ -183,7 +183,7 @@ jobs:
       - name: Checkout frontend (private)
         uses: actions/checkout@v4
         with:
-          repository: Professor-Low/Cerebro
+          repository: Professor-Low/MY-Cracked-Cerebro
           token: ${{ secrets.CEREBRO_PRIVATE_TOKEN }}
           path: cerebro-private
           sparse-checkout: frontend/

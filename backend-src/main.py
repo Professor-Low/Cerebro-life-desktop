@@ -483,15 +483,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Frontend path — check env var first, then Docker layout (/app/frontend/), then dev layout (../frontend/)
+# Frontend path resolution:
+#   1. CEREBRO_FRONTEND_DIR env var (set by Electron/NativeManager for desktop builds)
+#   2. Sibling of backend-src (/app/frontend/ in Docker, ../frontend/ in dev)
+#   3. Inside backend dir (fallback)
 _env_frontend = Path(os.environ["CEREBRO_FRONTEND_DIR"]) if os.environ.get("CEREBRO_FRONTEND_DIR") else None
 _app_frontend = Path(__file__).parent / "frontend"
 _dev_frontend = Path(__file__).parent.parent / "frontend"
-FRONTEND_DIR = (
-    _env_frontend if _env_frontend and _env_frontend.exists()
-    else _app_frontend if _app_frontend.exists()
-    else _dev_frontend
-)
+
+if _env_frontend and _env_frontend.exists():
+    FRONTEND_DIR = _env_frontend
+elif _app_frontend.exists():
+    FRONTEND_DIR = _app_frontend
+else:
+    FRONTEND_DIR = _dev_frontend
 
 # Serve static files (socket.io, etc.) from frontend/static/
 STATIC_DIR = FRONTEND_DIR / "static"
