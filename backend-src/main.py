@@ -1431,7 +1431,7 @@ curl -s -X POST http://localhost:59000/internal/chat-spawn-agent \\
   -H "Content-Type: application/json" \\
   -d '{{"task": "Your task here", "agent_type": "researcher", "model": "sonnet"}}'
 ```
-Agent types: worker, researcher, coder, analyst, browser, specops_worker, specops_researcher, specops_trader, specops_analyst
+Agent types: worker, researcher, coder, analyst, browser, specops_worker, specops_researcher, specops_analyst
 
 **SpecOps Agent (timed cycling mission):**
 ```bash
@@ -1617,7 +1617,7 @@ _CAPABILITY_PACKS = {
                     "keywords": ["browser","chrome","tab","navigate","screenshot","click","scroll","page","website","web","browse","open site","close tab"],
                     "content": _CEREBRO_PACK_BROWSER, "builtin": True, "token_estimate": 400},
     "agents":      {"id": "agents",      "name": "Agent Management", "icon": "users",  "description": "Spawn agents, directives, SpecOps, pause/resume/stop",
-                    "keywords": ["agent","spawn","deploy","specops","mission","worker","researcher","coder","analyst","trader","directive","kill agent"],
+                    "keywords": ["agent","spawn","deploy","specops","mission","worker","researcher","coder","analyst","directive","kill agent"],
                     "content": _CEREBRO_PACK_AGENTS, "builtin": True, "token_estimate": 400},
     "specops":     {"id": "specops",    "name": "SpecOps Operations", "icon": "target", "description": "SpecOps mission lifecycle, cycling, directives, schedule windows",
                     "keywords": ["specops","mission","cycle","cycling","standby","directive","force cycle","schedule window","mission state","mission journal","pause agent","resume agent","agent lifecycle"],
