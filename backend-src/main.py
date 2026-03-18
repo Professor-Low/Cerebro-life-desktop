@@ -28,6 +28,11 @@ import re
 import time
 import uuid
 import subprocess
+
+# Windows: prevent console window flash when spawning CLI tools
+_SUBPROCESS_FLAGS = {}
+if sys.platform == "win32":
+    _SUBPROCESS_FLAGS["creationflags"] = subprocess.CREATE_NO_WINDOW
 import sys
 from datetime import datetime, timezone
 from typing import Optional, AsyncGenerator, Dict
@@ -328,6 +333,7 @@ Return ONLY valid JSON in this exact format:
                 text=True,
                 timeout=60,  # 60 second timeout
                 cwd=str(self.memory_path)
+                **_SUBPROCESS_FLAGS,
             )
 
             output = result.stdout.strip()
@@ -1637,10 +1643,14 @@ def _load_all_packs():
     packs = dict(_CAPABILITY_PACKS)
     try:
         _CUSTOM_PACKS_DIR.mkdir(parents=True, exist_ok=True)
+        # Block pack IDs that belong to private/internal builds
+        _BLOCKED_PACK_IDS = {"trading", "trader", "self-improve", "self-modification", "ibkr", "ib-gateway"}
         for f in _CUSTOM_PACKS_DIR.glob("*.json"):
             try:
                 data = json.loads(f.read_text())
                 data["id"] = data.get("id", f.stem)
+                if data["id"].lower() in _BLOCKED_PACK_IDS:
+                    continue  # Skip private/internal packs
                 data["builtin"] = False
                 packs[data["id"]] = data
             except Exception:
@@ -5120,6 +5130,7 @@ async def process_with_claude_code(content: str, session_id: str = "default", mo
             stderr=subprocess.PIPE,
             cwd=chat_cwd,
             env=agent_env,
+            **_SUBPROCESS_FLAGS,
         )
 
         # Read stdout in a background thread, push lines to an async queue
@@ -5279,13 +5290,13 @@ async def _process_chat_offloaded(content: str, session_id: str, model: str, dev
             if _ssh_key:
                 _mkdir_args2.extend(["-i", _ssh_key])
             _mkdir_args2.extend([_ssh_target, "mkdir -p ~/.claude"])
-            await asyncio.to_thread(lambda: subprocess.run(_mkdir_args2, capture_output=True, timeout=15))
+            await asyncio.to_thread(lambda: subprocess.run(_mkdir_args2, capture_output=True, timeout=15, **_SUBPROCESS_FLAGS))
             _scp_args2 = ["scp", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new",
                           "-o", "ConnectTimeout=10", "-o", "IdentitiesOnly=yes", "-P", _ssh_port]
             if _ssh_key:
                 _scp_args2.extend(["-i", _ssh_key])
             _scp_args2.extend([str(_creds_path), f"{_ssh_target}:~/.claude/.credentials.json"])
-            _scp_res2 = await asyncio.to_thread(lambda: subprocess.run(_scp_args2, capture_output=True, timeout=15))
+            _scp_res2 = await asyncio.to_thread(lambda: subprocess.run(_scp_args2, capture_output=True, timeout=15, **_SUBPROCESS_FLAGS))
             if _scp_res2.returncode == 0:
                 print(f"[Chat Offload] Synced Claude credentials to {_device_name}")
             else:
@@ -5321,6 +5332,7 @@ async def _process_chat_offloaded(content: str, session_id: str, model: str, dev
             stderr=subprocess.PIPE,
             cwd=config.AI_MEMORY_PATH,
             env=agent_env,
+            **_SUBPROCESS_FLAGS,
         )
 
         # Pipe user message via stdin
@@ -5859,6 +5871,7 @@ async def warmup_chat(user: str = Depends(verify_token)):
              "--output-format", "text", "--dangerously-skip-permissions", "--max-turns", "1"],
             capture_output=True, text=True, timeout=30, env=agent_env,
             cwd=config.AI_MEMORY_PATH,
+            **_SUBPROCESS_FLAGS,
         )
         return {"success": True, "model": effective_model, "output": result.stdout.strip()[:100]}
     except subprocess.TimeoutExpired:
@@ -7915,6 +7928,7 @@ Keep it concise and actionable. Use military-style brevity."""
             ["claude", "-p", "--model", "haiku", prompt],
             capture_output=True, text=True, timeout=30,
             env={**os.environ, "CLAUDE_NO_TELEMETRY": "1"}
+            **_SUBPROCESS_FLAGS,
         )
         if result.returncode == 0 and result.stdout.strip():
             agent["mission_debrief"] = result.stdout.strip()
@@ -8055,6 +8069,7 @@ Keep it concise and actionable. Use military-style brevity."""
             ["claude", "-p", "--model", "haiku", prompt],
             capture_output=True, text=True, timeout=30,
             env={**os.environ, "CLAUDE_NO_TELEMETRY": "1"}
+            **_SUBPROCESS_FLAGS,
         )
         if result.returncode == 0 and result.stdout.strip():
             agent["mission_debrief"] = result.stdout.strip()
@@ -9932,6 +9947,7 @@ async def analyze_and_suggest(user: str = Depends(verify_token)):
                     capture_output=True,
                     text=True,
                     timeout=5
+                    **_SUBPROCESS_FLAGS,
                 )
                 if result.returncode == 0 and result.stdout.strip():
                     changed_files = len(result.stdout.strip().split('\n'))
@@ -12325,6 +12341,7 @@ async def look_toggle(request: Request, user: str = Depends(verify_token)):
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             start_new_session=True,
+            **_SUBPROCESS_FLAGS,
         )
         print(f"[Look] Daemon started (PID {_look_daemon_process.pid})")
         return {"success": True, "running": True, "pid": _look_daemon_process.pid}

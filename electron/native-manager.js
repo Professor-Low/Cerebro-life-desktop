@@ -268,27 +268,68 @@ class NativeManager extends EventEmitter {
 
     const logStream = fs.createWriteStream(path.join(LOG_DIR, 'redis.log'), { flags: 'a' });
 
-    this._redisProcess = spawn(redisPath, args, {
+    // Capture early stderr for diagnostics before piping to log
+    let earlyStderr = '';
+
+    const spawnOpts = {
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
       detached: false,
-    });
+    };
 
-    this._redisProcess.stdout.pipe(logStream);
-    this._redisProcess.stderr.pipe(logStream);
+    // On Windows, try shell mode as fallback if first attempt fails
+    const attempts = process.platform === 'win32' ? 2 : 1;
 
-    this._redisProcess.on('error', (err) => {
-      console.error('[Native] Redis failed to start:', err.message);
-    });
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      if (attempt === 2) {
+        console.log('[Native] Redis: retrying with shell: true');
+        spawnOpts.shell = true;
+      }
 
-    this._redisProcess.on('exit', (code, signal) => {
-      console.log(`[Native] Redis exited (code: ${code}, signal: ${signal})`);
-      this._redisProcess = null;
-    });
+      this._redisProcess = spawn(redisPath, args, spawnOpts);
 
-    // Wait for Redis to be ready
-    await this._waitForPort(this.redisPort, 15000);
-    console.log(`[Native] Redis running on port ${this.redisPort}`);
+      // Capture stderr for early diagnostics
+      earlyStderr = '';
+      this._redisProcess.stderr.on('data', (chunk) => {
+        earlyStderr += chunk.toString();
+      });
+
+      this._redisProcess.stdout.pipe(logStream);
+      // Pipe stderr to log after a brief capture window
+      setTimeout(() => {
+        if (this._redisProcess && this._redisProcess.stderr) {
+          this._redisProcess.stderr.pipe(logStream);
+        }
+      }, 2000);
+
+      this._redisProcess.on('error', (err) => {
+        console.error('[Native] Redis failed to start:', err.message);
+      });
+
+      this._redisProcess.on('exit', (code, signal) => {
+        console.log(`[Native] Redis exited (code: ${code}, signal: ${signal})`);
+        if (earlyStderr) console.error('[Native] Redis stderr:', earlyStderr.trim());
+        this._redisProcess = null;
+      });
+
+      try {
+        // Increased timeout: 30s (was 15s) — Windows Electron can be slow to spawn
+        await this._waitForPort(this.redisPort, 30000);
+        console.log(`[Native] Redis running on port ${this.redisPort}`);
+        return; // Success — exit the retry loop
+      } catch (err) {
+        console.error(`[Native] Redis attempt ${attempt}/${attempts} failed: ${err.message}`);
+        if (earlyStderr) console.error('[Native] Redis stderr:', earlyStderr.trim());
+        // Kill the failed process before retry
+        if (this._redisProcess) {
+          try { this._redisProcess.kill(); } catch (_) {}
+          this._redisProcess = null;
+        }
+        if (attempt === attempts) throw err; // Final attempt failed
+        // Brief pause before retry
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
   }
 
   /**
@@ -308,6 +349,21 @@ class NativeManager extends EventEmitter {
     if (onProgress) onProgress({ stage: 'backend', message: 'Starting Cerebro backend...' });
 
     const frontendPath = this._getFrontendPath();
+
+    // Ensure the backend can find the frontend — create symlink/junction if needed
+    // The PyInstaller binary looks for frontend/ relative to its own directory
+    const backendBinDir = path.dirname(backendPath);
+    const expectedFrontend = path.join(backendBinDir, 'frontend');
+    if (frontendPath && fs.existsSync(frontendPath) && !fs.existsSync(expectedFrontend)) {
+      try {
+        // On Windows use 'junction', on Unix use 'dir' symlink
+        const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+        fs.symlinkSync(frontendPath, expectedFrontend, linkType);
+        console.log(`[Native] Created ${linkType} link: ${expectedFrontend} -> ${frontendPath}`);
+      } catch (err) {
+        console.warn(`[Native] Could not create frontend link: ${err.message}`);
+      }
+    }
 
     const env = {
       ...process.env,
