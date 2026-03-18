@@ -768,12 +768,48 @@ ipcMain.handle('get-docker-logs', async () => nativeManager.getLogs(200));
 // Updates — native mode only has Electron updates
 ipcMain.handle('check-for-updates', async () => {
   try {
+    // Try electron-updater first (works when proper release assets exist)
     await autoUpdater.checkForUpdates();
-    return { updateAvailable: electronUpdateReady };
+    if (electronUpdateReady) {
+      return { updateAvailable: true, source: 'electron-updater' };
+    }
+
+    // Fallback: check GitHub releases API for newer tags
+    const currentVersion = app.getVersion();
+    const https = require('https');
+    const latestVersion = await new Promise((resolve, reject) => {
+      const req = https.get('https://api.github.com/repos/Professor-Low/cerebro-life-desktop/releases/latest', {
+        headers: { 'User-Agent': 'cerebro-desktop' }
+      }, (res) => {
+        let data = '';
+        res.on('data', (chunk) => data += chunk);
+        res.on('end', () => {
+          try {
+            const release = JSON.parse(data);
+            resolve(release.tag_name ? release.tag_name.replace(/^v/, '') : null);
+          } catch { resolve(null); }
+        });
+      });
+      req.on('error', () => resolve(null));
+      req.setTimeout(5000, () => { req.destroy(); resolve(null); });
+    });
+
+    if (latestVersion && latestVersion !== currentVersion) {
+      // Simple semver comparison: split and compare numerically
+      const cur = currentVersion.split('.').map(Number);
+      const lat = latestVersion.split('.').map(Number);
+      const isNewer = lat[0] > cur[0] || (lat[0] === cur[0] && lat[1] > cur[1]) || (lat[0] === cur[0] && lat[1] === cur[1] && lat[2] > cur[2]);
+      if (isNewer) {
+        return { updateAvailable: true, latestVersion, currentVersion, source: 'github-api' };
+      }
+    }
+
+    return { updateAvailable: false, currentVersion, latestVersion: latestVersion || currentVersion };
   } catch (err) {
     return { updateAvailable: false, error: err.message };
   }
 });
+
 
 ipcMain.handle('apply-update', async () => {
   try {
