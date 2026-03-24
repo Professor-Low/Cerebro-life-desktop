@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('cerebroDesktop', {
   // App info
   getVersion: () => ipcRenderer.invoke('get-app-version'),
   getEdition: () => ipcRenderer.invoke('get-edition'),
+  getBuildType: () => ipcRenderer.invoke('get-build-type'),
 
   // License
   getLicenseStatus: () => ipcRenderer.invoke('get-license-status'),

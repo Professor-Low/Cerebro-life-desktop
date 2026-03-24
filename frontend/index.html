@@ -63841,5 +63841,81 @@ Please proceed with implementing this recommendation. You have full permissions.
         };
     })();
     </script>
+
+    <!-- ── Public Build Feature Gate ────────────────────────────────────── -->
+    <script>
+    (function() {
+        'use strict';
+
+        // Default to private until async IPC resolves
+        window.__CEREBRO_BUILD_TYPE__ = 'private';
+
+        // Determine if a capability pack is private-only (trading/finance)
+        function _isPrivatePack(pack) {
+            var tradingIds = ['trading', 'elimination', 'ibkr', 'options', 'finance', 'broker'];
+            var tradingKws = ['trading', 'ibkr', 'options_trading', 'trade', 'broker', 'position'];
+            if (tradingIds.some(function(t) { return pack.id && pack.id.indexOf(t) !== -1; })) return true;
+            if (pack.keywords && pack.keywords.some(function(k) { return tradingKws.indexOf(k) !== -1; })) return true;
+            return false;
+        }
+
+        // Intercept capability-packs API to filter private packs in public builds
+        function _patchFetchForPacks() {
+            var _orig = window.fetch;
+            window.fetch = function() {
+                var args = arguments;
+                var url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url);
+                if (url && url.indexOf('/api/capability-packs') !== -1) {
+                    return _orig.apply(window, args).then(function(resp) {
+                        return resp.json().then(function(data) {
+                            data.packs = (data.packs || []).filter(function(p) { return !_isPrivatePack(p); });
+                            return new Response(JSON.stringify(data), {
+                                status: resp.status,
+                                statusText: resp.statusText,
+                                headers: { 'Content-Type': 'application/json' }
+                            });
+                        });
+                    });
+                }
+                return _orig.apply(window, args);
+            };
+        }
+
+        function _applyDomGates() {
+            // Hide trader role options in all agent creation modals
+            document.querySelectorAll('[data-role="trader"]').forEach(function(el) {
+                el.style.display = 'none';
+            });
+
+            // Hide trader quantity row in team builder (identified by data-agent="trader" input)
+            document.querySelectorAll('input[data-agent="trader"]').forEach(function(el) {
+                var row = el.closest('.team-member-qty');
+                if (row) row.style.display = 'none';
+            });
+        }
+
+        async function applyFeatureGate() {
+            if (!window.cerebroDesktop) return; // Not in Electron — skip gate
+
+            var buildType = await window.cerebroDesktop.getBuildType();
+            window.__CEREBRO_BUILD_TYPE__ = buildType;
+
+            if (buildType !== 'public') return; // Private build — show everything
+
+            // Patch fetch to filter trading capability packs from API responses
+            _patchFetchForPacks();
+
+            // Apply DOM gates immediately and after DOMContentLoaded
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', _applyDomGates);
+            } else {
+                _applyDomGates();
+            }
+        }
+
+        applyFeatureGate();
+    })();
+    </script>
+    <!-- ─────────────────────────────────────────────────────────────────── -->
 </body>
 </html>

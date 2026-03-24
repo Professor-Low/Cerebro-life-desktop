@@ -1,0 +1,8 @@
+extends: electron-builder-fullstack.yml
+
+extraMetadata:
+  buildType: "public"
+  productDescription: "Cerebro Desktop — Public Edition"
+
+productName: Cerebro
+appId: com.cerebro.desktop.public

@@ -35,6 +35,10 @@ if (process.platform === 'win32') {
 }
 
 const isDev = process.env.CEREBRO_DEV === '1';
+
+// Build type: "public" for public release, "private" for personal/internal use
+const BUILD_TYPE = require('./package.json').buildType || 'private';
+
 const dockerManager = new DockerManager();
 
 let licenseManager;
@@ -1167,6 +1171,7 @@ app.on('before-quit', async (e) => {
 // App info
 ipcMain.handle('get-app-version', () => app.getVersion());
 ipcMain.handle('get-edition', () => 'docker');
+ipcMain.handle('get-build-type', () => BUILD_TYPE);
 
 // Port configuration
 ipcMain.handle('get-port-config', () => loadPortConfig());
