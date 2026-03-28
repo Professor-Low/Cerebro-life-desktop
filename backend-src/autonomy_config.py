@@ -19,7 +19,7 @@ class AutonomyConfig:
     ENABLE_PREDICTIONS = os.environ.get("CEREBRO_PREDICTIONS", "true").lower() == "true"
     ENABLE_PROACTIVE = os.environ.get("CEREBRO_PROACTIVE", "true").lower() == "true"
     ENABLE_LEARNING_INJECTION = os.environ.get("CEREBRO_LEARNING", "true").lower() == "true"
-    ENABLE_SELF_MODIFICATION = os.environ.get("CEREBRO_SELF_MOD", "true").lower() == "true"
+    ENABLE_SELF_MODIFICATION = os.environ.get("CEREBRO_SELF_MOD", "false").lower() == "true"
     ENABLE_SIMULATION = os.environ.get("CEREBRO_SIMULATION", "true").lower() == "true"
 
     # SimEngine settings

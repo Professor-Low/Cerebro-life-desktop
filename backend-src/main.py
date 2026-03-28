@@ -1567,8 +1567,15 @@ _CAPABILITY_PACKS = {
 
 _CUSTOM_PACKS_DIR = Path(config.AI_MEMORY_PATH) / "cerebro" / "capability_packs"
 
+# Pack IDs that are developer-only and must not be loaded in the desktop build
+_BLOCKED_PACK_IDS = {
+    "trading", "trader", "self-improve", "self-improvement", "self-modification",
+    "ibkr", "ib-gateway", "quick-trade-ops", "project-phoenix",
+    "project-genesis-review", "system-health",
+}
+
 def _load_all_packs():
-    """Load built-in + custom capability packs."""
+    """Load built-in + custom capability packs (filtering blocked packs)."""
     packs = dict(_CAPABILITY_PACKS)
     try:
         _CUSTOM_PACKS_DIR.mkdir(parents=True, exist_ok=True)
@@ -1576,6 +1583,8 @@ def _load_all_packs():
             try:
                 data = json.loads(f.read_text())
                 data["id"] = data.get("id", f.stem)
+                if data["id"] in _BLOCKED_PACK_IDS:
+                    continue
                 data["builtin"] = False
                 packs[data["id"]] = data
             except Exception:
@@ -10958,84 +10967,6 @@ async def reject_proactive_action(action_id: str, reason: str = "User rejected",
     if not result:
         raise HTTPException(status_code=404, detail="Action not found or not pending")
     return {"status": "rejected", "action": result.to_dict() if hasattr(result, 'to_dict') else result}
-
-
-# ============================================================================
-# Self-Modification Proposals Endpoints
-# ============================================================================
-
-@app.get("/api/proposals")
-async def list_proposals(status: Optional[str] = None, user: str = Depends(verify_token)):
-    """List modification proposals."""
-    from self_modification import get_self_mod_manager
-    manager = get_self_mod_manager(Path(config.AI_MEMORY_PATH))
-    if not manager:
-        return {"proposals": []}
-    proposals = await manager.list_proposals(status)
-    return {"proposals": proposals}
-
-
-@app.get("/api/proposals/{proposal_id}")
-async def get_proposal_detail(proposal_id: str, user: str = Depends(verify_token)):
-    """Get detailed proposal information including diff."""
-    from self_modification import get_self_mod_manager
-    manager = get_self_mod_manager(Path(config.AI_MEMORY_PATH))
-    if not manager:
-        raise HTTPException(status_code=503, detail="Self-modification manager not available")
-    proposal = await manager.get_proposal(proposal_id)
-    if not proposal:
-        raise HTTPException(status_code=404, detail="Proposal not found")
-    return proposal
-
-
-@app.post("/api/proposals/{proposal_id}/approve")
-async def approve_proposal_endpoint(proposal_id: str, user: str = Depends(verify_token)):
-    """Approve and apply a modification proposal."""
-    from self_modification import get_self_mod_manager
-    manager = get_self_mod_manager(Path(config.AI_MEMORY_PATH))
-    if not manager:
-        raise HTTPException(status_code=503, detail="Self-modification manager not available")
-    result = await manager.approve_proposal(proposal_id, user)
-    if not result.get("success"):
-        raise HTTPException(status_code=400, detail=result.get("error", "Failed to approve"))
-    return result
-
-
-@app.post("/api/proposals/{proposal_id}/reject")
-async def reject_proposal_endpoint(proposal_id: str, reason: str = "User rejected", user: str = Depends(verify_token)):
-    """Reject a modification proposal."""
-    from self_modification import get_self_mod_manager
-    manager = get_self_mod_manager(Path(config.AI_MEMORY_PATH))
-    if not manager:
-        raise HTTPException(status_code=503, detail="Self-modification manager not available")
-    result = await manager.reject_proposal(proposal_id, reason, user)
-    if not result.get("success"):
-        raise HTTPException(status_code=400, detail=result.get("error", "Failed to reject"))
-    return result
-
-
-@app.post("/api/proposals/{proposal_id}/rollback")
-async def rollback_proposal_endpoint(proposal_id: str, user: str = Depends(verify_token)):
-    """Rollback a previously applied proposal."""
-    from self_modification import get_self_mod_manager
-    manager = get_self_mod_manager(Path(config.AI_MEMORY_PATH))
-    if not manager:
-        raise HTTPException(status_code=503, detail="Self-modification manager not available")
-    result = await manager.rollback(proposal_id, user)
-    if not result.get("success"):
-        raise HTTPException(status_code=400, detail=result.get("error", "Failed to rollback"))
-    return result
-
-
-@app.get("/api/proposals/history")
-async def get_proposals_history(limit: int = 20, user: str = Depends(verify_token)):
-    """Get modification history."""
-    from self_modification import get_self_mod_manager
-    manager = get_self_mod_manager(Path(config.AI_MEMORY_PATH))
-    if not manager:
-        return {"history": []}
-    history = await manager.get_history(limit)
-    return {"history": history}
 
 # ============================================================================
 # Learning Injection Stats Endpoint
