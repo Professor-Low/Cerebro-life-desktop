@@ -42761,6 +42761,7 @@
         // Chat Session Archives (synced with backend)
         // ============================================================================
         var _sessionArchives = new Set();
+        var _archiveViewActive = false;
 
         async function loadSessionArchives() {
             try {
@@ -62809,7 +62810,6 @@ Please proceed with implementing this recommendation. You have full permissions.
         // ============================================================================
         // CHAT ARCHIVE VIEW
         // ============================================================================
-        let _archiveViewActive = false;
 
         function toggleArchiveView() {
             _archiveViewActive = !_archiveViewActive;
