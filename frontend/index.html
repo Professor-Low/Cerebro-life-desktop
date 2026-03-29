@@ -2164,6 +2164,741 @@
             margin-top: 2px;
         }
 
+
+        /* ==================== USAGE WIDGET ==================== */
+        .usage-widget {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            overflow: hidden;
+            margin-bottom: 4px;
+        }
+        .usage-widget-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.15s;
+        }
+        .usage-widget-header:hover {
+            background: rgba(139, 92, 246, 0.05);
+        }
+        .usage-widget-header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .usage-widget-icon {
+            font-size: 1.1rem;
+        }
+        .usage-widget-title {
+            font-size: 0.78rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+        }
+        .usage-widget-period-selector {
+            display: flex;
+            gap: 4px;
+        }
+        .usage-period-btn {
+            padding: 3px 10px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 0.68rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .usage-period-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        .usage-period-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+        .usage-widget-body {
+            padding: 14px 16px;
+            display: none;
+        }
+        .usage-widget.expanded .usage-widget-body {
+            display: block;
+        }
+        .usage-widget-chevron {
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            transition: transform 0.2s;
+            margin-left: 8px;
+        }
+        .usage-widget.expanded .usage-widget-chevron {
+            transform: rotate(180deg);
+        }
+        .usage-widget.expanded .usage-inline-preview {
+            display: none;
+        }
+        .usage-inline-preview {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-left: auto;
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+        .usage-inline-stat {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .usage-inline-stat strong {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+        .usage-summary-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+        @media (max-width: 600px) {
+            .usage-summary-row {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        .usage-stat-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 12px;
+            text-align: center;
+        }
+        .usage-stat-value {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            font-variant-numeric: tabular-nums;
+        }
+        .usage-stat-value.cost {
+            color: var(--accent-light);
+        }
+        .usage-stat-label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 2px;
+        }
+        .usage-models-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .usage-model-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .usage-model-name {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .usage-model-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .usage-model-dot.opus { background: #f59e0b; box-shadow: 0 0 6px rgba(245,158,11,0.4); }
+        .usage-model-dot.sonnet { background: #8b5cf6; box-shadow: 0 0 6px rgba(139,92,246,0.4); }
+        .usage-model-dot.haiku { background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,0.4); }
+        .usage-model-dot.unknown { background: #6b7280; }
+        .usage-model-stats {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+        .usage-model-cost {
+            color: var(--accent-light);
+            font-weight: 600;
+        }
+        .usage-daily-chart {
+            display: flex;
+            align-items: flex-end;
+            gap: 3px;
+            height: 40px;
+            margin-top: 8px;
+            padding: 0 2px;
+        }
+        .usage-daily-bar {
+            flex: 1;
+            min-width: 0;
+            background: var(--accent);
+            border-radius: 3px 3px 0 0;
+            opacity: 0.6;
+            transition: opacity 0.15s, height 0.3s;
+            position: relative;
+            cursor: default;
+        }
+        .usage-daily-bar:hover { opacity: 1; }
+        .usage-daily-bar-tooltip {
+            display: none;
+            position: absolute;
+            bottom: calc(100% + 6px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 0.65rem;
+            white-space: nowrap;
+            z-index: 10;
+            color: var(--text-primary);
+        }
+        .usage-daily-bar:hover .usage-daily-bar-tooltip { display: block; }
+        .usage-chart-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            padding: 2px 4px 0;
+        }
+        .usage-source-row {
+            display: flex;
+            gap: 14px;
+            margin-top: 10px;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+        .usage-source-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .usage-source-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .usage-source-dot.chat { background: var(--accent); }
+        .usage-source-dot.agent { background: #22c55e; }
+        .usage-source-dot.autonomy { background: #f59e0b; }
+        .usage-empty {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.78rem;
+            padding: 16px;
+        }
+
+        /* ==================== AGENT HEALTH WIDGET ==================== */
+        .agent-health-widget {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            overflow: hidden;
+            margin-bottom: 4px;
+        }
+        .agent-health-widget-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.15s;
+        }
+        .agent-health-widget-header:hover {
+            background: rgba(139, 92, 246, 0.05);
+        }
+        .agent-health-widget-body {
+            padding: 14px 16px;
+            display: none;
+        }
+        .agent-health-widget.expanded .agent-health-widget-body {
+            display: block;
+        }
+        .agent-health-widget.expanded .usage-widget-chevron {
+            transform: rotate(180deg);
+        }
+        .agent-health-widget.expanded .agent-health-inline-preview {
+            display: none;
+        }
+        .agent-health-inline-preview {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-left: auto;
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+        .agent-health-inline-stat {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .agent-health-inline-stat strong {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+        .agent-health-summary-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+        @media (max-width: 600px) {
+            .agent-health-summary-row {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        .agent-health-table {
+            width: 100%;
+            font-size: 0.72rem;
+            border-collapse: collapse;
+        }
+        .agent-health-table th {
+            text-align: left;
+            padding: 6px 8px;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+        }
+        .agent-health-table td {
+            padding: 7px 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            color: var(--text-secondary);
+            vertical-align: middle;
+        }
+        .agent-health-table tr:last-child td { border-bottom: none; }
+        .agent-health-table tr:hover td { background: rgba(139, 92, 246, 0.04); }
+        .agent-health-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-weight: 600;
+            font-size: 0.68rem;
+        }
+        .agent-health-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .agent-health-dot.healthy { background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,0.4); }
+        .agent-health-dot.warning { background: #f59e0b; box-shadow: 0 0 6px rgba(245,158,11,0.4); }
+        .agent-health-dot.error { background: #ef4444; box-shadow: 0 0 6px rgba(239,68,68,0.4); }
+        .agent-health-dot.idle { background: #6b7280; }
+        .agent-health-callsign {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .agent-health-cycles { font-variant-numeric: tabular-nums; }
+        .agent-health-alert-banner {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 0.72rem;
+            margin-bottom: 10px;
+            color: #fca5a5;
+        }
+        .agent-health-alert-banner.warn {
+            background: rgba(245, 158, 11, 0.1);
+            border-color: rgba(245, 158, 11, 0.2);
+            color: #fcd34d;
+        }
+
+        /* ==================== PACK BUILDER ==================== */
+        .pb-fab {
+            position: relative;
+            width: auto;
+            height: auto;
+            border-radius: 10px;
+            background: none;
+            border: none;
+            color: var(--accent);
+            font-size: 1.1rem;
+            cursor: pointer;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 6px;
+            transition: all 0.2s ease;
+        }
+        .pb-fab:hover {
+            background: rgba(139, 92, 246, 0.15);
+            transform: none;
+            box-shadow: none;
+        }
+        .pb-fab.has-message {
+            animation: pb-fab-bounce 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .pb-fab.hidden { display: none; }
+        .pb-fab-badge {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #ef4444;
+            color: #fff;
+            font-size: 0.5rem;
+            font-weight: 700;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid var(--bg-primary);
+        }
+        .pb-fab-badge.visible { display: flex; }
+        @keyframes pb-fab-bounce {
+            0% { transform: scale(1); }
+            30% { transform: scale(1.2); }
+            50% { transform: scale(0.95); }
+            70% { transform: scale(1.08); }
+            100% { transform: scale(1); }
+        }
+        @media (max-width: 768px) {
+            .pb-fab { font-size: 1rem; padding: 4px; }
+            .pb-panel {
+                top: 48px; right: 0;
+                width: 100vw; height: calc(100vh - 48px);
+                max-width: 100vw; max-height: calc(100vh - 48px);
+                border-radius: 0;
+            }
+        }
+        .pb-panel {
+            position: fixed;
+            top: 52px;
+            right: 10px;
+            width: 420px;
+            height: 560px;
+            max-width: calc(100vw - 20px);
+            max-height: calc(100vh - 62px);
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
+            border-radius: 16px;
+            box-shadow: 0 24px 64px rgba(0,0,0,0.4), 0 0 0 1px rgba(139,92,246,0.08);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            z-index: 10002;
+            opacity: 0;
+            transform: scale(0.3) translateY(-20px);
+            transform-origin: top right;
+            pointer-events: none;
+            transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .pb-panel.open {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+            pointer-events: auto;
+        }
+        .pb-panel-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-elevated);
+            cursor: grab;
+            user-select: none;
+        }
+        .pb-panel-header:active { cursor: grabbing; }
+        .pb-panel-title {
+            flex: 1;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .pb-panel-title .pb-status {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: #22c55e;
+            display: inline-block;
+        }
+        .pb-header-actions { display: flex; gap: 4px; }
+        .pb-header-btn {
+            width: 26px; height: 26px;
+            border-radius: 7px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s ease;
+        }
+        .pb-header-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .pb-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            background: var(--bg-primary);
+        }
+        .pb-messages::-webkit-scrollbar { width: 4px; }
+        .pb-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+        .pb-msg { padding: 0; animation: pb-msg-in 0.25s ease; }
+        @keyframes pb-msg-in {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .pb-msg.system {
+            color: var(--text-primary);
+            padding: 10px 14px;
+            background: rgba(139,92,246,0.06);
+            border-radius: 10px;
+            border-left: 3px solid var(--accent);
+        }
+        .pb-msg.user { color: var(--text-primary); }
+        .pb-msg.user::before { content: '\2771 '; color: #22d3ee; font-weight: 700; }
+        .pb-msg.assistant {
+            color: var(--text-primary);
+            padding: 8px 12px;
+            background: rgba(255,255,255,0.02);
+            border-radius: 8px;
+            border-left: 3px solid rgba(34,211,238,0.3);
+        }
+        .pb-msg pre {
+            background: rgba(0,0,0,0.4);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 0.72rem;
+            overflow-x: auto;
+            margin: 6px 0 2px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .pb-msg code {
+            background: rgba(255,255,255,0.07);
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 0.75rem;
+        }
+        .pb-typing {
+            display: none;
+            color: var(--text-muted);
+            font-style: italic;
+            padding: 4px 0;
+            font-size: 0.75rem;
+        }
+        .pb-typing.visible { display: block; }
+        .pb-typing::after { content: ''; animation: pb-dots 1.5s steps(4) infinite; }
+        @keyframes pb-dots {
+            0% { content: ''; }
+            25% { content: '.'; }
+            50% { content: '..'; }
+            75% { content: '...'; }
+        }
+        .pb-input-area {
+            padding: 10px 14px;
+            border-top: 1px solid var(--border);
+            background: rgba(0,0,0,0.1);
+        }
+        .pb-input-row { display: flex; gap: 8px; align-items: flex-end; }
+        .pb-input {
+            flex: 1;
+            background: var(--glass-bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 9px 12px;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            outline: none;
+            resize: none;
+            min-height: 20px;
+            max-height: 100px;
+            transition: border-color 0.2s ease;
+        }
+        .pb-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(139,92,246,0.15); }
+        .pb-input::placeholder { color: var(--text-muted); opacity: 0.6; }
+        .pb-send {
+            width: 36px; height: 36px;
+            border-radius: 10px;
+            border: none;
+            background: var(--accent-gradient);
+            color: #fff;
+            font-size: 0.9rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+        .pb-send:hover { transform: scale(1.05); box-shadow: 0 4px 12px var(--glow-medium); }
+        .pb-send:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+        .pb-preview {
+            display: none;
+            padding: 10px 14px;
+            background: rgba(139,92,246,0.04);
+            border-top: 1px solid rgba(139,92,246,0.15);
+        }
+        .pb-preview.visible { display: block; }
+        .pb-preview-title {
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: var(--accent);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .pb-preview-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 3px 10px;
+            font-size: 0.72rem;
+        }
+        .pb-preview-label { color: var(--text-muted); font-weight: 500; }
+        .pb-preview-value { color: var(--text-primary); }
+        .pb-preview-actions { display: flex; gap: 6px; margin-top: 8px; }
+        .pb-preview-btn {
+            padding: 5px 12px;
+            border-radius: 7px;
+            border: none;
+            font-size: 0.72rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .pb-preview-btn.save { background: #22c55e; color: #fff; }
+        .pb-preview-btn.save:hover { background: #16a34a; }
+        .pb-preview-btn.edit { background: var(--bg-hover); color: var(--text-muted); }
+        .pb-preview-btn.edit:hover { color: var(--text-primary); }
+
+        /* ==================== HIDE INACTIVE TOGGLE (AGENTS) ==================== */
+        .hide-completed-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            padding: 4px 10px;
+            border-radius: 8px;
+            transition: background 0.15s;
+            user-select: none;
+        }
+        .hide-completed-toggle:hover { background: rgba(139, 92, 246, 0.08); }
+        .hide-completed-toggle .toggle-track {
+            width: 32px;
+            height: 18px;
+            border-radius: 9px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            position: relative;
+            transition: all 0.2s;
+        }
+        .hide-completed-toggle .toggle-thumb {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            position: absolute;
+            top: 1px;
+            left: 1px;
+            transition: all 0.2s;
+        }
+        .hide-completed-toggle.active .toggle-track {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+        .hide-completed-toggle.active .toggle-thumb {
+            left: 15px;
+            background: #fff;
+        }
+        .hide-completed-toggle .toggle-label {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        /* ==================== AGENT PERF SECTION ==================== */
+        .perf-section {
+            margin-top: 8px;
+            border-top: 1px solid var(--border);
+            padding-top: 8px;
+        }
+        .perf-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            transition: color 0.15s;
+        }
+        .perf-toggle:hover { color: var(--text-primary); }
+        .perf-toggle-icon { font-size: 0.7rem; transition: transform 0.2s; }
+        .perf-cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 10px;
+            padding: 8px;
+        }
+        .perf-cards-grid.hidden { display: none; }
+
+        /* ==================== CHAT ARCHIVE BUTTON ==================== */
+        .sidebar-archive-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--glass-bg);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            transition: all 0.15s;
+        }
+        .sidebar-archive-btn:hover {
+            background: rgba(139, 92, 246, 0.1);
+            color: var(--text-primary);
+        }
+        .sidebar-archive-btn.active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+
         /* ==================== HOMEPAGE V2: DETAIL MODAL ==================== */
         .home-detail-modal {
             max-width: 500px;
@@ -29208,6 +29943,10 @@
                 </div>
                 <div class="header-status">
                     <div class="header-agents-pill" id="header-agents-pill">idle</div>
+                    <button class="pb-fab" id="pb-fab" onclick="pbToggle()" title="Pack Builder">
+                        🧩
+                        <span class="pb-fab-badge" id="pb-fab-badge">!</span>
+                    </button>
                     <div class="notification-bell" id="notification-bell" onclick="toggleNotificationPanel()">
                         <svg class="bell-icon-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
                         <span class="notification-badge hidden" id="notification-badge">0</span>
@@ -29283,6 +30022,110 @@
                             <div class="stat-pill" onclick="openHomeDetail('stat', {name:'System Health', value: this.querySelector('.stat-pill-value').textContent, icon:'\u2764\uFE0F', context:'Overall knowledge base health score.'})">
                                 <span class="stat-pill-value" id="system-health">100%</span>
                                 <span class="stat-pill-label">Health</span>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <!-- Usage Widget (collapsible, default collapsed) -->
+                    <div class="home-section" id="home-section-usage" style="margin-bottom: 8px;">
+                        <div class="usage-widget" id="usage-widget">
+                            <div class="usage-widget-header" onclick="toggleUsageWidget()">
+                                <div class="usage-widget-header-left">
+                                    <span class="usage-widget-icon">📊</span>
+                                    <span class="usage-widget-title">Claude Usage</span>
+                                </div>
+                                <div class="usage-inline-preview" id="usage-inline-preview">
+                                    <span class="usage-inline-stat"><strong id="usage-inline-requests">—</strong> requests</span>
+                                    <span class="usage-inline-stat"><strong id="usage-inline-tokens">—</strong> tokens</span>
+                                    <span class="usage-inline-stat" style="color:var(--accent-light)"><strong id="usage-inline-cost">—</strong></span>
+                                </div>
+                                <div class="usage-widget-period-selector" onclick="event.stopPropagation()">
+                                    <button class="usage-period-btn" data-period="today" onclick="loadUsageData('today')">Today</button>
+                                    <button class="usage-period-btn active" data-period="week" onclick="loadUsageData('week')">Week</button>
+                                    <button class="usage-period-btn" data-period="month" onclick="loadUsageData('month')">Month</button>
+                                </div>
+                                <span class="usage-widget-chevron">&#9660;</span>
+                            </div>
+                            <div class="usage-widget-body" id="usage-widget-body">
+                                <div class="usage-summary-row" id="usage-summary-row">
+                                    <div class="usage-stat-card">
+                                        <div class="usage-stat-value" id="usage-total-requests">—</div>
+                                        <div class="usage-stat-label">Requests</div>
+                                    </div>
+                                    <div class="usage-stat-card">
+                                        <div class="usage-stat-value" id="usage-total-input">—</div>
+                                        <div class="usage-stat-label">Input Tokens</div>
+                                    </div>
+                                    <div class="usage-stat-card">
+                                        <div class="usage-stat-value" id="usage-total-output">—</div>
+                                        <div class="usage-stat-label">Output Tokens</div>
+                                    </div>
+                                    <div class="usage-stat-card">
+                                        <div class="usage-stat-value cost" id="usage-total-cost">—</div>
+                                        <div class="usage-stat-label">Est. Cost</div>
+                                    </div>
+                                </div>
+                                <div class="usage-models-grid" id="usage-models-grid"></div>
+                                <div class="usage-daily-chart" id="usage-daily-chart"></div>
+                                <div class="usage-chart-labels" id="usage-chart-labels"></div>
+                                <div class="usage-source-row" id="usage-source-row"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Agent Health Widget (collapsible, default collapsed) -->
+                    <div class="home-section" id="home-section-agent-health" style="margin-bottom: 8px;">
+                        <div class="agent-health-widget" id="agent-health-widget">
+                            <div class="agent-health-widget-header" onclick="toggleAgentHealthWidget()">
+                                <div class="usage-widget-header-left">
+                                    <span class="usage-widget-icon">🤖</span>
+                                    <span class="usage-widget-title">Agent Health</span>
+                                </div>
+                                <div class="agent-health-inline-preview" id="agent-health-inline-preview">
+                                    <span class="agent-health-inline-stat"><strong id="ah-inline-total">—</strong> agents</span>
+                                    <span class="agent-health-inline-stat"><strong id="ah-inline-healthy" style="color:#22c55e">—</strong> healthy</span>
+                                    <span class="agent-health-inline-stat" id="ah-inline-warn-wrap" style="display:none"><strong id="ah-inline-warnings" style="color:#f59e0b">0</strong> ⚠️</span>
+                                    <span class="agent-health-inline-stat" id="ah-inline-err-wrap" style="display:none"><strong id="ah-inline-errors" style="color:#ef4444">0</strong> 🔴</span>
+                                </div>
+                                <span class="usage-widget-chevron">&#9660;</span>
+                            </div>
+                            <div class="agent-health-widget-body" id="agent-health-widget-body">
+                                <div id="agent-health-alerts"></div>
+                                <div class="agent-health-summary-row" id="agent-health-summary-row">
+                                    <div class="usage-stat-card">
+                                        <div class="usage-stat-value" id="ah-total-agents">—</div>
+                                        <div class="usage-stat-label">Total Agents</div>
+                                    </div>
+                                    <div class="usage-stat-card">
+                                        <div class="usage-stat-value" id="ah-running-agents" style="color:#22c55e">—</div>
+                                        <div class="usage-stat-label">Running</div>
+                                    </div>
+                                    <div class="usage-stat-card">
+                                        <div class="usage-stat-value" id="ah-cycling-agents" style="color:#8b5cf6">—</div>
+                                        <div class="usage-stat-label">Cycling</div>
+                                    </div>
+                                    <div class="usage-stat-card">
+                                        <div class="usage-stat-value" id="ah-problem-agents" style="color:#ef4444">—</div>
+                                        <div class="usage-stat-label">Problems</div>
+                                    </div>
+                                </div>
+                                <div style="overflow-x:auto">
+                                <table class="agent-health-table" id="agent-health-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Agent</th>
+                                            <th>Status</th>
+                                            <th>Cycles</th>
+                                            <th>Last Active</th>
+                                            <th>Health</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="agent-health-tbody">
+                                        <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px">Loading...</td></tr>
+                                    </tbody>
+                                </table>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -29495,6 +30338,9 @@
                             <div class="sidebar-header-actions">
                                 <button class="sidebar-favorites-btn" id="sidebar-favorites-btn" onclick="toggleFavoritesView()" title="Favorite chats">
                                     ☆
+                                </button>
+                                <button class="sidebar-archive-btn" id="sidebar-archive-btn" onclick="toggleArchiveView()" title="Archived chats">
+                                    &#128451;
                                 </button>
                                 <div class="sidebar-new-chat-btn-wrap">
                                     <button class="sidebar-new-chat-btn" onclick="newChatFromSidebar()">
@@ -43654,6 +44500,14 @@
                     (a.project_id || '').toLowerCase().includes(q) ||
                     (a.output || '').toLowerCase().includes(q)
                 );
+            }
+
+            // Hide completed/failed agents if toggle is active
+            if (typeof hideCompletedAgents !== 'undefined' && hideCompletedAgents) {
+                allAgents = allAgents.filter(a => {
+                    const s = a.status || '';
+                    return s === 'running' || s === 'queued' || s === 'cycling' || s === 'standby' || s === 'working';
+                });
             }
 
             // Filter by active tab source ('all' shows everything)
@@ -61412,6 +62266,601 @@ Please proceed with implementing this recommendation. You have full permissions.
             initCardHoverEffects();
 
             // Add ripple effects to primary/secondary buttons
+
+        // ============================================================================
+        // USAGE WIDGET — Claude API Usage Tracking
+        // ============================================================================
+        let _usageData = null;
+        let _usageCurrentPeriod = 'week';
+
+        function toggleUsageWidget() {
+            const widget = document.getElementById('usage-widget');
+            if (!widget) return;
+            const wasExpanded = widget.classList.contains('expanded');
+            widget.classList.toggle('expanded');
+            if (!wasExpanded && !_usageData) {
+                loadUsageData(_usageCurrentPeriod);
+            }
+            localStorage.setItem('usage-widget-expanded', widget.classList.contains('expanded') ? '1' : '0');
+        }
+
+        function formatTokenCount(n) {
+            if (n == null || isNaN(n)) return '—';
+            if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+            if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+            return n.toString();
+        }
+
+        function formatCost(usd) {
+            if (usd == null || isNaN(usd)) return '—';
+            if (usd < 0.01) return '$' + usd.toFixed(4);
+            if (usd < 1) return '$' + usd.toFixed(3);
+            return '$' + usd.toFixed(2);
+        }
+
+        function getModelTier(modelId) {
+            if (!modelId) return 'unknown';
+            const m = modelId.toLowerCase();
+            if (m.includes('opus')) return 'opus';
+            if (m.includes('sonnet')) return 'sonnet';
+            if (m.includes('haiku')) return 'haiku';
+            return 'unknown';
+        }
+
+        function getModelDisplayName(modelId) {
+            if (!modelId) return 'Unknown';
+            const m = modelId.toLowerCase();
+            if (m.includes('opus') && m.includes('4-6')) return 'Opus 4.6';
+            if (m.includes('opus')) return 'Opus';
+            if (m.includes('sonnet') && m.includes('4-6')) return 'Sonnet 4.6';
+            if (m.includes('sonnet')) return 'Sonnet';
+            if (m.includes('haiku') && m.includes('4-5')) return 'Haiku 4.5';
+            if (m.includes('haiku')) return 'Haiku';
+            return modelId.split('-').slice(0, 3).join(' ');
+        }
+
+        async function loadUsageData(period) {
+            _usageCurrentPeriod = period || 'week';
+            document.querySelectorAll('.usage-period-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.period === _usageCurrentPeriod);
+            });
+            try {
+                const token = localStorage.getItem('cerebro_token');
+                const resp = await fetch(API_URL + '/api/usage?period=' + _usageCurrentPeriod, {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                _usageData = await resp.json();
+                renderUsageWidget(_usageData);
+            } catch (err) {
+                console.warn('[Usage] Failed to load:', err);
+                const body = document.getElementById('usage-widget-body');
+                if (body) body.innerHTML = '<div class="usage-empty">Unable to load usage data</div>';
+            }
+        }
+
+        function renderUsageWidget(data) {
+            if (!data) return;
+            const t = data.totals || {};
+            const el = (id) => document.getElementById(id);
+
+            if (el('usage-total-requests')) el('usage-total-requests').textContent = (t.requests || 0).toLocaleString();
+            if (el('usage-total-input')) el('usage-total-input').textContent = formatTokenCount(t.input_tokens);
+            if (el('usage-total-output')) el('usage-total-output').textContent = formatTokenCount(t.output_tokens);
+            if (el('usage-total-cost')) el('usage-total-cost').textContent = formatCost(t.cost_usd);
+            if (el('usage-inline-requests')) el('usage-inline-requests').textContent = (t.requests || 0).toLocaleString();
+            if (el('usage-inline-tokens')) el('usage-inline-tokens').textContent = formatTokenCount((t.input_tokens || 0) + (t.output_tokens || 0));
+            if (el('usage-inline-cost')) el('usage-inline-cost').textContent = formatCost(t.cost_usd);
+
+            const modelsGrid = el('usage-models-grid');
+            if (modelsGrid) {
+                const models = data.models || {};
+                const modelKeys = Object.keys(models).sort((a, b) => (models[b].cost_usd || 0) - (models[a].cost_usd || 0));
+                if (modelKeys.length === 0) {
+                    modelsGrid.innerHTML = '<div class="usage-empty">No usage recorded yet</div>';
+                } else {
+                    modelsGrid.innerHTML = modelKeys.map(modelId => {
+                        const m = models[modelId];
+                        const tier = getModelTier(modelId);
+                        const name = getModelDisplayName(modelId);
+                        return '<div class="usage-model-card">' +
+                            '<div class="usage-model-name"><span class="usage-model-dot ' + tier + '"></span>' + name + '</div>' +
+                            '<div class="usage-model-stats">' +
+                                '<span>' + (m.requests || 0) + ' req</span>' +
+                                '<span>' + formatTokenCount((m.input_tokens || 0) + (m.output_tokens || 0)) + ' tokens</span>' +
+                                '<span class="usage-model-cost">' + formatCost(m.cost_usd) + '</span>' +
+                            '</div>' +
+                        '</div>';
+                    }).join('');
+                }
+            }
+
+            const dailyChart = el('usage-daily-chart');
+            const chartLabels = el('usage-chart-labels');
+            const daily = data.daily || [];
+            if (dailyChart) {
+                if (daily.length === 0) {
+                    dailyChart.innerHTML = '';
+                    if (chartLabels) chartLabels.innerHTML = '';
+                } else {
+                    const maxCost = Math.max(...daily.map(d => d.cost_usd || 0), 0.001);
+                    dailyChart.innerHTML = daily.map(d => {
+                        const h = Math.max(2, Math.round(((d.cost_usd || 0) / maxCost) * 36));
+                        const dateStr = new Date(d.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                        return '<div class="usage-daily-bar" style="height:' + h + 'px">' +
+                            '<div class="usage-daily-bar-tooltip">' + dateStr + ' — ' + formatCost(d.cost_usd) + ' / ' + (d.requests || 0) + ' req</div>' +
+                        '</div>';
+                    }).join('');
+                    if (chartLabels && daily.length >= 2) {
+                        const fmt = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        chartLabels.innerHTML = '<span>' + fmt(daily[0].date) + '</span><span>' + fmt(daily[daily.length - 1].date) + '</span>';
+                    }
+                }
+            }
+
+            const sourceRow = el('usage-source-row');
+            if (sourceRow) {
+                const sources = data.by_source || {};
+                const srcKeys = Object.keys(sources);
+                if (srcKeys.length > 0) {
+                    sourceRow.innerHTML = srcKeys.map(src => {
+                        const s = sources[src];
+                        const label = src.charAt(0).toUpperCase() + src.slice(1);
+                        return '<div class="usage-source-item">' +
+                            '<span class="usage-source-dot ' + src + '"></span>' +
+                            '<span>' + label + ': ' + (s.requests || 0) + ' req (' + formatCost(s.cost_usd) + ')</span>' +
+                        '</div>';
+                    }).join('');
+                }
+            }
+        }
+
+        // Initialize usage widget
+        (function initUsageWidget() {
+            setTimeout(() => loadUsageData('week'), 1500);
+            const saved = localStorage.getItem('usage-widget-expanded');
+            if (saved === '1') {
+                const widget = document.getElementById('usage-widget');
+                if (widget) widget.classList.add('expanded');
+            }
+            setInterval(() => {
+                const homeView = document.getElementById('view-home');
+                if (homeView && !homeView.classList.contains('hidden') && document.visibilityState === 'visible') {
+                    loadUsageData(_usageCurrentPeriod);
+                }
+            }, 30000);
+        })();
+
+
+        // ============================================================================
+        // AGENT HEALTH WIDGET
+        // ============================================================================
+
+        function toggleAgentHealthWidget() {
+            const widget = document.getElementById('agent-health-widget');
+            if (!widget) return;
+            widget.classList.toggle('expanded');
+            localStorage.setItem('agent-health-widget-expanded', widget.classList.contains('expanded') ? '1' : '0');
+            if (widget.classList.contains('expanded')) {
+                loadAgentHealthData();
+            }
+        }
+
+        function classifyAgentHealth(agent) {
+            const status = agent.status || '';
+            const error = agent.error;
+            const cycles = agent.cycle_count || 0;
+            if (error && error !== 'null') return 'error';
+            if (status === 'error' || status === 'failed') return 'error';
+            if ((status === 'running' || status === 'cycling' || status === 'standby') && agent.is_specops) {
+                const now = Date.now();
+                if (agent.next_checkin) {
+                    const checkinTime = new Date(agent.next_checkin).getTime();
+                    const overdueMins = (now - checkinTime) / 60000;
+                    if (overdueMins > 120) return 'error';
+                    if (overdueMins > 30) return 'warning';
+                }
+                if (status === 'running' && cycles === 0 && agent.started_at) {
+                    const startTime = new Date(agent.started_at).getTime();
+                    if ((now - startTime) / 60000 > 30) return 'warning';
+                }
+            }
+            if (status === 'running' || status === 'cycling') return 'healthy';
+            if (status === 'standby' || status === 'queued') return 'idle';
+            return 'idle';
+        }
+
+        function getAgentLastActive(agent) {
+            const active = agent.completed_at || agent.started_at || agent.created_at;
+            return active ? new Date(active) : null;
+        }
+
+        async function loadAgentHealthData() {
+            try {
+                const token = localStorage.getItem('cerebro_token');
+                const resp = await fetch(API_URL + '/agents', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                const data = await resp.json();
+                renderAgentHealthWidget(data.agents || []);
+            } catch (err) {
+                console.warn('[AgentHealth] Failed to load:', err);
+                const tbody = document.getElementById('agent-health-tbody');
+                if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px">Unable to load agent data</td></tr>';
+            }
+        }
+
+        function renderAgentHealthWidget(agents) {
+            const active = agents.filter(a => {
+                const s = a.status || '';
+                return s === 'running' || s === 'cycling' || s === 'standby' || s === 'queued' || s === 'working';
+            });
+            const classified = active.map(a => ({
+                ...a,
+                health: classifyAgentHealth(a),
+                lastActive: getAgentLastActive(a)
+            }));
+            const healthy = classified.filter(c => c.health === 'healthy').length;
+            const warnings = classified.filter(c => c.health === 'warning').length;
+            const errors = classified.filter(c => c.health === 'error').length;
+            const running = classified.filter(c => c.status === 'running' || c.status === 'working').length;
+            const cycling = classified.filter(c => c.status === 'cycling' || c.status === 'standby').length;
+
+            const el = (id) => document.getElementById(id);
+            if (el('ah-inline-total')) el('ah-inline-total').textContent = active.length;
+            if (el('ah-inline-healthy')) el('ah-inline-healthy').textContent = healthy;
+            const warnWrap = el('ah-inline-warn-wrap');
+            const errWrap = el('ah-inline-err-wrap');
+            if (warnings > 0) {
+                if (el('ah-inline-warnings')) el('ah-inline-warnings').textContent = warnings;
+                if (warnWrap) warnWrap.style.display = '';
+            } else if (warnWrap) warnWrap.style.display = 'none';
+            if (errors > 0) {
+                if (el('ah-inline-errors')) el('ah-inline-errors').textContent = errors;
+                if (errWrap) errWrap.style.display = '';
+            } else if (errWrap) errWrap.style.display = 'none';
+
+            if (el('ah-total-agents')) el('ah-total-agents').textContent = active.length;
+            if (el('ah-running-agents')) el('ah-running-agents').textContent = running;
+            if (el('ah-cycling-agents')) el('ah-cycling-agents').textContent = cycling;
+            if (el('ah-problem-agents')) {
+                el('ah-problem-agents').textContent = warnings + errors;
+                el('ah-problem-agents').style.color = (warnings + errors) > 0 ? '#ef4444' : '#22c55e';
+            }
+
+            const alertsEl = el('agent-health-alerts');
+            if (alertsEl) {
+                alertsEl.innerHTML = '';
+                if (errors > 0) {
+                    const names = classified.filter(c => c.health === 'error').map(a => a.call_sign || a.id).join(', ');
+                    alertsEl.innerHTML += '<div class="agent-health-alert-banner">🔴 ' + errors + ' agent' + (errors > 1 ? 's' : '') + ' with errors: ' + names + '</div>';
+                }
+                if (warnings > 0) {
+                    const names = classified.filter(c => c.health === 'warning').map(a => a.call_sign || a.id).join(', ');
+                    alertsEl.innerHTML += '<div class="agent-health-alert-banner warn">⚠️ ' + warnings + ' agent' + (warnings > 1 ? 's' : '') + ' may be stuck: ' + names + '</div>';
+                }
+            }
+
+            const healthOrder = { error: 0, warning: 1, healthy: 2, idle: 3 };
+            classified.sort((a, b) => (healthOrder[a.health] || 3) - (healthOrder[b.health] || 3));
+
+            const tbody = el('agent-health-tbody');
+            if (!tbody) return;
+            if (classified.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px">No active agents</td></tr>';
+                return;
+            }
+            tbody.innerHTML = classified.map(a => {
+                const statusLabel = (a.status || 'unknown').charAt(0).toUpperCase() + (a.status || 'unknown').slice(1);
+                const callSign = (a.call_sign || a.id || '—').replace(/</g, '&lt;');
+                const cycles = a.cycle_count || 0;
+                let lastActiveStr = '—';
+                if (a.lastActive) {
+                    const mins = Math.round((Date.now() - a.lastActive.getTime()) / 60000);
+                    if (mins < 1) lastActiveStr = 'just now';
+                    else if (mins < 60) lastActiveStr = mins + 'm ago';
+                    else if (mins < 1440) lastActiveStr = Math.round(mins / 60) + 'h ago';
+                    else lastActiveStr = Math.round(mins / 1440) + 'd ago';
+                }
+                let healthLabel = '✅ OK';
+                if (a.health === 'warning') healthLabel = '⚠️ Stuck?';
+                else if (a.health === 'error') healthLabel = '🔴 Error';
+                else if (a.health === 'idle') healthLabel = '💤 Idle';
+                return '<tr>' +
+                    '<td><span class="agent-health-callsign">' + callSign + '</span></td>' +
+                    '<td><span class="agent-health-status"><span class="agent-health-dot ' + (a.health || 'idle') + '"></span>' + statusLabel + '</span></td>' +
+                    '<td class="agent-health-cycles">' + cycles + '</td>' +
+                    '<td>' + lastActiveStr + '</td>' +
+                    '<td>' + healthLabel + '</td>' +
+                '</tr>';
+            }).join('');
+        }
+
+        (function initAgentHealthWidget() {
+            setTimeout(() => loadAgentHealthData(), 2000);
+            const saved = localStorage.getItem('agent-health-widget-expanded');
+            if (saved === '1') {
+                const widget = document.getElementById('agent-health-widget');
+                if (widget) widget.classList.add('expanded');
+            }
+            setInterval(() => {
+                const homeView = document.getElementById('view-home');
+                if (homeView && !homeView.classList.contains('hidden') && document.visibilityState === 'visible') {
+                    loadAgentHealthData();
+                }
+            }, 30000);
+        })();
+
+
+        // ============================================================================
+        // CHAT ARCHIVE VIEW
+        // ============================================================================
+        let _archiveViewActive = false;
+
+        function toggleArchiveView() {
+            _archiveViewActive = !_archiveViewActive;
+            if (_archiveViewActive && _favoritesViewActive) {
+                _favoritesViewActive = false;
+                var favBtn = document.getElementById('sidebar-favorites-btn');
+                if (favBtn) { favBtn.classList.remove('active'); favBtn.innerHTML = '☆'; }
+            }
+            var btn = document.getElementById('sidebar-archive-btn');
+            if (btn) btn.classList.toggle('active', _archiveViewActive);
+            loadConversationList();
+        }
+
+
+        // ============================================================================
+        // HIDE INACTIVE AGENTS TOGGLE
+        // ============================================================================
+        let hideCompletedAgents = localStorage.getItem('hideCompletedAgents') === 'true';
+
+        function toggleHideCompleted() {
+            hideCompletedAgents = !hideCompletedAgents;
+            localStorage.setItem('hideCompletedAgents', hideCompletedAgents);
+            const toggle = document.getElementById('hide-completed-toggle');
+            if (toggle) toggle.classList.toggle('active', hideCompletedAgents);
+            if (typeof renderAgents === 'function') renderAgents();
+        }
+
+        // Initialize toggle state on load
+        (function() {
+            const toggle = document.getElementById('hide-completed-toggle');
+            if (toggle && hideCompletedAgents) toggle.classList.add('active');
+        })();
+
+
+        // ============================================================================
+        // PACK BUILDER — AI-Assisted Capability Pack Creator
+        // ============================================================================
+        let pbConvo = [];
+        let pbDraft = null;
+        let pbBusy = false;
+        let pbOpen = false;
+        let pbUnread = 0;
+        let pbInitialized = false;
+
+        function pbToggle() {
+            if (pbOpen) { pbMinimize(); } else { pbExpand(); }
+        }
+
+        function pbExpand() {
+            const panel = document.getElementById('pb-panel');
+            if (!panel) return;
+            pbOpen = true;
+            panel.classList.add('open');
+            const fab = document.getElementById('pb-fab');
+            if (fab) fab.style.opacity = '0.5';
+            pbUnread = 0;
+            const badge = document.getElementById('pb-fab-badge');
+            if (badge) badge.classList.remove('visible');
+            if (!pbInitialized) {
+                pbInitialized = true;
+                pbAppend('system', '<strong>Welcome to Pack Builder</strong> 🧩<br><br>I\'ll help you create capability packs step by step.<br><br><span style="color:var(--text-muted)">Try something like:</span><br>&nbsp;&nbsp;<span style="color:#22d3ee">❯</span> <em>"Create a Docker management pack"</em><br>&nbsp;&nbsp;<span style="color:#22d3ee">❯</span> <em>"I need a pack for my home automation API"</em><br>&nbsp;&nbsp;<span style="color:#22d3ee">❯</span> <em>"Build a pack for GitHub issue tracking"</em><br><br>I\'ll guide you through name, description, keywords, and the system prompt content. When ready, I\'ll show a preview and you can save it instantly — no restart needed.', true);
+            }
+            setTimeout(() => { const inp = document.getElementById('pb-input'); if (inp) inp.focus(); }, 300);
+        }
+
+        function pbMinimize() {
+            const panel = document.getElementById('pb-panel');
+            if (!panel) return;
+            pbOpen = false;
+            panel.classList.remove('open');
+            const fab = document.getElementById('pb-fab');
+            if (fab) fab.style.opacity = '1';
+        }
+
+        function pbClose() { pbMinimize(); }
+
+        function pbClear() {
+            if (!confirm('Start a new Pack Builder session? Current conversation will be cleared.')) return;
+            pbConvo = [];
+            pbDraft = null;
+            pbInitialized = false;
+            const msgs = document.getElementById('pb-messages');
+            const preview = document.getElementById('pb-preview');
+            if (msgs) msgs.innerHTML = '';
+            if (preview) { preview.innerHTML = ''; preview.classList.remove('visible'); }
+            pbInitialized = true;
+            pbAppend('system', '<strong>Session cleared.</strong> 🧩<br><br>Describe the capability pack you want to build.', true);
+        }
+
+        function pbNotify() {
+            if (pbOpen) return;
+            pbUnread++;
+            const badge = document.getElementById('pb-fab-badge');
+            const fab = document.getElementById('pb-fab');
+            if (badge) {
+                badge.textContent = pbUnread > 9 ? '9+' : pbUnread;
+                badge.classList.add('visible');
+            }
+            if (fab) {
+                fab.classList.add('has-message');
+                setTimeout(() => fab.classList.remove('has-message'), 700);
+            }
+        }
+
+        function pbAppend(role, text, raw) {
+            const msgs = document.getElementById('pb-messages');
+            if (!msgs) return;
+            const div = document.createElement('div');
+            div.className = 'pb-msg ' + role;
+            if (raw) {
+                div.innerHTML = text;
+            } else {
+                div.innerHTML = pbRender(text);
+            }
+            msgs.appendChild(div);
+            msgs.scrollTop = msgs.scrollHeight;
+            return div;
+        }
+
+        function pbRender(text) {
+            return text
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/```json([\s\S]*?)```/g, '<pre>$1</pre>')
+                .replace(/```([\s\S]*?)```/g, '<pre>$1</pre>')
+                .replace(/`([^`]+)`/g, '<code>$1</code>')
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                .replace(/\n/g, '<br>');
+        }
+
+        async function pbSend() {
+            if (pbBusy) return;
+            const input = document.getElementById('pb-input');
+            const text = (input ? input.value : '').trim();
+            if (!text) return;
+            if (input) input.value = '';
+
+            pbAppend('user', text);
+            pbConvo.push({ role: 'user', content: text });
+            pbBusy = true;
+            const sendBtn = document.getElementById('pb-send');
+            if (sendBtn) sendBtn.disabled = true;
+            const typing = document.getElementById('pb-typing');
+            if (typing) typing.classList.add('visible');
+
+            try {
+                const resp = await fetch(API_URL + '/api/capability-packs/builder/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('cerebro_token'),
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: text,
+                        history: pbConvo.slice(0, -1)
+                    })
+                });
+
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+                const reader = resp.body.getReader();
+                const decoder = new TextDecoder();
+                let fullText = '';
+                let sseBuffer = '';
+
+                const msgs = document.getElementById('pb-messages');
+                const msgDiv = document.createElement('div');
+                msgDiv.className = 'pb-msg assistant';
+                msgs.appendChild(msgDiv);
+                if (typing) typing.classList.remove('visible');
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    const chunk = sseBuffer + decoder.decode(value, { stream: true });
+                    const parts = chunk.split('\n');
+                    sseBuffer = parts.pop();
+                    for (const line of parts) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                if (data.type === 'text' && data.content) {
+                                    fullText += data.content;
+                                }
+                            } catch(e) {}
+                        }
+                    }
+                    msgDiv.innerHTML = pbRender(fullText);
+                    msgs.scrollTop = msgs.scrollHeight;
+                }
+
+                pbConvo.push({ role: 'assistant', content: fullText });
+
+                const jsonMatch = fullText.match(/```json\s*([\s\S]*?)```/);
+                if (jsonMatch) {
+                    try {
+                        pbDraft = JSON.parse(jsonMatch[1].trim());
+                        pbShowPreview(pbDraft);
+                    } catch(e) {
+                        console.warn('[PackBuilder] JSON parse error:', e.message);
+                    }
+                }
+                pbNotify();
+
+            } catch (e) {
+                if (typing) typing.classList.remove('visible');
+                pbAppend('system', '⚠️ Error: ' + e.message);
+            } finally {
+                pbBusy = false;
+                if (sendBtn) sendBtn.disabled = false;
+                if (input) input.focus();
+            }
+        }
+
+        function pbShowPreview(draft) {
+            const preview = document.getElementById('pb-preview');
+            if (!preview) return;
+            const icon = (typeof PACK_ICONS !== 'undefined' && PACK_ICONS[draft.icon]) ? PACK_ICONS[draft.icon] : '📦';
+            const contentLen = (draft.content || '').length;
+            const tokenEst = Math.round((draft.content || '').split(/\s+/).length * 1.3);
+            preview.innerHTML = '<div class="pb-preview-title">📋 Pack Preview</div>'
+                + '<div class="pb-preview-grid">'
+                + '<span class="pb-preview-label">ID</span><span class="pb-preview-value">' + (draft.id || '—') + '</span>'
+                + '<span class="pb-preview-label">Name</span><span class="pb-preview-value">' + icon + ' ' + (draft.name || '—') + '</span>'
+                + '<span class="pb-preview-label">Desc</span><span class="pb-preview-value">' + (draft.description || '—') + '</span>'
+                + '<span class="pb-preview-label">Keywords</span><span class="pb-preview-value">' + (draft.keywords || []).join(', ') + '</span>'
+                + '<span class="pb-preview-label">Content</span><span class="pb-preview-value">' + contentLen + ' chars (~' + tokenEst + ' tokens)</span>'
+                + '</div>'
+                + '<div class="pb-preview-actions">'
+                + '<button class="pb-preview-btn save" onclick="pbSaveDraft()">✅ Save Pack</button>'
+                + '<button class="pb-preview-btn edit" onclick="pbDraft=null;document.getElementById(\'pb-preview\').classList.remove(\'visible\')">✏️ Keep Editing</button>'
+                + '</div>';
+            preview.classList.add('visible');
+        }
+
+        async function pbSaveDraft() {
+            if (!pbDraft || !pbDraft.id) {
+                pbAppend('system', '⚠️ No valid pack draft to save.');
+                return;
+            }
+            try {
+                const resp = await fetch(API_URL + '/api/capability-packs', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('cerebro_token'),
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(pbDraft)
+                });
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({}));
+                    throw new Error(err.detail || 'HTTP ' + resp.status);
+                }
+                pbAppend('system', '✅ <strong>' + (pbDraft.name || pbDraft.id) + '</strong> saved successfully!<br>It\'s now available in your capability packs. No restart needed.', true);
+                const preview = document.getElementById('pb-preview');
+                if (preview) { preview.classList.remove('visible'); preview.innerHTML = ''; }
+                pbDraft = null;
+                if (typeof fetchCapabilityPacks === 'function') fetchCapabilityPacks();
+            } catch (e) {
+                pbAppend('system', '⚠️ Failed to save: ' + e.message);
+            }
+        }
+
+
             document.querySelectorAll('.btn-primary, .btn-secondary').forEach(addRippleEffect);
         });
     </script>
@@ -63811,5 +65260,26 @@ Please proceed with implementing this recommendation. You have full permissions.
         };
     })();
     </script>
+
+    <!-- Pack Builder Panel -->
+    <div class="pb-panel" id="pb-panel">
+        <div class="pb-panel-header" id="pb-panel-header">
+            <div class="pb-panel-title"><span class="pb-status"></span> Pack Builder</div>
+            <div class="pb-header-actions">
+                <button class="pb-header-btn" onclick="pbClear()" title="New session">🗑</button>
+                <button class="pb-header-btn" onclick="pbMinimize()" title="Minimize">─</button>
+                <button class="pb-header-btn" onclick="pbClose()" title="Close">✕</button>
+            </div>
+        </div>
+        <div class="pb-messages" id="pb-messages"></div>
+        <div class="pb-typing" id="pb-typing">Cerebro is thinking</div>
+        <div class="pb-preview" id="pb-preview"></div>
+        <div class="pb-input-area">
+            <div class="pb-input-row">
+                <textarea class="pb-input" id="pb-input" placeholder="Describe the capability pack you want to create..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();pbSend()}"></textarea>
+                <button class="pb-send" id="pb-send" onclick="pbSend()" title="Send">▸</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

@@ -461,6 +461,15 @@ from datetime import timedelta
 dismiss_tracker = DismissTracker(Path(config.AI_MEMORY_PATH))
 smart_suggestion_generator = SmartSuggestionGenerator(Path(config.AI_MEMORY_PATH))
 
+# Usage tracker for Claude API token/cost tracking
+try:
+    from usage_tracker import UsageTracker
+    usage_tracker = UsageTracker(config.AI_MEMORY_PATH)
+except Exception as _ut_err:
+    import logging as _ut_logging
+    _ut_logging.getLogger("cerebro").warning(f"Usage tracker unavailable: {_ut_err}")
+    usage_tracker = None
+
 # FastAPI app
 app = FastAPI(
     title="Cerebro - Digital Companion",
@@ -5773,6 +5782,126 @@ async def delete_capability_pack(pack_id: str, user: str = Depends(verify_token)
         raise HTTPException(status_code=404, detail="Pack not found")
     pack_file.unlink()
     return {"status": "deleted", "id": pack_id}
+
+
+# ============================================================================
+# Usage Tracking API
+# ============================================================================
+
+@app.get("/api/usage")
+async def get_usage(period: str = "week", user: str = Depends(verify_token)):
+    """Get Claude API usage stats. Period: today, week, month, all."""
+    if period not in ("today", "week", "month", "all"):
+        period = "week"
+    if not usage_tracker:
+        raise HTTPException(status_code=503, detail="Usage tracker unavailable")
+    return usage_tracker.get_usage(period)
+
+@app.get("/api/usage/models")
+async def get_usage_models(user: str = Depends(verify_token)):
+    """Get available model pricing info."""
+    if not usage_tracker:
+        return {}
+    return {k: v for k, v in UsageTracker.MODEL_PRICING.items() if k != "_default"}
+
+
+# ============================================================================
+# Pack Builder (AI-assisted capability pack creator)
+# ============================================================================
+
+@app.post("/api/capability-packs/builder/chat")
+async def pack_builder_chat(request: Request, user: str = Depends(verify_token)):
+    """Chat endpoint for the Pack Builder — streams AI responses via SSE."""
+    import shutil
+
+    data = await request.json()
+    user_message = data.get("message", "").strip()
+    history = data.get("history", [])
+
+    if not user_message:
+        raise HTTPException(400, "Message required")
+
+    system_prompt = """You are Cerebro's Pack Builder assistant. Help the user create a capability pack.
+
+A capability pack is a JSON object with these fields:
+- id: short snake_case identifier (e.g. "docker_mgmt")
+- name: display name (e.g. "Docker Management")
+- icon: one of: globe, users, clock, chart, server, folder, code, box, target, shield, wrench, bolt, brain, rocket, eye, star
+- description: one-line description shown in the UI (keep under 60 chars)
+- keywords: array of lowercase trigger words for auto-detection (5-15 keywords)
+- content: the actual system prompt text that gets injected when the pack is active. This should contain useful instructions, API endpoints with curl examples, rules, etc.
+- token_estimate: rough estimate of tokens in the content (count words * 1.3)
+
+Guide the user step by step:
+1. Understand what they want the pack to do
+2. Ask clarifying questions if needed (what endpoints? what rules? what tools?)
+3. Propose a complete draft with all fields filled in
+4. When you have a complete draft ready, output it as a JSON code block with ```json ... ``` tags
+5. Ask if they want to save it or make changes
+
+Keep responses concise. Be helpful but brief. The content field is the most important part — it should give Cerebro actionable instructions."""
+
+    # Build the full conversation as a single prompt for the CLI
+    convo_parts = []
+    for msg in history:
+        role = msg.get("role", "user")
+        convo_parts.append(f"[{role.upper()}]: {msg.get('content', '')}")
+    convo_parts.append(f"[USER]: {user_message}")
+    full_prompt = "\n\n".join(convo_parts)
+
+    claude_path = shutil.which("claude")
+    if not claude_path:
+        for p in [os.path.join(os.path.expanduser("~"), ".local", "bin", "claude")]:
+            if os.path.exists(p):
+                claude_path = p
+                break
+    if not claude_path:
+        raise HTTPException(500, "Claude Code CLI not found")
+
+    cmd_args = [claude_path, "-p", full_prompt,
+                "--system-prompt", system_prompt,
+                "--model", config.DEFAULT_MODEL,
+                "--output-format", "stream-json",
+                "--dangerously-skip-permissions", "--verbose",
+                "--strict-mcp-config",
+                "--max-turns", "1"]
+
+    agent_env = os.environ.copy()
+    agent_env.pop("CLAUDECODE", None)
+    agent_env["CLAUDE_CONFIG_DIR"] = os.path.expanduser("~/.claude-chat")
+
+    def generate():
+        try:
+            process = subprocess.Popen(
+                cmd_args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd="/tmp",
+                env=agent_env,
+            )
+            for raw_line in iter(process.stdout.readline, b""):
+                line = raw_line.decode("utf-8", errors="replace").strip()
+                if not line:
+                    continue
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                etype = event.get("type", "")
+                if etype == "assistant" and "message" in event:
+                    for block in event["message"].get("content", []):
+                        if block.get("type") == "text":
+                            yield f"data: {json.dumps({'type': 'text', 'content': block['text']})}\n\n"
+                elif etype == "content_block_delta":
+                    delta = event.get("delta", {})
+                    if delta.get("type") == "text_delta":
+                        yield f"data: {json.dumps({'type': 'text', 'content': delta['text']})}\n\n"
+            process.wait()
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 # ============================================================================
 # Chat Warmup
