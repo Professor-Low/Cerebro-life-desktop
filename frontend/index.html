@@ -2080,6 +2080,23 @@
             background: rgba(168,85,247,0.15);
             border-color: rgba(168,85,247,0.4);
         }
+        .home-agent-pill.status-standby {
+            background: rgba(245,158,11,0.1);
+            border-color: rgba(245,158,11,0.25);
+        }
+        .home-agent-pill.specops.status-standby {
+            background: rgba(245,158,11,0.12);
+            border-color: rgba(245,158,11,0.35);
+            color: #fbbf24;
+        }
+        .home-agent-pill.status-cycling {
+            background: rgba(167,139,250,0.1);
+            border-color: rgba(167,139,250,0.25);
+        }
+        .home-agent-pill.specops.status-cycling {
+            background: rgba(168,85,247,0.15);
+            border-color: rgba(168,85,247,0.4);
+        }
         .home-agent-dot {
             width: 7px;
             height: 7px;
@@ -2898,6 +2915,40 @@
             color: #fff;
             border-color: var(--accent);
         }
+        .sidebar-archives-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .sidebar-archives-header span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .sidebar-archives-count {
+            background: rgba(168,85,247,0.2);
+            color: var(--accent-light);
+            padding: 1px 6px;
+            border-radius: 10px;
+            font-size: 0.65rem;
+        }
+        .sidebar-empty-archives {
+            padding: 30px 15px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            line-height: 1.5;
+        }
+        .empty-archive-icon {
+            font-size: 2rem;
+            margin-bottom: 8px;
+        }
+
 
         /* ==================== HOMEPAGE V2: DETAIL MODAL ==================== */
         .home-detail-modal {
@@ -13204,6 +13255,13 @@
             padding: 1px 7px;
             border-radius: 8px;
             font-weight: 700;
+        }
+        .sidebar-conversation-item .archive-badge {
+            position: absolute;
+            right: 4px;
+            bottom: 4px;
+            font-size: 0.6rem;
+            opacity: 0.6;
         }
         .sidebar-conversation-item .fav-star {
             position: absolute;
@@ -30443,6 +30501,7 @@
                                     <div class="pack-dropdown-header" style="display:flex;align-items:center;justify-content:space-between;">
                                         <span>Capability Packs</span>
                                         <div style="display:flex;align-items:center;gap:6px;">
+                                            <button onclick="event.stopPropagation();openPackBuilder()" title="Create new capability pack" style="width:22px;height:22px;border-radius:6px;border:1px solid var(--border);background:var(--glass-bg);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:0.85rem;padding:0;transition:all 0.2s ease;" onmouseenter="this.style.background='rgba(139,92,246,0.2)'" onmouseleave="this.style.background='var(--glass-bg)'">+</button>
                                             <span style="font-size:0.6rem;color:var(--text-muted);text-transform:none;letter-spacing:0;">Auto</span>
                                             <div class="pack-toggle" id="auto-detect-toggle" onclick="toggleAutoDetect(event)" title="Toggle auto-detection of packs based on your message"></div>
                                         </div>
@@ -42189,6 +42248,36 @@
                 }
             }
 
+            // Filter for archive view
+            if (_archiveViewActive) {
+                displaySessions = sessions.filter(function(s) {
+                    return _sessionArchives.has(s.session_id);
+                });
+                var archHeader = document.createElement('div');
+                archHeader.className = 'sidebar-archives-header';
+                var archLabel = document.createElement('span');
+                archLabel.innerHTML = '📦 Archived Chats';
+                var archCount = document.createElement('span');
+                archCount.className = 'sidebar-archives-count';
+                archCount.textContent = displaySessions.length;
+                archHeader.appendChild(archLabel);
+                archHeader.appendChild(archCount);
+                container.appendChild(archHeader);
+
+                if (!displaySessions.length) {
+                    var emptyArch = document.createElement('div');
+                    emptyArch.className = 'sidebar-empty-archives';
+                    emptyArch.innerHTML = '<div class="empty-archive-icon">📦</div>No archived chats yet.<br>Right-click a chat to archive it.';
+                    container.appendChild(emptyArch);
+                    return;
+                }
+            } else if (!_favoritesViewActive) {
+                // In normal view, hide archived chats
+                displaySessions = displaySessions.filter(function(s) {
+                    return !_sessionArchives.has(s.session_id);
+                });
+            }
+
             if (!displaySessions.length) {
                 var empty = document.createElement('div');
                 empty.style.cssText = 'padding:20px;text-align:center;color:var(--text-muted);font-size:0.8rem;';
@@ -42267,6 +42356,13 @@
                         favStar.className = 'fav-star';
                         favStar.textContent = '★';
                         item.appendChild(favStar);
+                    }
+
+                    if (_sessionArchives.has(s.session_id)) {
+                        var archBadge = document.createElement('span');
+                        archBadge.className = 'archive-badge';
+                        archBadge.textContent = '📦';
+                        item.appendChild(archBadge);
                     }
 
                     groupEl.appendChild(item);
@@ -42661,6 +42757,45 @@
             loadConversationList();
         }
 
+        // ============================================================================
+        // Chat Session Archives (synced with backend)
+        // ============================================================================
+        var _sessionArchives = new Set();
+
+        async function loadSessionArchives() {
+            try {
+                var resp = await fetch(API_URL + '/chat/session-archives', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (resp.ok) {
+                    var data = await resp.json();
+                    _sessionArchives = new Set(data.archives || []);
+                }
+            } catch (e) {
+                console.error('[SessionArchives] load error:', e);
+            }
+        }
+
+        function _saveSessionArchives() {
+            fetch(API_URL + '/chat/session-archives', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ archives: Array.from(_sessionArchives) })
+            }).catch(function(e) { console.error('[SessionArchives] save error:', e); });
+        }
+
+        function toggleSessionArchive(sid) {
+            if (_sessionArchives.has(sid)) {
+                _sessionArchives.delete(sid);
+                showToast('Unarchived conversation', 'info');
+            } else {
+                _sessionArchives.add(sid);
+                showToast('Chat archived 📦', 'success');
+            }
+            _saveSessionArchives();
+            loadConversationList();
+        }
+
         function newChatFromSidebar() {
             // Cancel any pending debounced save for old session
             if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
@@ -42756,6 +42891,21 @@
             });
             menu.appendChild(ren);
 
+            // Archive toggle
+            var arch = document.createElement('div');
+            arch.className = 'sidebar-ctx-item';
+            var archIcon = document.createElement('span');
+            var isArchived = _sessionArchives.has(sid);
+            archIcon.textContent = '📦';
+            var archLabel = document.createTextNode(isArchived ? ' Unarchive' : ' Archive');
+            arch.appendChild(archIcon);
+            arch.appendChild(archLabel);
+            arch.addEventListener('click', function() {
+                menu.remove();
+                toggleSessionArchive(sid);
+            });
+            menu.appendChild(arch);
+
             var del = document.createElement('div');
             del.className = 'sidebar-ctx-item danger';
             var delIcon = document.createElement('span');
@@ -42809,7 +42959,7 @@
                         if (sidebar) sidebar.style.transition = '';
                     });
                 });
-                loadSessionFavorites().then(function() {
+                Promise.all([loadSessionFavorites(), loadSessionArchives()]).then(function() {
                     loadConversationList();
                 });
             }
@@ -59501,6 +59651,69 @@ Please proceed with implementing this recommendation. You have full permissions.
             }
         }
 
+        // ============================================================================
+        // Per-Chat State (packs, model, draft)
+        // ============================================================================
+        function savePerChatState(sid) {
+            var id = sid || sessionId;
+            if (!id) return;
+            try {
+                var state = {};
+                // Save active packs
+                var active = [];
+                document.querySelectorAll('.pack-item.active').forEach(function(el) {
+                    if (el.dataset.packId) active.push(el.dataset.packId);
+                });
+                state.packs = active;
+                // Save model selection
+                var modelSel = document.getElementById('model-select');
+                if (modelSel) state.model = modelSel.value;
+                // Save draft text
+                var input = document.getElementById('chat-input');
+                if (input && input.value.trim()) state.draft = input.value;
+                localStorage.setItem('cerebro_chat_state_' + id, JSON.stringify(state));
+            } catch (e) {
+                console.error('[PerChatState] save error:', e);
+            }
+        }
+
+        function restorePerChatState(sid) {
+            if (!sid) return;
+            try {
+                var raw = localStorage.getItem('cerebro_chat_state_' + sid);
+                if (!raw) return;
+                var state = JSON.parse(raw);
+                // Restore packs
+                if (state.packs && Array.isArray(state.packs)) {
+                    document.querySelectorAll('.pack-item.active').forEach(function(el) {
+                        el.classList.remove('active');
+                    });
+                    state.packs.forEach(function(pid) {
+                        var el = document.querySelector('.pack-item[data-pack-id="' + pid + '"]');
+                        if (el) el.classList.add('active');
+                    });
+                    if (typeof updatePackBadge === 'function') updatePackBadge();
+                    if (typeof updateActivePacksBar === 'function') updateActivePacksBar();
+                }
+                // Restore model
+                if (state.model) {
+                    var modelSel = document.getElementById('model-select');
+                    if (modelSel) modelSel.value = state.model;
+                }
+                // Restore draft
+                if (state.draft) {
+                    var input = document.getElementById('chat-input');
+                    if (input) {
+                        input.value = state.draft;
+                        if (typeof autoResizeChat === 'function') autoResizeChat(input);
+                    }
+                }
+            } catch (e) {
+                console.error('[PerChatState] restore error:', e);
+            }
+        }
+
+
         function updateBrowserPanel() {
             var dot = document.getElementById('browser-status-dot');
             var statusText = document.getElementById('browser-status-text');
@@ -62672,6 +62885,8 @@ Please proceed with implementing this recommendation. You have full permissions.
         }
 
         function pbClose() { pbMinimize(); }
+        function openPackBuilder() { pbExpand(); }
+        function closePackBuilder() { pbMinimize(); }
 
         function pbClear() {
             if (!confirm('Start a new Pack Builder session? Current conversation will be cleared.')) return;

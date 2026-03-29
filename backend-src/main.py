@@ -5943,6 +5943,8 @@ async def warmup_chat(user: str = Depends(verify_token)):
 # Chat History Persistence
 # ============================================================================
 CHAT_HISTORY_PATH = Path(config.AI_MEMORY_PATH) / "cerebro" / "chat_history"
+CHAT_FAVORITES_PATH = Path(config.AI_MEMORY_PATH) / "cerebro" / "chat_favorites"
+CHAT_FAVORITES_PATH.mkdir(parents=True, exist_ok=True)
 
 class ChatHistoryMessage(BaseModel):
     type: str
@@ -6027,6 +6029,16 @@ async def get_chat_session(session_id: str, user: str = Depends(verify_token)):
         "summary": data.get("summary", ""),
     }
 
+@app.patch("/chat/session/{session_id}")
+async def update_chat_session(session_id: str, request: Request, user: str = Depends(verify_token)):
+    """Update session metadata (e.g. custom title)."""
+    body = await request.json()
+    data = _load_persistent_session(session_id)
+    if "title" in body:
+        data["title"] = str(body["title"])[:80]
+    _save_persistent_session(session_id, data)
+    return {"success": True}
+
 @app.get("/chat/sessions")
 async def list_chat_sessions(user: str = Depends(verify_token)):
     """List all persistent chat sessions."""
@@ -6034,16 +6046,88 @@ async def list_chat_sessions(user: str = Depends(verify_token)):
     for f in CHAT_SESSION_DIR.glob("*.json"):
         if "_archived_" in f.name:
             continue
+        if f.stem.startswith("fork_"):
+            continue
         try:
             d = json.loads(f.read_text())
+            msgs = d.get("messages", [])
+            title = d.get("title", "")
+            if not title:
+                for m in msgs:
+                    if m.get("role") == "user":
+                        title = m.get("content", "")[:40]
+                        break
             sessions.append({
                 "session_id": d.get("session_id", f.stem),
-                "message_count": len(d.get("messages", [])),
+                "message_count": len(msgs),
                 "last_updated": d.get("last_updated", ""),
+                "title": title,
+                "summary": d.get("summary", ""),
             })
         except (json.JSONDecodeError, OSError):
             pass
+    sessions.sort(key=lambda s: s.get("last_updated", ""), reverse=True)
     return {"sessions": sessions}
+
+# ============================================================================
+# Chat Session Favorites
+# ============================================================================
+
+@app.get("/chat/session-favorites")
+async def get_session_favorites(user: str = Depends(verify_token)):
+    """Get all favorite session IDs for this user."""
+    try:
+        fav_file = CHAT_FAVORITES_PATH / f"{user}_session_favorites.json"
+        if not fav_file.exists():
+            return {"favorites": []}
+        data = json.loads(fav_file.read_text())
+        return {"favorites": data.get("favorites", [])}
+    except Exception as e:
+        print(f"Error loading session favorites: {e}")
+        return {"favorites": []}
+
+@app.post("/chat/session-favorites")
+async def save_session_favorites(request: Request, user: str = Depends(verify_token)):
+    """Save the full list of favorite session IDs."""
+    try:
+        body = await request.json()
+        favorites = body.get("favorites", [])
+        fav_file = CHAT_FAVORITES_PATH / f"{user}_session_favorites.json"
+        fav_file.write_text(json.dumps({"favorites": favorites, "updated": datetime.now(timezone.utc).isoformat()}, indent=2))
+        return {"success": True, "count": len(favorites)}
+    except Exception as e:
+        print(f"Error saving session favorites: {e}")
+        return {"success": False, "error": str(e)}
+
+# ============================================================================
+# Chat Session Archives
+# ============================================================================
+
+@app.get("/chat/session-archives")
+async def get_session_archives(user: str = Depends(verify_token)):
+    """Get all archived session IDs for this user."""
+    try:
+        arch_file = CHAT_FAVORITES_PATH / f"{user}_session_archives.json"
+        if not arch_file.exists():
+            return {"archives": []}
+        data = json.loads(arch_file.read_text())
+        return {"archives": data.get("archives", [])}
+    except Exception as e:
+        print(f"Error loading session archives: {e}")
+        return {"archives": []}
+
+@app.post("/chat/session-archives")
+async def save_session_archives(request: Request, user: str = Depends(verify_token)):
+    """Save the full list of archived session IDs."""
+    try:
+        body = await request.json()
+        archives = body.get("archives", [])
+        arch_file = CHAT_FAVORITES_PATH / f"{user}_session_archives.json"
+        arch_file.write_text(json.dumps({"archives": archives, "updated": datetime.now(timezone.utc).isoformat()}, indent=2))
+        return {"success": True, "count": len(archives)}
+    except Exception as e:
+        print(f"Error saving session archives: {e}")
+        return {"success": False, "error": str(e)}
 
 @app.post("/task")
 async def create_task(request: TaskRequest, user: str = Depends(verify_token)):
