@@ -63076,6 +63076,23 @@ Please proceed with implementing this recommendation. You have full permissions.
         }
 
 
+
+            // === Expose DOMContentLoaded-scoped functions to global scope for onclick handlers ===
+            window.toggleUsageWidget = toggleUsageWidget;
+            window.loadUsageData = loadUsageData;
+            window.toggleAgentHealthWidget = toggleAgentHealthWidget;
+            window.toggleArchiveView = toggleArchiveView;
+            window.toggleHideCompleted = toggleHideCompleted;
+            window.pbToggle = pbToggle;
+            window.pbExpand = pbExpand;
+            window.pbMinimize = pbMinimize;
+            window.pbClose = pbClose;
+            window.pbSend = pbSend;
+            window.pbClear = pbClear;
+            window.pbSaveDraft = pbSaveDraft;
+            window.openPackBuilder = openPackBuilder;
+            window.closePackBuilder = closePackBuilder;
+
             document.querySelectorAll('.btn-primary, .btn-secondary').forEach(addRippleEffect);
         });
     </script>
