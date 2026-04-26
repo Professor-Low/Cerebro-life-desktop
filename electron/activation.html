@@ -491,13 +491,13 @@
         <div class="dot"></div>
       </div>
       <h2>Prerequisites</h2>
-      <div class="subtitle">Cerebro needs Docker to run</div>
+      <div class="subtitle">Verifying your installation</div>
       <div class="prereq-list">
         <!-- Docker row -->
         <div class="prereq-item" id="prereq-docker">
           <div class="prereq-icon"><div class="spinner"></div></div>
           <div class="prereq-info">
-            <div class="prereq-name">Docker Desktop</div>
+            <div class="prereq-name">Backend Service</div>
             <div class="prereq-detail" id="prereq-docker-detail">Checking...</div>
           </div>
           <div class="prereq-action" id="prereq-docker-action"></div>
@@ -537,8 +537,8 @@
         <div class="dot"></div>
         <div class="dot"></div>
       </div>
-      <h2>Restart Required</h2>
-      <div class="subtitle">Docker was installed but needs a restart to finish setup</div>
+      <h2>Almost Ready</h2>
+      <div class="subtitle">Cerebro is finalizing setup — this will only take a moment</div>
       <div class="countdown-container">
         <svg class="countdown-ring" viewBox="0 0 120 120">
           <circle class="ring-bg" cx="60" cy="60" r="52" fill="none" stroke="rgba(139,92,246,0.1)" stroke-width="4"/>
@@ -566,14 +566,14 @@
         <div class="dot"></div>
       </div>
       <h2>Setting Up</h2>
-      <div class="subtitle">Downloading and configuring Cerebro</div>
+      <div class="subtitle">Initializing Cerebro</div>
       <div class="progress-container">
         <div class="progress-bar-track">
           <div class="progress-bar-fill" id="setup-progress-fill"></div>
         </div>
         <div class="progress-status" id="setup-progress-steps">
           <div class="progress-step" id="ps-config"><span class="icon">&#9675;</span> Writing configuration...</div>
-          <div class="progress-step" id="ps-pull"><span class="icon">&#9675;</span> Pulling Docker images...</div>
+          <div class="progress-step" id="ps-pull"><span class="icon">&#9675;</span> Starting backend service...</div>
           <div class="progress-step" id="ps-ready"><span class="icon">&#9675;</span> Verifying setup...</div>
         </div>
       </div>
@@ -595,7 +595,7 @@
       <div class="subtitle">Optional: Connect Cerebro's cognitive tools to Claude Code</div>
       <div class="mcp-info">
         <div class="mcp-info-title">What does this do?</div>
-        <div class="mcp-info-body">This configures Claude Code to use Cerebro's MCP server running in Docker, giving it access to 49 cognitive tools including memory, reasoning, and goal tracking. Your ~/.claude.json will be updated.</div>
+        <div class="mcp-info-body">This configures Claude Code to use Cerebro's MCP server, giving it access to cognitive tools including memory, reasoning, and goal tracking. Your ~/.claude.json will be updated.</div>
       </div>
       <button class="btn btn-primary" id="mcp-setup-btn" onclick="setupMcp()">Yes, Set It Up</button>
       <button class="btn btn-ghost" onclick="goToStep(7)">Skip for Now</button>
@@ -801,11 +801,11 @@
       window.cerebroDesktop.checkDocker().then(function(docker) {
         if (docker.installed && docker.running) {
           // Docker installed + running = green check
-          setPrereqResult('prereq-docker', 'prereq-docker-detail', 'pass', 'Installed and running');
+          setPrereqResult('prereq-docker', 'prereq-docker-detail', 'pass', 'Bundled and ready');
           dockerReady = true;
         } else if (docker.installed) {
           // Docker installed but not running = show Start button
-          setPrereqResult('prereq-docker', 'prereq-docker-detail', 'fail', 'Installed but not running');
+          setPrereqResult('prereq-docker', 'prereq-docker-detail', 'fail', 'Backend not yet started');
           var btn = document.createElement('button');
           btn.className = 'btn-sm btn-start';
           btn.textContent = 'Start';
@@ -813,7 +813,7 @@
           actionEl.appendChild(btn);
         } else {
           // Docker not installed = show Install button
-          setPrereqResult('prereq-docker', 'prereq-docker-detail', 'fail', 'Not installed');
+          setPrereqResult('prereq-docker', 'prereq-docker-detail', 'fail', 'Backend missing — reinstall Cerebro');
           var btn = document.createElement('button');
           btn.className = 'btn-sm btn-install';
           btn.textContent = 'Install';
@@ -907,7 +907,7 @@
       window.cerebroDesktop.startDockerDaemon().then(function(result) {
         if (result.success) {
           progressEl.style.display = 'none';
-          setPrereqResult('prereq-docker', 'prereq-docker-detail', 'pass', 'Installed and running');
+          setPrereqResult('prereq-docker', 'prereq-docker-detail', 'pass', 'Bundled and ready');
           document.getElementById('prereq-continue-btn').disabled = false;
           showStatus('prereq-status', '', '');
         } else {
