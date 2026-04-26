@@ -6,21 +6,90 @@ on:
 
 env:
   NODE_VERSION: '20'
+  PYTHON_VERSION: '3.11'
 
 jobs:
-  validate:
+  # Build backend binary first so the electron build has it
+  backend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: backend-src/requirements.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip wheel
+          pip install -r backend-src/requirements.txt
+          pip install pyinstaller
+
+      - name: Build backend binary
+        run: pyinstaller build/cerebro-backend.spec --clean --noconfirm
+
+      - name: Verify binary
+        run: |
+          ls -lh dist/
+          file dist/cerebro-backend
+
+      - name: Smoke test backend (probe /health)
+        run: |
+          ./dist/cerebro-backend > backend.log 2>&1 &
+          BACKEND_PID=$!
+          sleep 8
+          if curl -fsS http://127.0.0.1:61000/health > /dev/null; then
+            echo "Backend healthy ✓"
+            kill $BACKEND_PID 2>/dev/null || true
+          else
+            echo "Backend health check FAILED"
+            tail -30 backend.log
+            kill $BACKEND_PID 2>/dev/null || true
+            exit 1
+          fi
+        env:
+          CEREBRO_PORT: 61000
+          CEREBRO_HOST: 127.0.0.1
+          CEREBRO_DATA_DIR: /tmp/cerebro-data
+          AI_MEMORY_PATH: /tmp/cerebro-memory
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-pr
+          path: dist/cerebro-backend
+          retention-days: 1
+
+  # Build electron shell (validation only — installer not published)
+  electron:
+    needs: [backend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download backend binary
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-pr
+          path: bundle/
+
+      - name: Make backend executable
+        run: chmod +x bundle/cerebro-backend
+
       - run: npm ci
-      - name: Build Electron shell (validation)
+
+      - name: Build Linux AppImage (validation)
         run: npm run build:linux
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Verify output exists
+
+      - name: Verify installer
         run: |
           ls -la dist/
           ls dist/Cerebro-Installer.AppImage
