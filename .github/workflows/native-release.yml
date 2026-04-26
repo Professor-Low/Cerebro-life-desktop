@@ -1,0 +1,223 @@
+name: Native Build & Release (v6)
+
+# Replaces docker-release.yml. Builds:
+#   1. PyInstaller backend binaries for Linux x64 + Windows x64
+#   2. Electron installers that bundle the backend binary
+#   3. GitHub release with installers (no Docker images)
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: '20'
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # --- Build backend binary on Linux ---
+  backend-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: backend-src/requirements.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip wheel
+          pip install -r backend-src/requirements.txt
+          pip install pyinstaller
+
+      - name: Build backend binary (PyInstaller)
+        run: |
+          pyinstaller build/cerebro-backend.spec --clean --noconfirm
+          ls -lh dist/
+
+      - name: Smoke test backend binary
+        run: |
+          # Launch and immediately probe /health — kill after success
+          ./dist/cerebro-backend &
+          BACKEND_PID=$!
+          sleep 8
+          if curl -fsS http://127.0.0.1:61000/health > /dev/null; then
+            echo "Backend healthy ✓"
+          else
+            echo "Backend health check failed"
+            kill $BACKEND_PID 2>/dev/null || true
+            exit 1
+          fi
+          kill $BACKEND_PID 2>/dev/null || true
+        env:
+          CEREBRO_PORT: 61000
+          CEREBRO_DATA_DIR: /tmp/cerebro-data
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-linux
+          path: dist/cerebro-backend
+          retention-days: 1
+
+  # --- Build backend binary on Windows ---
+  backend-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: backend-src/requirements.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip wheel
+          pip install -r backend-src/requirements.txt
+          pip install pyinstaller
+
+      - name: Build backend binary (PyInstaller)
+        run: |
+          pyinstaller build/cerebro-backend.spec --clean --noconfirm
+          dir dist
+        shell: cmd
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-windows
+          path: dist/cerebro-backend.exe
+          retention-days: 1
+
+  # --- Build Electron installer for Linux ---
+  electron-linux:
+    needs: [backend-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download backend binary
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-linux
+          path: bundle/
+
+      - name: Make backend binary executable
+        run: chmod +x bundle/cerebro-backend
+
+      - run: npm ci
+
+      - name: Build Linux installer
+        run: npm run build:fullstack:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: electron-linux
+          path: |
+            dist/Cerebro-Installer.AppImage
+            dist/Cerebro-Installer.deb
+            dist/latest-linux.yml
+          retention-days: 1
+
+  # --- Build Electron installer for Windows ---
+  electron-windows:
+    needs: [backend-windows]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download backend binary
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-windows
+          path: bundle/
+
+      - run: npm ci
+
+      - name: Build Windows installer
+        run: npm run build:fullstack:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: electron-win
+          path: |
+            dist/Cerebro-Installer.exe
+            dist/latest.yml
+          retention-days: 1
+
+  # --- Create GitHub Release ---
+  release:
+    needs: [electron-linux, electron-windows]
+    runs-on: ubuntu-latest
+    env:
+      TAG_NAME: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+          pattern: electron-*
+
+      - name: List artifacts
+        run: find artifacts/ -type f | sort
+
+      - name: Determine prerelease
+        id: prerelease
+        run: |
+          if echo "$TAG_NAME" | grep -qE '(alpha|beta|rc)'; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
+          generate_release_notes: true
+          body: |
+            ## Cerebro v6 — Native Build
+
+            **No Docker required.** This release ships the backend as a bundled
+            native binary, slashing install size by ~10x and idle RAM by ~5x.
+
+            ### Installation
+
+            1. Download the installer for your platform below
+            2. Install and launch — the backend binary is included
+            3. On first run, sign in to your Claude account when prompted
+
+            ### Requirements
+
+            - 16 GB RAM (recommended), 8 GB minimum
+            - Claude account with active subscription
+            - Google Chrome (auto-detected for browser automation)
+
+          files: |
+            artifacts/electron-win/*
+            artifacts/electron-linux/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -7,12 +7,30 @@ directories:
   output: dist
   buildResources: assets
 
+# Files included inside the asar bundle (the Electron app itself)
 files:
   - electron/**/*
   - frontend/**/*
-  - docker/**/*
   - assets/**/*
   - package.json
+  - "!docker/**"      # v6: no docker
+  - "!backend-src/**" # backend ships as binary in extraResources
+
+# Backend binary + frontend static files ship as extraResources (NOT in asar).
+# At runtime they live at process.resourcesPath/backend/ and process.resourcesPath/frontend/.
+extraResources:
+  - from: bundle/cerebro-backend
+    to: backend/cerebro-backend
+    filter: ["**/*"]
+  - from: bundle/cerebro-backend.exe
+    to: backend/cerebro-backend.exe
+    filter: ["**/*"]
+  - from: frontend
+    to: frontend
+    filter:
+      - "**/*"
+      - "!*.bak"
+      - "!.DS_Store"
 
 asar: true
 asarUnpack:

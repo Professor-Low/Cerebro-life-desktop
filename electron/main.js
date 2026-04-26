@@ -4,7 +4,7 @@ const fs = require('fs');
 const net = require('net');
 const { spawn, execFile } = require('child_process');
 const { autoUpdater } = require('electron-updater');
-const { DockerManager } = require('./docker-manager');
+const { NativeManager } = require('./native-manager');
 const { loadPortConfig, savePortConfig, getBackendUrl } = require('./port-config');
 const { LicenseManager } = require('./license-manager');
 const { createTray, updateTrayStatus } = require('./tray');
@@ -35,7 +35,7 @@ if (process.platform === 'win32') {
 }
 
 const isDev = process.env.CEREBRO_DEV === '1';
-const dockerManager = new DockerManager();
+const nativeManager = new NativeManager();
 
 let licenseManager;
 try {
@@ -558,7 +558,7 @@ async function ensureDefenderExclusion() {
 
   if (needsCheck) {
     // Verify actual exclusion state (runs elevated check)
-    const excluded = await dockerManager.isDefenderExcluded().catch(() => false);
+    const excluded = await nativeManager.isDefenderExcluded().catch(() => false);
     if (excluded) {
       // Refresh marker timestamp
       try { fs.writeFileSync(markerPath, new Date().toISOString()); } catch {}
@@ -568,15 +568,15 @@ async function ensureDefenderExclusion() {
 
   console.log('[Main] Defender exclusion not found — requesting elevation to add it');
   updateSplashStatus('Configuring Windows Defender...');
-  const result = await dockerManager.addDefenderExclusion();
+  const result = await nativeManager.addDefenderExclusion();
   if (!result.success) {
     console.warn('[Main] Defender exclusion failed (non-fatal):', result.error);
     defenderExclusionFailed = true;
   }
 }
 
-async function startDockerStack() {
-  updateSplashStatus('Starting Docker containers...');
+async function startBackendStack() {
+  updateSplashStatus('Starting Cerebro backend...');
 
   // Auto-detect memory config from env vars before writing compose
   // (ensures bind mount is set up on first run if CEREBRO_DATA_DIR is set)
@@ -593,7 +593,7 @@ async function startDockerStack() {
         cfg.localMirrorPath = localMirrorPath;
         saveMemoryConfig(cfg);
         console.log(`[Storage] Auto-created local mirror for network drive: ${localMirrorPath}`);
-        await dockerManager.writeComposeFile();
+        await nativeManager.writeComposeFile();
       } catch (e) {
         console.warn('[Storage] Auto-setup of local mirror failed:', e.message);
       }
@@ -629,23 +629,23 @@ async function startDockerStack() {
   // Defender exclusion now runs at app startup (before license gate), so no
   // need to duplicate it here. The marker file prevents repeated UAC prompts.
 
-  // 1. Check if Docker is installed — if not, wizard handles install
-  const installed = await dockerManager.isDockerInstalled();
+  // 1. Check if backend binary is bundled — should always be true in v6 native build
+  const installed = await nativeManager.isDockerInstalled();
   if (!installed) {
-    console.log('[Main] Docker not installed, deferring to wizard');
-    return { ok: false, error: 'Docker is not installed' };
+    console.log('[Main] Backend binary missing — installation appears corrupted');
+    return { ok: false, error: 'Backend binary not found. Reinstall Cerebro.' };
   }
 
-  // 2. Check if Docker daemon is running — auto-start if not
-  const running = await dockerManager.isDockerRunning();
+  // 2. Native build — no daemon to start (compat shim returns running=true)
+  const running = await nativeManager.isDockerRunning();
   if (!running) {
-    updateSplashStatus('Starting Docker...');
-    const startResult = await dockerManager.startDockerDaemon((p) => {
+    updateSplashStatus('Starting backend service...');
+    const startResult = await nativeManager.startDockerDaemon((p) => {
       updateSplashStatus(p.message || 'Starting Docker...');
     });
     if (!startResult.success) {
-      console.error('[Main] Failed to start Docker daemon:', startResult.error);
-      return { ok: false, error: `Failed to start Docker daemon: ${startResult.error}` };
+      console.error('[Main] Daemon-start shim returned error (unexpected in native build):', startResult.error);
+      return { ok: false, error: `Native runtime startup failed: ${startResult.error}` };
     }
   }
 
@@ -656,19 +656,19 @@ async function startDockerStack() {
 
   // 4. Write/refresh config (always refresh compose to fix volume mounts)
   updateSplashStatus('Writing configuration...');
-  await dockerManager.writeComposeFile();
-  dockerManager.writeEnvFile();
-  await dockerManager.setClaudeCliPath();
+  await nativeManager.writeComposeFile();
+  nativeManager.writeEnvFile();
+  await nativeManager.setClaudeCliPath();
 
   // 5. Start the compose stack
   try {
-    updateSplashStatus('Starting containers...');
-    await dockerManager.startStack();
+    updateSplashStatus('Starting backend service...');
+    await nativeManager.startStack();
 
     // 6. Verify storage mount health (non-blocking diagnostic)
     let storageHealth = null;
     try {
-      storageHealth = await dockerManager.verifyStorageMount();
+      storageHealth = await nativeManager.verifyStorageMount();
       if (storageHealth.warnings.length > 0) {
         console.warn('[Main] Storage health warnings:', storageHealth.warnings);
       }
@@ -678,7 +678,7 @@ async function startDockerStack() {
 
     return { ok: true, storageHealth };
   } catch (err) {
-    console.error('[Main] Docker stack failed to start:', err.message);
+    console.error('[Main] Backend failed to start:', err.message);
     const result = { ok: false, error: err.message };
     if (err.portConflict) {
       result.portConflict = true;
@@ -748,13 +748,13 @@ async function loadFrontend() {
 async function checkForUpdatesQuietly() {
   let bannerShown = false;
 
-  // Check Docker image updates (existing behavior)
+  // Check for app updates (electron-updater handles full install)
   try {
-    const result = await dockerManager.checkForUpdates();
+    const result = await nativeManager.checkForUpdates();
     if (result.updateAvailable && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.executeJavaScript(`
         if (typeof window.__cerebroShowUpdateBanner === 'function') {
-          window.__cerebroShowUpdateBanner('docker');
+          window.__cerebroShowUpdateBanner('app');
         }
       `).catch(() => {});
       bannerShown = true;
@@ -879,7 +879,7 @@ function installDesktopIntegration() {
 
 async function shutdown() {
   console.log('[Main] Shutting down...');
-  await dockerManager.stopStack();
+  await nativeManager.stopStack();
 }
 
 // Focus existing window when a second instance is launched
@@ -1035,7 +1035,7 @@ app.whenReady().then(async () => {
   tray = createTray(mainWindow, trayIconPath);
 
   // Post-restart resume: check for saved setup state before license gate
-  const savedState = dockerManager.loadSetupState();
+  const savedState = nativeManager.loadSetupState();
   if (savedState && savedState.step === 'needs-setup') {
     console.log('[Main] Resuming setup after restart');
     showSetupWizard();
@@ -1059,15 +1059,15 @@ app.whenReady().then(async () => {
   }
 
   // Forward credential events to renderer
-  dockerManager.on('credentials-expired', (data) => {
+  nativeManager.on('credentials-expired', (data) => {
     if (mainWindow) mainWindow.webContents.send('credentials-expired', data);
   });
-  dockerManager.on('credentials-refreshed', (data) => {
+  nativeManager.on('credentials-refreshed', (data) => {
     if (mainWindow) mainWindow.webContents.send('credentials-refreshed', data);
   });
 
   // Returning user: start Docker stack and load frontend
-  const dockerResult = await startDockerStack();
+  const dockerResult = await startBackendStack();
   if (!dockerResult.ok) {
     console.error('[Main] Docker start failed:', dockerResult.error);
     showSetupWizard();
@@ -1166,7 +1166,7 @@ app.on('before-quit', async (e) => {
 
 // App info
 ipcMain.handle('get-app-version', () => app.getVersion());
-ipcMain.handle('get-edition', () => 'docker');
+ipcMain.handle('get-edition', () => 'native');
 
 // Port configuration
 ipcMain.handle('get-port-config', () => loadPortConfig());
@@ -1197,28 +1197,28 @@ ipcMain.handle('refresh-license', async () => {
 
 // Docker status
 ipcMain.handle('check-docker', async () => {
-  const installed = await dockerManager.isDockerInstalled();
+  const installed = await nativeManager.isDockerInstalled();
   if (!installed) return { installed: false, running: false };
-  const running = await dockerManager.isDockerRunning();
+  const running = await nativeManager.isDockerRunning();
   return { installed, running };
 });
 
 ipcMain.handle('check-claude-code', async () => {
-  return dockerManager.isClaudeInstalled();
+  return nativeManager.isClaudeInstalled();
 });
 
 ipcMain.handle('get-docker-status', async () => {
-  return dockerManager.getStatus();
+  return nativeManager.getStatus();
 });
 
 ipcMain.handle('get-docker-logs', async () => {
-  return dockerManager.getLogs();
+  return nativeManager.getLogs();
 });
 
 // Docker install & daemon management
 ipcMain.handle('install-docker', async () => {
   try {
-    const result = await dockerManager.installDocker((progress) => {
+    const result = await nativeManager.installDocker((progress) => {
       if (mainWindow) {
         mainWindow.webContents.send('docker-install-progress', progress);
       }
@@ -1230,12 +1230,12 @@ ipcMain.handle('install-docker', async () => {
 });
 
 ipcMain.handle('check-wsl', async () => {
-  return dockerManager.checkWslAvailable();
+  return nativeManager.checkWslAvailable();
 });
 
 ipcMain.handle('start-docker-daemon', async () => {
   try {
-    const result = await dockerManager.startDockerDaemon((progress) => {
+    const result = await nativeManager.startDockerDaemon((progress) => {
       if (mainWindow) {
         mainWindow.webContents.send('docker-start-progress', progress);
       }
@@ -1249,9 +1249,9 @@ ipcMain.handle('start-docker-daemon', async () => {
 // Setup & lifecycle
 ipcMain.handle('setup-docker', async () => {
   try {
-    await dockerManager.writeComposeFile();
-    dockerManager.writeEnvFile();
-    await dockerManager.setClaudeCliPath();
+    await nativeManager.writeComposeFile();
+    nativeManager.writeEnvFile();
+    await nativeManager.setClaudeCliPath();
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -1260,7 +1260,7 @@ ipcMain.handle('setup-docker', async () => {
 
 ipcMain.handle('pull-images', async () => {
   try {
-    await dockerManager.pullImages((progress) => {
+    await nativeManager.pullImages((progress) => {
       if (mainWindow) {
         mainWindow.webContents.send('pull-progress', progress);
       }
@@ -1273,7 +1273,7 @@ ipcMain.handle('pull-images', async () => {
 
 ipcMain.handle('install-kokoro-tts', async () => {
   try {
-    await dockerManager.installKokoroTts((progress) => {
+    await nativeManager.installKokoroTts((progress) => {
       if (mainWindow) {
         mainWindow.webContents.send('kokoro-install-progress', progress);
       }
@@ -1286,7 +1286,7 @@ ipcMain.handle('install-kokoro-tts', async () => {
 
 ipcMain.handle('start-stack', async () => {
   try {
-    await dockerManager.startStack();
+    await nativeManager.startStack();
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -1295,7 +1295,7 @@ ipcMain.handle('start-stack', async () => {
 
 ipcMain.handle('stop-stack', async () => {
   try {
-    await dockerManager.stopStack();
+    await nativeManager.stopStack();
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -1305,7 +1305,7 @@ ipcMain.handle('stop-stack', async () => {
 // Updates
 ipcMain.handle('check-for-updates', async () => {
   // Check Docker image updates
-  const dockerResult = await dockerManager.checkForUpdates().catch(() => ({ updateAvailable: false }));
+  const dockerResult = await nativeManager.checkForUpdates().catch(() => ({ updateAvailable: false }));
   if (dockerResult.updateAvailable) return dockerResult;
 
   // Check Electron app updates via autoUpdater
@@ -1367,7 +1367,7 @@ ipcMain.handle('apply-update', async () => {
       }
     }
 
-    const dockerResult = await dockerManager.checkForUpdates();
+    const dockerResult = await nativeManager.checkForUpdates();
     const needsDocker = dockerResult.updateAvailable;
 
     // Re-check for pending Electron updates (electronUpdateReady resets on restart)
@@ -1454,7 +1454,7 @@ ipcMain.handle('apply-update', async () => {
 
     // Step 1: Docker update (if needed)
     if (needsDocker) {
-      await dockerManager.applyUpdate((progress) => {
+      await nativeManager.applyUpdate((progress) => {
         // Map stages to clean messages + progress percentages
         const stage = progress.stage || '';
         const msg = progress.message || '';
@@ -1480,7 +1480,7 @@ ipcMain.handle('apply-update', async () => {
         }
       });
       // Re-sync frontend and env after Docker update to ensure latest files are mounted
-      try { dockerManager.writeEnvFile(); } catch {}
+      try { nativeManager.writeEnvFile(); } catch {}
     }
 
     // Step 2: Electron update (if needed) — quits and reinstalls silently
@@ -1546,7 +1546,7 @@ ipcMain.handle('configure-mcp', async () => {
 // Wizard completion: start stack and load frontend
 ipcMain.handle('wizard-complete', async () => {
   try {
-    const result = await startDockerStack();
+    const result = await startBackendStack();
     if (!result.ok) {
       const response = { success: false, error: result.error || 'Failed to start Docker stack' };
       if (result.portConflict) {
@@ -1564,16 +1564,16 @@ ipcMain.handle('wizard-complete', async () => {
 });
 
 ipcMain.handle('get-setup-status', async () => {
-  const dockerStatus = await dockerManager.isDockerRunning().catch(() => false);
-  const claudeStatus = await dockerManager.isClaudeInstalled().catch(() => ({ installed: false }));
+  const dockerStatus = await nativeManager.isDockerRunning().catch(() => false);
+  const claudeStatus = await nativeManager.isClaudeInstalled().catch(() => ({ installed: false }));
 
   return {
     licensed: licenseManager.getStatus().valid,
-    dockerInstalled: await dockerManager.isDockerInstalled().catch(() => false),
+    dockerInstalled: await nativeManager.isDockerInstalled().catch(() => false),
     dockerRunning: dockerStatus,
     claudeInstalled: claudeStatus.installed,
-    setupComplete: dockerManager.isSetupComplete(),
-    stackRunning: dockerManager.isRunning(),
+    setupComplete: nativeManager.isSetupComplete(),
+    stackRunning: nativeManager.isRunning(),
   };
 });
 
@@ -1600,15 +1600,15 @@ ipcMain.handle('enable-autostart', () => {
 
 // Claude credentials
 ipcMain.handle('check-claude-credentials', () => {
-  return dockerManager.checkClaudeCredentials();
+  return nativeManager.checkClaudeCredentials();
 });
 
 ipcMain.handle('refresh-claude-credentials', () => {
-  return dockerManager.refreshClaudeCredentials();
+  return nativeManager.refreshClaudeCredentials();
 });
 
 ipcMain.handle('silent-refresh-oauth', async () => {
-  return dockerManager.silentRefreshOAuthToken();
+  return nativeManager.silentRefreshOAuthToken();
 });
 
 // Launch Claude CLI login — captures OAuth URL and opens in-app browser window
@@ -1684,9 +1684,9 @@ ipcMain.handle('launch-claude-login', async () => {
         console.log('[Claude Auth] Process exited with code', code);
         // Check if credentials were written successfully
         setTimeout(() => {
-          const status = dockerManager.checkClaudeCredentials();
+          const status = nativeManager.checkClaudeCredentials();
           if (status.valid) {
-            const refreshResult = dockerManager.refreshClaudeCredentials();
+            const refreshResult = nativeManager.refreshClaudeCredentials();
             if (mainWindow) {
               mainWindow.webContents.send('credentials-refreshed', {
                 expiresIn: refreshResult.expiresIn || status.expiresIn,
@@ -1703,10 +1703,10 @@ ipcMain.handle('launch-claude-login', async () => {
       const maxAttempts = 60;
       const watcher = setInterval(() => {
         attempts++;
-        const status = dockerManager.checkClaudeCredentials();
+        const status = nativeManager.checkClaudeCredentials();
         if (status.valid && status.expiresIn > 30) {
           clearInterval(watcher);
-          const refreshResult = dockerManager.refreshClaudeCredentials();
+          const refreshResult = nativeManager.refreshClaudeCredentials();
           if (mainWindow) {
             mainWindow.webContents.send('credentials-refreshed', {
               expiresIn: refreshResult.expiresIn || status.expiresIn,
@@ -1809,32 +1809,32 @@ ipcMain.handle('stop-chrome-cdp', async () => {
 
 // Restart & setup state
 ipcMain.handle('needs-restart', async () => {
-  return dockerManager.checkNeedsRestart();
+  return nativeManager.checkNeedsRestart();
 });
 
 ipcMain.handle('save-setup-state', (_event, state) => {
-  dockerManager.saveSetupState(state);
+  nativeManager.saveSetupState(state);
   return true;
 });
 
 ipcMain.handle('load-setup-state', () => {
-  return dockerManager.loadSetupState();
+  return nativeManager.loadSetupState();
 });
 
 ipcMain.handle('clear-setup-state', () => {
-  dockerManager.clearSetupState();
+  nativeManager.clearSetupState();
   return true;
 });
 
 // File access settings
 ipcMain.handle('get-file-access-config', () => {
-  return dockerManager.loadFileAccessConfig();
+  return nativeManager.loadFileAccessConfig();
 });
 
 ipcMain.handle('save-file-access-config', async (_event, config) => {
   try {
-    dockerManager.saveFileAccessConfig(config);
-    await dockerManager.writeComposeFile();
+    nativeManager.saveFileAccessConfig(config);
+    await nativeManager.writeComposeFile();
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -1842,7 +1842,7 @@ ipcMain.handle('save-file-access-config', async (_event, config) => {
 });
 
 ipcMain.handle('get-file-access-presets', () => {
-  return dockerManager.getPresetMounts();
+  return nativeManager.getPresetMounts();
 });
 
 ipcMain.handle('browse-folder', async () => {
@@ -1861,9 +1861,9 @@ ipcMain.handle('browse-folder', async () => {
 
 ipcMain.handle('restart-docker-stack', async () => {
   try {
-    await dockerManager.stopStack();
-    await dockerManager.writeComposeFile();
-    await dockerManager.startStack();
+    await nativeManager.stopStack();
+    await nativeManager.writeComposeFile();
+    await nativeManager.startStack();
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -2232,7 +2232,7 @@ ipcMain.handle('set-storage-path', async (_event, newPath) => {
 
     saveMemoryConfig(config);
     // Rewrite compose file with new mount
-    await dockerManager.writeComposeFile();
+    await nativeManager.writeComposeFile();
     // Sync MCP config so Claude Code uses the same storage path
     const mcpConfig = getDynamicMcpConfig();
     await writeMcpConfig(mcpConfig.mcpServers);
@@ -2245,7 +2245,7 @@ ipcMain.handle('set-storage-path', async (_event, newPath) => {
 
 ipcMain.handle('get-storage-health', async () => {
   try {
-    return await dockerManager.verifyStorageMount();
+    return await nativeManager.verifyStorageMount();
   } catch (err) {
     return { healthy: true, totalSize: 0, availableSize: 0, fsType: '', warnings: [`Health check failed: ${err.message}`] };
   }
@@ -2271,7 +2271,7 @@ ipcMain.handle('setup-local-mirror', async (_event, opts = {}) => {
     const syncResult = await runStorageSync('pull');
 
     // Rewrite compose + MCP
-    await dockerManager.writeComposeFile();
+    await nativeManager.writeComposeFile();
     const mcpConfig = getDynamicMcpConfig();
     await writeMcpConfig(mcpConfig.mcpServers);
 

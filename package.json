@@ -1,18 +1,19 @@
 {
   "name": "cerebro-desktop",
-  "version": "5.4.2",
-  "description": "Cerebro - Your AI, Everywhere",
+  "version": "6.0.0-alpha.1",
+  "description": "Cerebro - Your AI, Everywhere (Native)",
   "author": "Professor (Michael Anthony Lopez) <lopez.michael19007@gmail.com>",
   "license": "SEE LICENSE IN LICENSE",
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
     "start:dev": "cross-env CEREBRO_DEV=1 electron .",
+    "build:backend:linux": "pyinstaller build/cerebro-backend.spec --clean --noconfirm && mkdir -p bundle && cp dist/cerebro-backend bundle/",
+    "build:backend:win": "pyinstaller build/cerebro-backend.spec --clean --noconfirm && powershell -Command \"New-Item -ItemType Directory -Force bundle; Copy-Item dist/cerebro-backend.exe bundle/\"",
     "build:win": "electron-builder --win -c build/electron-builder-fullstack.yml",
     "build:linux": "electron-builder --linux -c build/electron-builder-fullstack.yml",
     "build:fullstack:win": "electron-builder --win -c build/electron-builder-fullstack.yml",
     "build:fullstack:linux": "electron-builder --linux -c build/electron-builder-fullstack.yml",
-    "build:docker": "docker compose -f docker/docker-compose.yml build",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
