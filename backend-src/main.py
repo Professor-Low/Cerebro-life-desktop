@@ -12938,15 +12938,6 @@ async def auto_complete_directive_from_agent(directive_id: str, agent_id: str, a
             d["final_answer"] = f"Completed by Agent {agent_id}:\n{agent_output[:1000] if agent_output else 'Task completed successfully'}"
             save_directives_to_file(directives)
 
-            # Award XP for directive completion
-            try:
-                tama_state = _load_tamagotchi_state()
-                tama_state["lifetime_xp"] = tama_state.get("lifetime_xp", 0) + 10
-                tama_state["directives_completed"] = tama_state.get("directives_completed", 0) + 1
-                _save_tamagotchi_state(tama_state)
-            except Exception:
-                pass
-
             # Emit directive completion event to frontend
             await sio.emit("directive_completed", {
                 "directive_id": directive_id,
@@ -12972,15 +12963,6 @@ async def complete_directive(directive_id: str, user: str = Depends(verify_token
             d["status"] = "completed"
             d["completed_at"] = datetime.now().isoformat()
             save_directives_to_file(directives)
-
-            # Award XP for manual directive completion
-            try:
-                tama_state = _load_tamagotchi_state()
-                tama_state["lifetime_xp"] = tama_state.get("lifetime_xp", 0) + 10
-                tama_state["directives_completed"] = tama_state.get("directives_completed", 0) + 1
-                _save_tamagotchi_state(tama_state)
-            except Exception:
-                pass
 
             return {"success": True}
 
@@ -14336,106 +14318,42 @@ async def agent_question_response(sid, data):
 
 
 # ============================================================================
-# Tamagotchi Health System (Cerebro v2.0)
+# System Health — Memory & Storage Status
 # ============================================================================
-# XP/Level system + memory health for the Info tab health panel.
-# State persisted to <AI_MEMORY_PATH>/cerebro/tamagotchi_state.json
+# Lightweight read-only endpoint that exposes memory storage health
+# (NAS connectivity, FAISS index size). Used by the Home/Info widgets.
 
-TAMAGOTCHI_STATE_PATH = Path(config.AI_MEMORY_PATH) / "cerebro" / "tamagotchi_state.json"
-TAMAGOTCHI_LEVEL_THRESHOLDS = [0, 50, 200, 500, 1000, 2000, 5000, 10000, 25000, 50000]
-
-
-def _load_tamagotchi_state() -> dict:
-    try:
-        if TAMAGOTCHI_STATE_PATH.exists():
-            return json.loads(TAMAGOTCHI_STATE_PATH.read_text(encoding="utf-8"))
-    except Exception:
-        pass
-    return {"lifetime_xp": 0, "actions_logged": 0, "directives_completed": 0}
-
-
-def _save_tamagotchi_state(state: dict):
-    try:
-        TAMAGOTCHI_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        TAMAGOTCHI_STATE_PATH.write_text(json.dumps(state, indent=2), encoding="utf-8")
-    except Exception as e:
-        print(f"[Tamagotchi] Failed to save state: {e}")
-
-
-def _compute_level(xp: int) -> int:
-    level = 1
-    for i, threshold in enumerate(TAMAGOTCHI_LEVEL_THRESHOLDS):
-        if xp >= threshold:
-            level = i + 1
-    return level
-
-
-def _compute_level_progress(xp: int) -> float:
-    level = _compute_level(xp)
-    idx = level - 1
-    current_threshold = TAMAGOTCHI_LEVEL_THRESHOLDS[idx] if idx < len(TAMAGOTCHI_LEVEL_THRESHOLDS) else TAMAGOTCHI_LEVEL_THRESHOLDS[-1]
-    next_threshold = TAMAGOTCHI_LEVEL_THRESHOLDS[idx + 1] if idx + 1 < len(TAMAGOTCHI_LEVEL_THRESHOLDS) else current_threshold + 50000
-    if next_threshold == current_threshold:
-        return 1.0
-    return (xp - current_threshold) / (next_threshold - current_threshold)
-
-
-def _add_xp(amount: int):
-    state = _load_tamagotchi_state()
-    state["lifetime_xp"] = state.get("lifetime_xp", 0) + amount
-    _save_tamagotchi_state(state)
-
-
-@app.get("/api/cerebro/tamagotchi")
-async def get_tamagotchi_state():
-    """Return tamagotchi health data for the Info tab. No auth required."""
-    state = _load_tamagotchi_state()
-    xp = state.get("lifetime_xp", 0)
-    level = _compute_level(xp)
-    progress = _compute_level_progress(xp)
-
-    # Memory health check
+@app.get("/api/system/memory-health")
+async def get_memory_health():
+    """Return memory storage health for the Info widgets. No auth required."""
     nas_path = Path(config.AI_MEMORY_PATH)
     nas_connected = nas_path.exists() and nas_path.is_dir()
     faiss_ok = False
     faiss_size_mb = 0
-
-    if _IS_STANDALONE:
-        # Standalone: check Docker volume health (/data/memory)
-        try:
-            if nas_connected:
-                total_bytes = sum(f.stat().st_size for f in nas_path.rglob("*") if f.is_file())
-                faiss_size_mb = round(total_bytes / (1024 * 1024), 1)
-                faiss_ok = True
-        except Exception:
-            pass
-    else:
-        try:
+    try:
+        if nas_connected:
             faiss_index = nas_path / "embeddings" / "indexes"
             if faiss_index.exists():
                 faiss_ok = True
-                faiss_size_mb = round(sum(f.stat().st_size for f in faiss_index.rglob("*") if f.is_file()) / (1024 * 1024), 1)
-        except Exception:
-            pass
-
+                faiss_size_mb = round(
+                    sum(f.stat().st_size for f in faiss_index.rglob("*") if f.is_file())
+                    / (1024 * 1024),
+                    1,
+                )
+            else:
+                # Fall back to total memory dir size if no embeddings index yet
+                total_bytes = sum(f.stat().st_size for f in nas_path.rglob("*") if f.is_file())
+                faiss_size_mb = round(total_bytes / (1024 * 1024), 1)
+    except Exception:
+        pass
     return {
-        "lifetime_xp": xp,
-        "level": level,
-        "level_progress": round(progress, 3),
-        "next_level_xp": TAMAGOTCHI_LEVEL_THRESHOLDS[level] if level < len(TAMAGOTCHI_LEVEL_THRESHOLDS) else xp + 50000,
-        "actions_logged": state.get("actions_logged", 0),
-        "directives_completed": state.get("directives_completed", 0),
-        "memory_health": {
-            "nas_connected": nas_connected,
-            "faiss_ok": faiss_ok,
-            "faiss_size_mb": faiss_size_mb
-        }
+        "nas_connected": nas_connected,
+        "faiss_ok": faiss_ok,
+        "faiss_size_mb": faiss_size_mb,
+        "memory_path": str(nas_path),
     }
 
 
-
-# ============================================================================
-# Network Device Monitor — Known Devices Registry & Alert Endpoints
 # ============================================================================
 
 NETWORK_ALERTS_FILE = Path(config.AI_MEMORY_PATH) / "cerebro" / "network_alerts.json"

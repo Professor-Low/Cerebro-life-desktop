@@ -31712,7 +31712,7 @@
                                         </div>
                                     </div>
                                     <div class="storage-path-row">
-                                        <div class="storage-path-display" id="storage-path-display">Docker Volume (default)</div>
+                                        <div class="storage-path-display" id="storage-path-display">Default location (~/.cerebro/data)</div>
                                         <button class="btn-sm" onclick="openMergeDialog()">Merge</button>
                                         <button class="btn-sm" onclick="changeStoragePath()">Change</button>
                                     </div>
@@ -31733,7 +31733,7 @@
                                     </div>
                                     <div class="storage-warning error" id="storage-health-warning">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                                        <span id="storage-health-warning-text">Docker storage mount issue detected. Your data may not be persisting to the NAS.</span>
+                                        <span id="storage-health-warning-text">Storage path issue detected. Data may not be persisting correctly.</span>
                                     </div>
                                     <div class="storage-mirror-row" id="storage-mirror-row" style="display:none;">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
@@ -31751,7 +31751,7 @@
                                     </div>
                                     <div class="storage-warning" id="storage-mirror-setup-prompt" style="display:none;">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                                        <span>Network drive detected but no local mirror. Docker can't mount network drives directly.</span>
+                                        <span>Network drive detected. Cerebro will mirror to a local cache for performance.</span>
                                         <button class="btn-sm" onclick="setupLocalMirror()">Set Up Local Mirror</button>
                                     </div>
                                 </div>
@@ -33760,7 +33760,7 @@
                 showApp();
             } catch (e) {
                 if (e instanceof TypeError && e.message.includes('fetch')) {
-                    errorEl.textContent = 'Cannot reach Cerebro backend — is Docker running?';
+                    errorEl.textContent = 'Cannot reach Cerebro backend. Try restarting Cerebro.';
                 } else {
                     errorEl.textContent = e.message || 'Login failed';
                 }
@@ -41019,7 +41019,7 @@
                     if (mirrorSetupPrompt) mirrorSetupPrompt.style.display = looksLikeNetwork ? 'flex' : 'none';
                 }
             } else {
-                if (pathEl) pathEl.textContent = 'Docker Volume (default)';
+                if (pathEl) pathEl.textContent = 'Default location (~/.cerebro/data)';
                 if (badge) { badge.textContent = 'Default'; badge.className = 'risk-indicator safe'; }
                 if (warning) warning.classList.remove('visible');
                 if (mirrorRow) mirrorRow.style.display = 'none';
@@ -41141,7 +41141,7 @@
         async function setupLocalMirror() {
             if (!window.cerebroDesktop || !window.cerebroDesktop.setupLocalMirror) return;
             const proceed = await cerebroConfirm(
-                'This will create a local copy of your network memory in a CerebroMemory folder in your home directory and keep it synced. Docker will mount the local copy instead of the network drive.',
+                'This will create a local copy of your network memory in a CerebroMemory folder in your home directory and keep it synced. Cerebro will read from the local copy for better performance.',
                 { title: 'Set Up Local Mirror', confirmText: 'Set Up', cancelText: 'Cancel' }
             );
             if (!proceed) return;
@@ -41634,7 +41634,7 @@
                     if (resp.ok) {
                         var data = await resp.json();
                         if (data.updateAvailable) {
-                            showToast('Docker update available! Check the banner.', 'success');
+                            showToast('Backend update available!', 'success');
                             var bar = document.getElementById('update-available-bar');
                             if (bar) bar.style.display = '';
                         } else {
@@ -62447,7 +62447,7 @@ Please proceed with implementing this recommendation. You have full permissions.
                     }
                 } catch {
                     dotEl.style.background = '#ef4444';
-                    textEl.textContent = 'Backend unreachable — check Docker';
+                    textEl.textContent = 'Backend unreachable — try restarting Cerebro';
                 }
             }
             checkLoginHealth();
