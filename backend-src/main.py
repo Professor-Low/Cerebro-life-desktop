@@ -16819,5 +16819,10 @@ async def proxy_dev_server_ws(websocket, port: int, path: str):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(socket_app, host="0.0.0.0", port=59000)
+    # v6 native runtime: respect env vars set by NativeManager.
+    # Falls back to 0.0.0.0:59000 for backward compatibility with Docker images.
+    bind_host = os.environ.get("CEREBRO_HOST", "0.0.0.0")
+    bind_port = int(os.environ.get("CEREBRO_PORT", "59000"))
+    print(f"[Boot] Cerebro backend binding to {bind_host}:{bind_port}")
+    uvicorn.run(socket_app, host=bind_host, port=bind_port)
 
